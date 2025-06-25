@@ -9,7 +9,7 @@ import (
 
 func (u *UI) startupSequence() {
 	u.loadStartupUI()
-	u.ShowAuthModal()
+	u.showAuthModal()
 }
 
 // loadStartupUI displays the welcome message and banner

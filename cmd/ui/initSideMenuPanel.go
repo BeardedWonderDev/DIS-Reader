@@ -12,8 +12,8 @@ func (u *UI) InitSidebarMenu() *tview.List {
 	menuList.SetBorder(true).SetTitle(" 🐶 Menu ")
 	menuList.SetBorderPadding(1, 1, 1, 1)
 
-	menuList.AddItem("Auth Config", "", 'a', u.ShowAuthModal)
-	// menuList.AddItem("Metadata", "", 'd', u.ShowMetadataModal)
+	menuList.AddItem("Auth Config", "", 'a', u.showAuthModal)
+	menuList.AddItem("Debug Search", "", 'd', u.showAuthModal)
 	// menuList.AddItem("Request Payload", "", 'p', u.ShowRequestPayloadModal)
 	// menuList.AddItem("Invoke", "", 'i', u.InvokeRPC)
 	// menuList.AddItem("[::d]"+strings.Repeat(string(tcell.RuneHLine), 25), "", 0, nil)
