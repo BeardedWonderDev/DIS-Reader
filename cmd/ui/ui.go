@@ -4,16 +4,17 @@ import (
 	"fmt"
 
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
+	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/rivo/tview"
 )
 
 type ComponentLayout struct {
-	MenuList     *tview.List
-	BookmarkList *tview.TreeView
-	LogList      *tview.TextView
-	OutputPanel  InitOutputPanelComponents
+	MainMenu    *MainMenuDefinition
+	SubMenuList *tview.List
+	LogList     *tview.TextView
+	OutputPanel InitOutputPanelComponents
 }
 
 type UI struct {
@@ -21,7 +22,7 @@ type UI struct {
 	WinMan *winman.Manager
 	Layout *ComponentLayout
 
-	Config *types.Config
+	DIS types.DISReaderService
 
 	Theme *entity.Theme
 }
@@ -48,15 +49,15 @@ func NewUI(cfg *types.Config) UI {
 	ui := UI{
 		App:    app,
 		WinMan: wm,
-		Config: cfg,
+		DIS:    disreader.NewDISReaderService(cfg),
 		Theme:  &entity.TerminalTheme,
 	}
 
 	ui.Layout = &ComponentLayout{
-		MenuList:     ui.InitSidebarMenu(),
-		BookmarkList: ui.InitBookmarkMenu(),
-		LogList:      ui.InitLogList(),
-		OutputPanel:  ui.InitOutputPanel(),
+		MainMenu:    ui.InitMainMenu(),
+		SubMenuList: ui.initSubMenu(),
+		LogList:     ui.InitLogList(),
+		OutputPanel: ui.InitOutputPanel(),
 	}
 
 	window := wm.NewWindow().
@@ -65,7 +66,6 @@ func NewUI(cfg *types.Config) UI {
 		SetBorder(false)
 
 	window.Maximize()
-	app.SetRoot(wm, true)
 
 	ui.startupSequence()
 	return ui
@@ -87,8 +87,8 @@ func (u *UI) setupAppLayout() *tview.Flex {
 
 	// Setup the main layout
 	splitSidebar := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(u.Layout.MenuList, 15, 1, true).
-		AddItem(u.Layout.BookmarkList, 0, 1, false)
+		AddItem(u.Layout.MainMenu.MenuList, 15, 1, true).
+		AddItem(u.Layout.SubMenuList, 0, 1, false)
 
 	splitMainPanel := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(u.Layout.OutputPanel.Layout, 0, 3, false).

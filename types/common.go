@@ -9,5 +9,6 @@ type Config struct {
 }
 
 type DISReaderService interface {
-	RunDebugSearch(searchTerm string, outName string)
+	GetConfig() *Config
+	TestDISConnection() error
 }

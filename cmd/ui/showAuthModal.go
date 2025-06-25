@@ -20,19 +20,19 @@ func (u *UI) showAuthModal() {
 	txtServerURL = tview.NewInputField()
 	txtServerURL.SetBackgroundColor(u.Theme.Colors.WindowColor)
 	txtServerURL.SetFieldStyle(u.Theme.Style.FieldStyle)
-	txtServerURL.SetText(u.Config.Host)
+	txtServerURL.SetText(u.DIS.GetConfig().Host)
 	txtServerURL.SetLabel("DIS IP Address: ")
 
 	txtUsername = tview.NewInputField()
 	txtUsername.SetBackgroundColor(u.Theme.Colors.WindowColor)
 	txtUsername.SetFieldStyle(u.Theme.Style.FieldStyle)
-	txtUsername.SetText(u.Config.User)
+	txtUsername.SetText(u.DIS.GetConfig().User)
 	txtUsername.SetLabel("DIS Username: ")
 
 	txtPassword = tview.NewInputField()
 	txtPassword.SetBackgroundColor(u.Theme.Colors.WindowColor)
 	txtPassword.SetFieldStyle(u.Theme.Style.FieldStyle)
-	txtPassword.SetText(u.Config.Password)
+	txtPassword.SetText(u.DIS.GetConfig().Password)
 	txtPassword.SetLabel("DIS Password: ")
 	txtPassword.SetMaskCharacter('*')
 
@@ -53,7 +53,7 @@ func (u *UI) showAuthModal() {
 		rootView:      layout,
 		draggable:     true,
 		size:          winSize{0, 0, 70, 10},
-		fallbackFocus: u.Layout.MenuList,
+		fallbackFocus: u.Layout.MainMenu.MenuList,
 	})
 
 	u.ShowAuthModal_SetInputCapture(wnd)
@@ -64,9 +64,9 @@ func (u *UI) ShowAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 	txtServerURL.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape:
-			if u.Config.User != "" && u.Config.Password != "" {
+			if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
 				u.WinMan.RemoveWindow(wnd)
-				u.SetFocus(u.Layout.MenuList)
+				u.SetFocus(u.Layout.MainMenu.MenuList)
 			} else {
 				noUserPassError(u.PrintLog)
 			}
@@ -86,9 +86,9 @@ func (u *UI) ShowAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 	txtUsername.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape:
-			if u.Config.User != "" && u.Config.Password != "" {
+			if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
 				u.WinMan.RemoveWindow(wnd)
-				u.SetFocus(u.Layout.MenuList)
+				u.SetFocus(u.Layout.MainMenu.MenuList)
 			} else {
 				noUserPassError(u.PrintLog)
 			}
@@ -110,9 +110,9 @@ func (u *UI) ShowAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 	txtPassword.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape:
-			if u.Config.User != "" && u.Config.Password != "" {
+			if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
 				u.WinMan.RemoveWindow(wnd)
-				u.SetFocus(u.Layout.MenuList)
+				u.SetFocus(u.Layout.MainMenu.MenuList)
 			} else {
 				noUserPassError(u.PrintLog)
 			}
@@ -153,20 +153,30 @@ func (u *UI) saveAndTestConnection(wnd *winman.WindowBase) {
 	btnConnect.SetLabel("Connecting...")
 
 	go func() {
-		u.Config.Host = txtServerURL.GetText()
-		u.Config.User = txtUsername.GetText()
-		u.Config.Password = txtPassword.GetText()
+		u.DIS.GetConfig().Host = txtServerURL.GetText()
+		u.DIS.GetConfig().User = txtUsername.GetText()
+		u.DIS.GetConfig().Password = txtPassword.GetText()
 
-		if u.Config.User != "" && u.Config.Password != "" {
+		if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
 			u.PrintLog(entity.Log{
 				Content: "🌏 Verifying DIS Connection to [blue]" + txtServerURL.GetText() + ", connecting...",
 				Type:    entity.LOG_INFO,
 			})
 
-			// TODO - TEST CONNECTION
+			if err := u.DIS.TestDISConnection(); err != nil {
+				u.PrintLog(entity.Log{
+					Content: "Error Connecting to DIS, check host and credentials: " + err.Error(),
+					Type:    entity.LOG_ERROR,
+				})
+			} else {
+				u.PrintLog(entity.Log{
+					Content: "DIS Connection [green] Succesful",
+					Type:    entity.LOG_INFO,
+				})
+			}
 
 			// Remove the window and restore focus to menu list
-			u.CloseModalDialog(wnd, u.Layout.MenuList)
+			u.CloseModalDialog(wnd, u.Layout.MainMenu.MenuList)
 		} else {
 			noUserPassError(u.PrintLog)
 		}

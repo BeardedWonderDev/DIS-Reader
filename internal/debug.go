@@ -3,6 +3,7 @@ package internal
 import (
 	"bufio"
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +15,9 @@ import (
 	"time"
 
 	_ "embed"
+
+	"github.com/BeardedWonderDev/DIS-Reader/types"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 //go:embed queries.sql
@@ -33,7 +37,7 @@ type queryItem struct {
 
 var completedMu sync.Mutex
 
-func (s DISReaderService) RunDebugSearch(searchTerm string, outputFile string) {
+func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string, progressChan chan<- types.ProgressStatus, eventChan chan<- types.TableEvent) {
 	// Load query templates from embedded file
 	var queryTemplates []string
 	scanner := bufio.NewScanner(strings.NewReader(queriesSQL))
@@ -47,6 +51,15 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, outputFile string) {
 	completed := loadCompleted()
 	var batch []queryItem
 
+	// Open or create the SQLite database
+	db, err := sql.Open("sqlite3", sqliteDBFile)
+	if err != nil {
+		log.Fatalf("Failed to open SQLite DB: %v", err)
+	}
+	defer db.Close()
+
+	tableCols := make(map[string]map[string]struct{}) // Table -> set of columns
+
 	for i, tmpl := range queryTemplates {
 		if _, ok := completed[i]; ok {
 			continue // Already completed, skip
@@ -54,17 +67,28 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, outputFile string) {
 		query := strings.ReplaceAll(tmpl, "'{{SEARCH}}'", fmt.Sprintf("'%s'", searchTerm))
 		batch = append(batch, queryItem{Index: i, Query: query})
 		if len(batch) >= batchSize {
-			s.runBatch(batch, outputFile)
+			s.runBatchToSQLite(batch, db, tableCols, eventChan)
 			batch = []queryItem{}
 			time.Sleep(delay)
 			// Re-load completed.txt after each batch in case another process is marking completions
 			completed = loadCompleted()
+			progressChan <- types.ProgressStatus{
+				TotalQueries:     len(queryTemplates),
+				CompletedQueries: len(completed),
+				PercentComplete:  float64(len(completed)) / float64(len(queryTemplates)) * 100,
+			}
 		}
 	}
 
 	// Final batch, if any remain
 	if len(batch) > 0 {
-		s.runBatch(batch, outputFile)
+		s.runBatchToSQLite(batch, db, tableCols, eventChan)
+		completed = loadCompleted()
+		progressChan <- types.ProgressStatus{
+			TotalQueries:     len(queryTemplates),
+			CompletedQueries: len(completed),
+			PercentComplete:  float64(len(completed)) / float64(len(queryTemplates)) * 100,
+		}
 	}
 
 	// After all batches, check if all queries are completed
@@ -82,18 +106,12 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, outputFile string) {
 	}
 }
 
-func (s DISReaderService) runBatch(batch []queryItem, outputFile string) {
+func (s DISReaderService) runBatchToSQLite(batch []queryItem, db *sql.DB, tableCols map[string]map[string]struct{}, eventChan chan<- types.TableEvent) {
 	fmt.Printf("\nRunning batch of %d queries...\n", len(batch))
-	outFile, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		log.Fatalf("Failed to open output JSON: %v", err)
-	}
-	defer outFile.Close()
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallelism)
 	var mu sync.Mutex
-	var batchResults [][]map[string]interface{}
 
 	for _, item := range batch {
 		wg.Add(1)
@@ -120,7 +138,6 @@ func (s DISReaderService) runBatch(batch []queryItem, outputFile string) {
 				return
 			}
 			scanner := bufio.NewScanner(bytes.NewReader(output))
-			var records []map[string]interface{}
 			for scanner.Scan() {
 				line := scanner.Bytes()
 				if len(bytes.TrimSpace(line)) == 0 {
@@ -131,31 +148,89 @@ func (s DISReaderService) runBatch(batch []queryItem, outputFile string) {
 					log.Printf("Line %d: bad JSON: %s", item.Index, string(line))
 					continue
 				}
-				records = append(records, obj)
-			}
-			if len(records) > 0 {
+
+				// Table name from SRC_TABLE, fallback "unknown"
+				tableName, ok := obj["SRC_TABLE"].(string)
+				if !ok || tableName == "" {
+					tableName = "unknown"
+				}
+
 				mu.Lock()
-				batchResults = append(batchResults, records)
+				// Track columns for this table
+				if _, exists := tableCols[tableName]; !exists {
+					tableCols[tableName] = make(map[string]struct{})
+				}
+
+				// Check for new columns and alter table if needed
+				for col := range obj {
+					if _, seen := tableCols[tableName][col]; !seen {
+						addColumnIfNotExists(db, tableName, col)
+						tableCols[tableName][col] = struct{}{}
+					}
+				}
+
+				// Ensure table exists
+				createTableIfNotExists(db, tableName, obj, eventChan)
+				// Insert row
+				insertRow(db, tableName, obj, eventChan)
 				mu.Unlock()
-				markCompleted(item.Index)
-			} else {
-				fmt.Printf("Line %d: No data returned.\n", item.Index)
 			}
+			markCompleted(item.Index)
 		}(item)
 	}
 	wg.Wait()
-	mu.Lock()
-	if len(batchResults) > 0 {
-		for _, records := range batchResults {
-			if len(records) == 0 {
-				continue
+}
+
+func createTableIfNotExists(db *sql.DB, table string, row map[string]interface{}, eventChan chan<- types.TableEvent) {
+	cols := []string{}
+	for col := range row {
+		cols = append(cols, fmt.Sprintf("%q TEXT", col))
+	}
+	query := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" (%s)`, table, strings.Join(cols, ","))
+	res, err := db.Exec(query)
+	if err == nil {
+		// Check if table was created by querying sqlite_master
+		var count int
+		err2 := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&count)
+		if err2 == nil && count == 1 {
+			// Send event that table is created
+			eventChan <- types.TableEvent{
+				TableName:   table,
+				EventType:   "table_created",
+				RowCount:    0,
+				ColumnCount: len(row),
+				SampleRow:   nil,
 			}
-			b, _ := json.Marshal(records)
-			outFile.Write(b)
-			outFile.Write([]byte("\n"))
+		}
+	} else {
+		_ = res
+	}
+}
+
+func addColumnIfNotExists(db *sql.DB, table, col string) {
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE "%s" ADD COLUMN "%s" TEXT`, table, col))
+}
+
+func insertRow(db *sql.DB, table string, row map[string]interface{}, eventChan chan<- types.TableEvent) {
+	cols := []string{}
+	vals := []interface{}{}
+	holders := []string{}
+	for col, v := range row {
+		cols = append(cols, fmt.Sprintf("%q", col))
+		vals = append(vals, fmt.Sprintf("%v", v))
+		holders = append(holders, "?")
+	}
+	stmt := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, table, strings.Join(cols, ","), strings.Join(holders, ","))
+	_, err := db.Exec(stmt, vals...)
+	if err == nil {
+		eventChan <- types.TableEvent{
+			TableName:   table,
+			EventType:   "row_inserted",
+			RowCount:    1,
+			ColumnCount: len(row),
+			SampleRow:   row,
 		}
 	}
-	mu.Unlock()
 }
 
 func loadCompleted() map[int]struct{} {

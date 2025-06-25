@@ -4,17 +4,28 @@ import java.util.*;
 public class JDBCRunner {
     public static void main(String[] args) throws Exception {
         if (args.length < 4) {
-            System.err.println("Usage: java -cp jt400.jar:. JDBCRunner <host> <user> <pass> <sql>");
+            printStatus("error", "Usage: java -cp jt400.jar:. JDBCRunner <host> <user> <pass> <sql|test>");
             return;
         }
 
         String host = args[0];
         String user = args[1];
         String pass = args[2];
-        String sql = args[3];
 
-        String srcTable = extractTableName(sql);
+        boolean testConnection = args.length >= 4 && "test".equalsIgnoreCase(args[3]);
         String url = "jdbc:as400://" + host + ";naming=system";
+
+        if (testConnection) {
+            try (Connection conn = DriverManager.getConnection(url, user, pass)) {
+                printStatus("ok", "Connection successful");
+            } catch (Exception ex) {
+                printStatus("error", "Connection failed: " + ex.getMessage());
+                System.exit(1);
+            }
+            return;
+        }
+
+        String sql = args[3];
 
         try (Connection conn = DriverManager.getConnection(url, user, pass);
              Statement stmt = conn.createStatement();
@@ -26,13 +37,17 @@ public class JDBCRunner {
             // For each row, print NDJSON (one JSON object per line)
             while (rs.next()) {
                 Map<String, String> row = new LinkedHashMap<>();
-                row.put("SRC_TABLE", srcTable);
+                row.put("SRC_TABLE", extractTableName(sql));
                 for (int i = 1; i <= colCount; i++) {
                     String val = rs.getString(i);
                     row.put(md.getColumnName(i), val != null ? val : "");
                 }
                 System.out.println(toJson(row));
             }
+            printStatus("ok", "Query completed");
+        } catch (Exception ex) {
+            printStatus("error", "Query failed: " + ex.getMessage());
+            System.exit(1);
         }
     }
 
@@ -60,6 +75,10 @@ public class JDBCRunner {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
+    }
+
+    private static void printStatus(String status, String message) {
+        System.out.println("{\"status\":\"" + escapeJson(status) + "\",\"message\":\"" + escapeJson(message) + "\"}");
     }
 
     private static String extractTableName(String sql) {

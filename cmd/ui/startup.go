@@ -12,8 +12,10 @@ func (u *UI) startupSequence() {
 	u.showAuthModal()
 }
 
-// loadStartupUI displays the welcome message and banner
 func (u *UI) loadStartupUI() {
+	buildMenu(u.Layout.MainMenu.rootMenu, u.Layout.MainMenu.MenuList)
+	u.App.SetRoot(u.WinMan, true)
+
 	u.PrintLog(entity.Log{
 		Content: fmt.Sprintf("✨ Welcome to DIS Reader v%s", entity.APP_VERSION),
 		Type:    entity.LOG_INFO,
