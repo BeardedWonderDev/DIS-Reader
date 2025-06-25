@@ -1,4 +1,4 @@
-package ui
+package debugUI
 
 import (
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
@@ -13,55 +13,52 @@ var (
 	btnBatchSearch *tview.Button
 )
 
-func (u *UI) showDebugModal() {
+func (d *Debug) showDebugModal() {
 	txtDebugSearch = tview.NewInputField()
-	txtDebugSearch.SetBackgroundColor(u.Theme.Colors.WindowColor)
-	txtDebugSearch.SetFieldStyle(u.Theme.Style.FieldStyle)
+	txtDebugSearch.SetBackgroundColor(d.UI.GetTheme().Colors.WindowColor)
+	txtDebugSearch.SetFieldStyle(d.UI.GetTheme().Style.FieldStyle)
 	txtDebugSearch.SetLabel("Search Term: ")
 
 	txtDebugSearchDesc := tview.NewTextView()
-	txtDebugSearchDesc.SetBackgroundColor(u.Theme.Colors.WindowColor)
-	txtDebugSearchDesc.SetTextStyle(u.Theme.Style.TextAreaStyle)
+	txtDebugSearchDesc.SetBackgroundColor(d.UI.GetTheme().Colors.WindowColor)
+	txtDebugSearchDesc.SetTextStyle(d.UI.GetTheme().Style.TextAreaStyle)
 	txtDebugSearchDesc.SetDisabled(true)
 	txtDebugSearchDesc.SetText("Enter a term to search all DIS tables for\n(ie.. Part #, Invoice #, Unit#, etc).\nResults will be stored locally and visable in DIS Reader.")
 	txtDebugSearchDesc.SetTextAlign(tview.AlignCenter)
 
 	btnBatchSearch = tview.NewButton("Search")
-	btnBatchSearch.SetStyle(u.Theme.Style.ButtonStyle)
+	btnBatchSearch.SetStyle(d.UI.GetTheme().Style.ButtonStyle)
 
 	layout := tview.NewGrid()
 	layout.SetBorderPadding(1, 1, 1, 1)
-	layout.SetBackgroundColor(u.Theme.Colors.WindowColor)
+	layout.SetBackgroundColor(d.UI.GetTheme().Colors.WindowColor)
 	layout.AddItem(txtDebugSearch, 0, 0, 1, 1, 0, 0, true)
 	layout.AddItem(txtDebugSearchDesc, 1, 0, 2, 1, 0, 0, false)
 	layout.AddItem(btnBatchSearch, 3, 0, 1, 1, 0, 0, false)
 
-	wnd := u.CreateModalDialog(typesUI.CreateModalDialogParam{
+	wnd := d.UI.CreateModalDialog(typesUI.CreateModalDialogParam{
 		Title:         " DIS Batch Debug Search ",
 		RootView:      layout,
 		Draggable:     true,
 		Size:          typesUI.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
-		FallbackFocus: u.Layout.MainMenu.MenuList,
+		FallbackFocus: d.UI.GetLayout().MainMenu.MenuList,
 	})
 
-	u.showDebugModal_SetInputCapture(wnd)
+	d.showDebugModal_SetInputCapture(wnd)
 }
 
-func (u *UI) showDebugModal_SetInputCapture(wnd *winman.WindowBase) {
+func (d *Debug) showDebugModal_SetInputCapture(wnd *winman.WindowBase) {
 
 	txtDebugSearch.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape:
-			u.WinMan.RemoveWindow(wnd)
-			u.SetFocus(u.Layout.MainMenu.MenuList)
+			d.UI.GetWinMan().RemoveWindow(wnd)
+			d.UI.SetFocus(d.UI.GetLayout().MainMenu.MenuList)
 			return nil
 
 		case tcell.KeyTAB:
-			u.SetFocus(btnBatchSearch)
+			d.UI.SetFocus(btnBatchSearch)
 
-		case tcell.KeyEnter:
-			u.SetFocus(btnBatchSearch)
-			return nil
 		}
 
 		return event
@@ -70,10 +67,10 @@ func (u *UI) showDebugModal_SetInputCapture(wnd *winman.WindowBase) {
 	btnBatchSearch.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTab:
-			u.SetFocus(txtDebugSearch)
+			d.UI.SetFocus(txtDebugSearch)
 			return nil
 		case tcell.KeyEnter:
-			u.runBatchSearch(wnd)
+			d.runBatchSearch(wnd)
 			return nil
 		}
 
@@ -81,23 +78,25 @@ func (u *UI) showDebugModal_SetInputCapture(wnd *winman.WindowBase) {
 	})
 
 	btnBatchSearch.SetSelectedFunc(func() {
-		u.runBatchSearch(wnd)
+		d.runBatchSearch(wnd)
 	})
 }
 
-func (u *UI) runBatchSearch(wnd *winman.WindowBase) {
+func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
+	if !d.UI.GetAuth().IsAuthenticated() {
+		d.UI.GetAuth().ShowAuthModal()
+		return
+	}
+
 	go func() {
-		u.PrintLog(entity.Log{
+		d.UI.PrintLog(entity.Log{
 			Content: "Starting Search for [blue]" + txtDebugSearch.GetText() + "...",
 			Type:    entity.LOG_INFO,
 		})
 
 		// TODO - Start Batch Search
 
-		// Load Batch Search Views
-		u.InitDebugViews()
-
 		// Remove the window and restore focus to menu list
-		u.CloseModalDialog(wnd, u.Layout.MainMenu.MenuList)
+		d.UI.CloseModalDialog(wnd, d.UI.GetLayout().MainMenu.MenuList)
 	}()
 }

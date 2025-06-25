@@ -2,6 +2,7 @@ package ui
 
 import (
 	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
+	utilsUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/utils"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -27,24 +28,13 @@ func (u *UI) InitMainMenu() typesUI.MainMenuDefinition {
 					MainText:      "Debug Search",
 					SecondaryText: "",
 					Shortcut:      'd',
-					Selected:      u.InitDebugViews,
+					Selected:      u.Debug.InitDebugViews,
 				},
 				{
 					MainText:      "Quit",
 					SecondaryText: "",
 					Shortcut:      'q',
 					Selected:      u.QuitApplication,
-				},
-			},
-		},
-		DebugMenu: typesUI.MenuDefinition{
-			Title: " Debug Menu ",
-			Items: []typesUI.MenuItem{
-				{
-					MainText:      "Main Menu",
-					SecondaryText: "",
-					Shortcut:      'm',
-					Selected:      u.revertToMainMenu,
 				},
 			},
 		},
@@ -65,4 +55,8 @@ func (u *UI) initMainMenu_SetInputCapture(menuList *tview.List) {
 		}
 		return event
 	})
+}
+
+func (u UI) RevertToMainMenu() {
+	utilsUI.BuildMenu(u.Layout.MainMenu.RootMenu, u.Layout.MainMenu.MenuList)
 }

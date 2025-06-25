@@ -5,6 +5,8 @@ import (
 
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	authUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/auth"
+	debugUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/debug"
+	logUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/log"
 	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
@@ -17,8 +19,10 @@ type UI struct {
 	WinMan *winman.Manager
 	Layout *typesUI.ComponentLayout
 
-	DIS  types.DISReaderService
-	Auth *authUI.Auth
+	DIS   types.DISReaderService
+	Auth  typesUI.Auth
+	Debug *debugUI.Debug
+	Log   *logUI.Log
 
 	Theme *entity.Theme
 }
@@ -48,6 +52,10 @@ func (u UI) GetWinMan() *winman.Manager {
 	return u.WinMan
 }
 
+func (u UI) GetAuth() typesUI.Auth {
+	return u.Auth
+}
+
 func (u UI) SetFocus(p tview.Primitive) {
 	go u.App.QueueUpdateDraw(func() {
 		u.App.SetFocus(p)
@@ -73,16 +81,21 @@ func NewUI(cfg *types.Config) UI {
 		DIS:    disreader.NewDISReaderService(cfg),
 		Theme:  &entity.TerminalTheme,
 		Auth:   authUI.NewAuthService(),
+		Debug:  debugUI.NewDebugService(),
+		Log:    logUI.NewLogService(),
 	}
 
 	ui.Layout = &typesUI.ComponentLayout{
 		MainMenu:    ui.InitMainMenu(),
 		SubMenuList: ui.initSubMenu(),
-		LogList:     ui.InitLogList(),
+		LogList:     ui.Log.InitLogList(),
 		OutputPanel: ui.InitOutputPanel(),
 	}
 
-	ui.Auth.UI = ui
+	ui.Auth.SetUI(ui)
+	fmt.Printf("%v", ui.Auth.GetUI())
+	ui.Debug.UI = ui
+	ui.Log.UI = ui
 
 	window := wm.NewWindow().
 		Show().

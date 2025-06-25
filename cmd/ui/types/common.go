@@ -17,9 +17,19 @@ type UI interface {
 	GetTheme() *entity.Theme
 	GetApp() *tview.Application
 	GetWinMan() *winman.Manager
+	GetAuth() Auth
 
 	CreateModalDialog(param CreateModalDialogParam) *winman.WindowBase
 	CloseModalDialog(wnd *winman.WindowBase, focus tview.Primitive)
+	RevertToMainMenu()
 
 	PrintLog(param entity.Log)
+}
+
+type Auth interface {
+	IsAuthenticated() bool
+	Authenticate() error
+	ShowAuthModal()
+	SetUI(ui UI)
+	GetUI() UI
 }
