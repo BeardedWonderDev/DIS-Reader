@@ -1,26 +1,27 @@
 package ui
 
 import (
+	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
 // InitMainMenu is used to initialize and populate sidebar menu
-func (u *UI) InitMainMenu() *MainMenuDefinition {
+func (u *UI) InitMainMenu() typesUI.MainMenuDefinition {
 	menuList := tview.NewList().ShowSecondaryText(false)
 	menuList.SetBorder(true)
 	menuList.SetBorderPadding(1, 1, 1, 1)
 
-	mainMenu := MainMenuDefinition{
+	mainMenu := typesUI.MainMenuDefinition{
 		MenuList: menuList,
-		rootMenu: MenuDefinition{
+		RootMenu: typesUI.MenuDefinition{
 			Title: " Main Menu ",
-			Items: []MenuItem{
+			Items: []typesUI.MenuItem{
 				{
 					MainText:      "Auth Config",
 					SecondaryText: "",
 					Shortcut:      'a',
-					Selected:      u.showAuthModal,
+					Selected:      u.Auth.ShowAuthModal,
 				},
 				{
 					MainText:      "Debug Search",
@@ -36,14 +37,14 @@ func (u *UI) InitMainMenu() *MainMenuDefinition {
 				},
 			},
 		},
-		debugMenu: MenuDefinition{
+		DebugMenu: typesUI.MenuDefinition{
 			Title: " Debug Menu ",
-			Items: []MenuItem{
+			Items: []typesUI.MenuItem{
 				{
 					MainText:      "Main Menu",
 					SecondaryText: "",
 					Shortcut:      'm',
-					Selected:      u.revetToMainMenu,
+					Selected:      u.revertToMainMenu,
 				},
 			},
 		},
@@ -52,7 +53,7 @@ func (u *UI) InitMainMenu() *MainMenuDefinition {
 	// Handle keypress on menu list
 	u.initMainMenu_SetInputCapture(mainMenu.MenuList)
 
-	return &mainMenu
+	return mainMenu
 }
 
 func (u *UI) initMainMenu_SetInputCapture(menuList *tview.List) {

@@ -8,7 +8,7 @@ import (
 )
 
 // PrintLog is used to print a log message to the log window
-func (u *UI) PrintLog(param entity.Log) {
+func (u UI) PrintLog(param entity.Log) {
 	// Get last log message
 	lastLog := u.Layout.LogList.GetText(false)
 
@@ -27,7 +27,7 @@ func (u *UI) PrintLog(param entity.Log) {
 	u.Layout.LogList.ScrollToEnd()
 }
 
-func (u *UI) PrintOutput(param entity.Output) {
+func (u UI) PrintOutput(param entity.Output) {
 	var (
 		// metadata  string
 		newBuffer string

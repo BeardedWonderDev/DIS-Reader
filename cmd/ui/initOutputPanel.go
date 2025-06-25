@@ -5,23 +5,18 @@ import (
 	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
+	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
-
-type InitOutputPanelComponents struct {
-	Layout   *tview.Flex
-	TextArea *tview.TextArea
-	Buffer   string
-}
 
 var (
 	commands map[string]Commands
 )
 
 // InitOutputPanel initializes the output panel on the main screen
-func (u *UI) InitOutputPanel() InitOutputPanelComponents {
+func (u *UI) InitOutputPanel() typesUI.InitOutputPanelComponents {
 	output := tview.NewTextArea()
 	output.SetWrap(false)
 	output.SetMaxLength(1)
@@ -37,7 +32,7 @@ func (u *UI) InitOutputPanel() InitOutputPanelComponents {
 	layout.AddItem(output, 0, 1, true)
 	layout.AddItem(u.initOutputPanel_PanelBar(), 1, 1, false)
 
-	return InitOutputPanelComponents{
+	return typesUI.InitOutputPanelComponents{
 		Layout:   layout,
 		TextArea: output,
 		Buffer:   "",

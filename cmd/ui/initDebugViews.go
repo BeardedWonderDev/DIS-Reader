@@ -1,5 +1,5 @@
 package ui
 
 func (u *UI) InitDebugViews() {
-	buildMenu(u.Layout.MainMenu.debugMenu, u.Layout.MainMenu.MenuList)
+	buildMenu(u.Layout.MainMenu.DebugMenu, u.Layout.MainMenu.MenuList)
 }

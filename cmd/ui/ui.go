@@ -4,30 +4,51 @@ import (
 	"fmt"
 
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
+	authUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/auth"
+	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/rivo/tview"
 )
 
-type ComponentLayout struct {
-	MainMenu    *MainMenuDefinition
-	SubMenuList *tview.List
-	LogList     *tview.TextView
-	OutputPanel InitOutputPanelComponents
-}
-
 type UI struct {
 	App    *tview.Application
 	WinMan *winman.Manager
-	Layout *ComponentLayout
+	Layout *typesUI.ComponentLayout
 
-	DIS types.DISReaderService
+	DIS  types.DISReaderService
+	Auth *authUI.Auth
 
 	Theme *entity.Theme
 }
 
-func (u *UI) SetFocus(p tview.Primitive) {
+// GetApp implements typesUI.UI.
+func (u UI) GetApp() *tview.Application {
+	return u.App
+}
+
+// GetDIS implements typesUI.UI.
+func (u UI) GetDIS() types.DISReaderService {
+	return u.DIS
+}
+
+// GetLayout implements typesUI.UI.
+func (u UI) GetLayout() *typesUI.ComponentLayout {
+	return u.Layout
+}
+
+// GetTheme implements typesUI.UI.
+func (u UI) GetTheme() *entity.Theme {
+	return u.Theme
+}
+
+// GetWinMan implements typesUI.UI.
+func (u UI) GetWinMan() *winman.Manager {
+	return u.WinMan
+}
+
+func (u UI) SetFocus(p tview.Primitive) {
 	go u.App.QueueUpdateDraw(func() {
 		u.App.SetFocus(p)
 	})
@@ -51,14 +72,17 @@ func NewUI(cfg *types.Config) UI {
 		WinMan: wm,
 		DIS:    disreader.NewDISReaderService(cfg),
 		Theme:  &entity.TerminalTheme,
+		Auth:   authUI.NewAuthService(),
 	}
 
-	ui.Layout = &ComponentLayout{
+	ui.Layout = &typesUI.ComponentLayout{
 		MainMenu:    ui.InitMainMenu(),
 		SubMenuList: ui.initSubMenu(),
 		LogList:     ui.InitLogList(),
 		OutputPanel: ui.InitOutputPanel(),
 	}
+
+	ui.Auth.UI = ui
 
 	window := wm.NewWindow().
 		Show().
@@ -76,7 +100,7 @@ func NewUI(cfg *types.Config) UI {
 func setupAppTitle() *tview.TextView {
 	title := tview.NewTextView()
 	title.SetBorder(true)
-	title.SetText(fmt.Sprintf("DIS Reader v%s", entity.APP_VERSION))
+	title.SetText(fmt.Sprintf("%s v%s", entity.APP_NAME, entity.APP_VERSION))
 	title.SetTextAlign(tview.AlignCenter)
 
 	return title

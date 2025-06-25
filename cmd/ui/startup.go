@@ -9,11 +9,11 @@ import (
 
 func (u *UI) startupSequence() {
 	u.loadStartupUI()
-	u.showAuthModal()
+	// u.Auth.ShowAuthModal()
 }
 
 func (u *UI) loadStartupUI() {
-	buildMenu(u.Layout.MainMenu.rootMenu, u.Layout.MainMenu.MenuList)
+	buildMenu(u.Layout.MainMenu.RootMenu, u.Layout.MainMenu.MenuList)
 	u.App.SetRoot(u.WinMan, true)
 
 	u.PrintLog(entity.Log{

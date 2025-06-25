@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
+	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -35,12 +36,12 @@ func (u *UI) showDebugModal() {
 	layout.AddItem(txtDebugSearchDesc, 1, 0, 2, 1, 0, 0, false)
 	layout.AddItem(btnBatchSearch, 3, 0, 1, 1, 0, 0, false)
 
-	wnd := u.CreateModalDialog(CreateModalDialogParam{
-		title:         " DIS Batch Debug Search ",
-		rootView:      layout,
-		draggable:     true,
-		size:          winSize{0, 0, 70, 10},
-		fallbackFocus: u.Layout.MainMenu.MenuList,
+	wnd := u.CreateModalDialog(typesUI.CreateModalDialogParam{
+		Title:         " DIS Batch Debug Search ",
+		RootView:      layout,
+		Draggable:     true,
+		Size:          typesUI.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
+		FallbackFocus: u.Layout.MainMenu.MenuList,
 	})
 
 	u.showDebugModal_SetInputCapture(wnd)
