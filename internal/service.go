@@ -23,10 +23,10 @@ type DISReaderService struct {
 	config *types.Config
 }
 
-func NewDISReaderService(config *types.Config) DISReaderService {
+func NewDISReaderService(config *types.Config) *DISReaderService {
 	// ensureEmbeddedJarWritten(config.JarPath)
 
-	return DISReaderService{
+	return &DISReaderService{
 		config: config,
 	}
 }

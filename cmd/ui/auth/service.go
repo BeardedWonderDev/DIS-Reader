@@ -10,23 +10,15 @@ type Auth struct {
 	Authenticated bool
 }
 
-func NewAuthService() Auth {
-	return Auth{}
+func NewAuthService() *Auth {
+	return &Auth{}
 }
 
-func (a Auth) SetUI(ui typesUI.UI) {
-	a.UI = ui
-}
-
-func (a Auth) GetUI() typesUI.UI {
-	return a.UI
-}
-
-func (a Auth) IsAuthenticated() bool {
+func (a *Auth) IsAuthenticated() bool {
 	return a.Authenticated
 }
 
-func (a Auth) Authenticate() error {
+func (a *Auth) Authenticate() error {
 	a.UI.PrintLog(entity.Log{
 		Content: "🌏 Verifying DIS Connection to [blue]" + txtServerURL.GetText() + ", connecting...",
 		Type:    entity.LOG_INFO,

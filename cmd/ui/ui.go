@@ -20,7 +20,7 @@ type UI struct {
 	Layout *typesUI.ComponentLayout
 
 	DIS   types.DISReaderService
-	Auth  typesUI.Auth
+	Auth  *authUI.Auth
 	Debug *debugUI.Debug
 	Log   *logUI.Log
 
@@ -28,50 +28,49 @@ type UI struct {
 }
 
 // GetApp implements typesUI.UI.
-func (u UI) GetApp() *tview.Application {
+func (u *UI) GetApp() *tview.Application {
 	return u.App
 }
 
 // GetDIS implements typesUI.UI.
-func (u UI) GetDIS() types.DISReaderService {
+func (u *UI) GetDIS() types.DISReaderService {
 	return u.DIS
 }
 
 // GetLayout implements typesUI.UI.
-func (u UI) GetLayout() *typesUI.ComponentLayout {
+func (u *UI) GetLayout() *typesUI.ComponentLayout {
 	return u.Layout
 }
 
 // GetTheme implements typesUI.UI.
-func (u UI) GetTheme() *entity.Theme {
+func (u *UI) GetTheme() *entity.Theme {
 	return u.Theme
 }
 
 // GetWinMan implements typesUI.UI.
-func (u UI) GetWinMan() *winman.Manager {
+func (u *UI) GetWinMan() *winman.Manager {
 	return u.WinMan
 }
 
-func (u UI) GetAuth() typesUI.Auth {
+func (u *UI) GetAuth() typesUI.Auth {
 	return u.Auth
 }
 
-func (u UI) SetFocus(p tview.Primitive) {
+func (u *UI) SetFocus(p tview.Primitive) {
 	go u.App.QueueUpdateDraw(func() {
 		u.App.SetFocus(p)
 	})
 }
 
-func (u UI) Run() error {
-	u.App.EnableMouse(true)
+func (u *UI) Run() error {
 	return u.App.Run()
 }
 
-func (u UI) QuitApplication() {
+func (u *UI) QuitApplication() {
 	u.App.Stop()
 }
 
-func NewUI(cfg *types.Config) UI {
+func NewUI(cfg *types.Config) *UI {
 	app := tview.NewApplication()
 	wm := winman.NewWindowManager()
 
@@ -85,17 +84,16 @@ func NewUI(cfg *types.Config) UI {
 		Log:    logUI.NewLogService(),
 	}
 
+	ui.Auth.UI = &ui
+	ui.Debug.UI = &ui
+	ui.Log.UI = &ui
+
 	ui.Layout = &typesUI.ComponentLayout{
 		MainMenu:    ui.InitMainMenu(),
 		SubMenuList: ui.initSubMenu(),
 		LogList:     ui.Log.InitLogList(),
 		OutputPanel: ui.InitOutputPanel(),
 	}
-
-	ui.Auth.SetUI(ui)
-	fmt.Printf("%v", ui.Auth.GetUI())
-	ui.Debug.UI = ui
-	ui.Log.UI = ui
 
 	window := wm.NewWindow().
 		Show().
@@ -105,7 +103,7 @@ func NewUI(cfg *types.Config) UI {
 	window.Maximize()
 
 	ui.startupSequence()
-	return ui
+	return &ui
 }
 
 // setupTitle sets up the header title of the application.

@@ -1,6 +1,7 @@
 package types
 
 type ProgressStatus struct {
+	RunID            string
 	TotalQueries     int
 	CompletedQueries int
 	PercentComplete  float64

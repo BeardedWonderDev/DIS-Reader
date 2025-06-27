@@ -30,6 +30,4 @@ type Auth interface {
 	IsAuthenticated() bool
 	Authenticate() error
 	ShowAuthModal()
-	SetUI(ui UI)
-	GetUI() UI
 }

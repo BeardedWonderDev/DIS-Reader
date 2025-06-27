@@ -11,4 +11,5 @@ type Config struct {
 type DISReaderService interface {
 	GetConfig() *Config
 	TestDISConnection() error
+	RunDebugSearch(searchTerm string, sqliteDBFile string, progressChan chan<- ProgressStatus, eventChan chan<- TableEvent)
 }

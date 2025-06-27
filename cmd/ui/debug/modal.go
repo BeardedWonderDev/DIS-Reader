@@ -1,6 +1,8 @@
 package debugUI
 
 import (
+	"fmt"
+
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/epiclabs-io/winman"
@@ -89,14 +91,52 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 	}
 
 	go func() {
+		searchTerm := txtDebugSearch.GetText()
+		sqliteFile := "test.db"
+
 		d.UI.PrintLog(entity.Log{
-			Content: "Starting Search for [blue]" + txtDebugSearch.GetText() + "...",
+			Content: "Starting Search for [blue]" + searchTerm + "...",
 			Type:    entity.LOG_INFO,
 		})
 
-		// TODO - Start Batch Search
-
-		// Remove the window and restore focus to menu list
-		d.UI.CloseModalDialog(wnd, d.UI.GetLayout().MainMenu.MenuList)
+		d.UI.GetDIS().RunDebugSearch(
+			searchTerm,
+			sqliteFile,
+			d.ProgressChan,
+			d.EventChan,
+		)
 	}()
+
+	go func() {
+		for progress := range d.ProgressChan {
+			d.UI.PrintLog(entity.Log{
+				Content: "Progress: " + progress.RunID + " - " +
+					"Completed " + fmt.Sprintf("%d/%d (%.2f%%)",
+					progress.CompletedQueries, progress.TotalQueries, progress.PercentComplete),
+				Type: entity.LOG_INFO,
+			})
+		}
+	}()
+
+	go func() {
+		for event := range d.EventChan {
+			message := fmt.Sprintf("Event on Table: [yellow]%s[-] | Type: [green]%s[-] | Rows: [blue]%d[-] | Cols: %d",
+				event.TableName, event.EventType, event.RowCount, event.ColumnCount)
+
+			if len(event.SampleRow) > 0 {
+				message += " | Sample Row: "
+				for k, v := range event.SampleRow {
+					message += fmt.Sprintf("%s=%v ", k, v)
+				}
+			}
+
+			d.UI.PrintLog(entity.Log{
+				Content: message,
+				Type:    entity.LOG_INFO,
+			})
+		}
+	}()
+
+	// Remove the window and restore focus to menu list
+	d.UI.CloseModalDialog(wnd, d.UI.GetLayout().MainMenu.MenuList)
 }

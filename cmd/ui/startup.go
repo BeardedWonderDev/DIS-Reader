@@ -10,6 +10,17 @@ import (
 
 func (u *UI) startupSequence() {
 	u.loadStartupUI()
+
+	if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
+		if err := u.Auth.Authenticate(); err != nil {
+			u.PrintLog(entity.Log{
+				Content: fmt.Sprintf("Error Authenticating To DIS: ", err),
+				Type:    entity.LOG_ERROR,
+			})
+		}
+	} else {
+		u.Auth.ShowAuthModal()
+	}
 }
 
 func (u *UI) loadStartupUI() {

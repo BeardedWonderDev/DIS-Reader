@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +16,7 @@ import (
 	_ "embed"
 
 	"github.com/BeardedWonderDev/DIS-Reader/types"
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,10 +24,9 @@ import (
 var queriesSQL string
 
 const (
-	batchSize     = 20
-	delay         = 2 * time.Second
-	parallelism   = 5
-	completedFile = "completed.txt"
+	batchSize   = 20
+	delay       = 2 * time.Second
+	parallelism = 5
 )
 
 type queryItem struct {
@@ -35,9 +34,21 @@ type queryItem struct {
 	Query string
 }
 
-var completedMu sync.Mutex
+func ensureBatchStatusTable(db *sql.DB) {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS batch_status (
+        run_id TEXT NOT NULL,
+        search_term TEXT NOT NULL,
+        query_index INTEGER NOT NULL,
+        completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (run_id, query_index)
+    )`)
+	if err != nil {
+		log.Fatalf("Failed to ensure batch_status table: %v", err)
+	}
+}
 
 func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string, progressChan chan<- types.ProgressStatus, eventChan chan<- types.TableEvent) {
+	runID := uuid.New().String()
 	// Load query templates from embedded file
 	var queryTemplates []string
 	scanner := bufio.NewScanner(strings.NewReader(queriesSQL))
@@ -48,15 +59,25 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 		}
 	}
 
-	completed := loadCompleted()
-	var batch []queryItem
-
 	// Open or create the SQLite database
 	db, err := sql.Open("sqlite3", sqliteDBFile)
 	if err != nil {
 		log.Fatalf("Failed to open SQLite DB: %v", err)
 	}
 	defer db.Close()
+
+	ensureBatchStatusTable(db)
+
+	completed := loadCompletedFromDB(runID, db)
+
+	progressChan <- types.ProgressStatus{
+		RunID:            runID,
+		TotalQueries:     len(queryTemplates),
+		CompletedQueries: len(completed),
+		PercentComplete:  float64(len(completed)) / float64(len(queryTemplates)) * 100,
+	}
+
+	var batch []queryItem
 
 	tableCols := make(map[string]map[string]struct{}) // Table -> set of columns
 
@@ -67,12 +88,13 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 		query := strings.ReplaceAll(tmpl, "'{{SEARCH}}'", fmt.Sprintf("'%s'", searchTerm))
 		batch = append(batch, queryItem{Index: i, Query: query})
 		if len(batch) >= batchSize {
-			s.runBatchToSQLite(batch, db, tableCols, eventChan)
+			s.runBatchToSQLite(runID, searchTerm, batch, db, tableCols, eventChan)
 			batch = []queryItem{}
 			time.Sleep(delay)
-			// Re-load completed.txt after each batch in case another process is marking completions
-			completed = loadCompleted()
+			// Re-load completed from DB after each batch in case another process is marking completions
+			completed = loadCompletedFromDB(runID, db)
 			progressChan <- types.ProgressStatus{
+				RunID:            runID,
 				TotalQueries:     len(queryTemplates),
 				CompletedQueries: len(completed),
 				PercentComplete:  float64(len(completed)) / float64(len(queryTemplates)) * 100,
@@ -82,9 +104,10 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 
 	// Final batch, if any remain
 	if len(batch) > 0 {
-		s.runBatchToSQLite(batch, db, tableCols, eventChan)
-		completed = loadCompleted()
+		s.runBatchToSQLite(runID, searchTerm, batch, db, tableCols, eventChan)
+		completed = loadCompletedFromDB(runID, db)
 		progressChan <- types.ProgressStatus{
+			RunID:            runID,
 			TotalQueries:     len(queryTemplates),
 			CompletedQueries: len(completed),
 			PercentComplete:  float64(len(completed)) / float64(len(queryTemplates)) * 100,
@@ -92,21 +115,16 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	}
 
 	// After all batches, check if all queries are completed
-	completed = loadCompleted()
+	completed = loadCompletedFromDB(runID, db)
 	if len(completed) == len(queryTemplates) {
-		err := os.Remove(completedFile)
-		if err != nil {
-			log.Printf("Warning: could not remove completed file: %v", err)
-		} else {
-			fmt.Println("All queries completed. Progress file deleted.")
-		}
+		fmt.Println("All queries completed.")
 	} else {
 		remaining := len(queryTemplates) - len(completed)
 		fmt.Printf("Batch processing done. %d queries remain incomplete.\n", remaining)
 	}
 }
 
-func (s DISReaderService) runBatchToSQLite(batch []queryItem, db *sql.DB, tableCols map[string]map[string]struct{}, eventChan chan<- types.TableEvent) {
+func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batch []queryItem, db *sql.DB, tableCols map[string]map[string]struct{}, eventChan chan<- types.TableEvent) {
 	fmt.Printf("\nRunning batch of %d queries...\n", len(batch))
 
 	var wg sync.WaitGroup
@@ -134,9 +152,36 @@ func (s DISReaderService) runBatchToSQLite(batch []queryItem, db *sql.DB, tableC
 			)
 			output, err := cmd.CombinedOutput()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\nOutput:\n%s\n", err, output)
+				errMsg := fmt.Sprintf("Query %d failed: %v\nOutput:\n%s", item.Index, err, output)
+				fmt.Fprintln(os.Stderr, errMsg)
+
+				// Insert into a query_errors table
+				_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS query_errors (
+          run_id TEXT,
+          query_index INTEGER,
+          query TEXT,
+          error_message TEXT,
+          occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`)
+
+				_, _ = db.Exec(`INSERT INTO query_errors (run_id, query_index, query, error_message) VALUES (?, ?, ?, ?)`,
+					runID, item.Index, query, errMsg)
+
+				// Send over event channel
+				eventChan <- types.TableEvent{
+					TableName:   "query_errors",
+					EventType:   "query_failed",
+					RowCount:    0,
+					ColumnCount: 0,
+					SampleRow: map[string]interface{}{
+						"query_index":   item.Index,
+						"query":         query,
+						"error_message": err.Error(),
+					},
+				}
 				return
 			}
+
 			scanner := bufio.NewScanner(bytes.NewReader(output))
 			for scanner.Scan() {
 				line := scanner.Bytes()
@@ -147,6 +192,14 @@ func (s DISReaderService) runBatchToSQLite(batch []queryItem, db *sql.DB, tableC
 				if err := json.Unmarshal(line, &obj); err != nil {
 					log.Printf("Line %d: bad JSON: %s", item.Index, string(line))
 					continue
+				}
+
+				if len(obj) == 2 && obj["status"] == "ok" && obj["message"] == "Query completed" {
+					// Query succeeded but returned no rows; mark completed and skip
+					mu.Lock()
+					markCompletedInDB(runID, searchTerm, item.Index, db)
+					mu.Unlock()
+					return
 				}
 
 				// Table name from SRC_TABLE, fallback "unknown"
@@ -175,7 +228,7 @@ func (s DISReaderService) runBatchToSQLite(batch []queryItem, db *sql.DB, tableC
 				insertRow(db, tableName, obj, eventChan)
 				mu.Unlock()
 			}
-			markCompleted(item.Index)
+			markCompletedInDB(runID, searchTerm, item.Index, db)
 		}(item)
 	}
 	wg.Wait()
@@ -233,32 +286,27 @@ func insertRow(db *sql.DB, table string, row map[string]interface{}, eventChan c
 	}
 }
 
-func loadCompleted() map[int]struct{} {
-	data, err := os.ReadFile(completedFile)
-	completed := make(map[int]struct{})
+func loadCompletedFromDB(runID string, db *sql.DB) map[int]struct{} {
+	rows, err := db.Query(`SELECT query_index FROM batch_status WHERE run_id = ?`, runID)
 	if err != nil {
-		return completed
+		log.Printf("Warning: failed to load completed queries: %v", err)
+		return map[int]struct{}{}
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		val := strings.TrimSpace(line)
-		if val == "" {
-			continue
-		}
-		if idx, err := strconv.Atoi(val); err == nil {
+	defer rows.Close()
+
+	completed := make(map[int]struct{})
+	for rows.Next() {
+		var idx int
+		if err := rows.Scan(&idx); err == nil {
 			completed[idx] = struct{}{}
 		}
 	}
 	return completed
 }
 
-func markCompleted(idx int) {
-	completedMu.Lock()
-	defer completedMu.Unlock()
-	f, err := os.OpenFile(completedFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func markCompletedInDB(runID string, searchTerm string, idx int, db *sql.DB) {
+	_, err := db.Exec(`INSERT OR IGNORE INTO batch_status (run_id, search_term, query_index) VALUES (?, ?, ?)`, runID, searchTerm, idx)
 	if err != nil {
-		log.Printf("Warning: could not mark query %d as completed: %v", idx, err)
-		return
+		log.Printf("Warning: failed to mark query %d as completed: %v", idx, err)
 	}
-	defer f.Close()
-	f.WriteString(fmt.Sprintf("%d\n", idx))
 }
