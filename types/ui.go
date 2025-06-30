@@ -19,6 +19,17 @@ type ViewModule interface {
 	Activate()
 	// SubMenu returns a MenuDefinition for this module's submenu.
 	SubMenu() MenuDefinition
+	// OutputPanel returns a PanelDefinition describing the name and view
+	// to display in the main output area when this module is active.
+	OutputPanel() PanelDefinition
+}
+
+// PanelDefinition describes a named UI panel (view) for the output area.
+type PanelDefinition struct {
+	// Name is the title or identifier for the panel.
+	Name string
+	// View is the tview primitive to render as the output panel.
+	View tview.Primitive
 }
 
 type UI interface {
@@ -38,7 +49,8 @@ type UI interface {
 
 	CreateModalDialog(param CreateModalDialogParam) *winman.WindowBase
 	CloseModalDialog(wnd *winman.WindowBase, focus tview.Primitive)
-	// RevertToMainMenu()
+	ClearOutputPanel()
+	SetOutputPanel(pd PanelDefinition)
 }
 
 type Auth interface {

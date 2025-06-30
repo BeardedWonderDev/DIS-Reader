@@ -39,6 +39,7 @@ func (d *Debug) Init(ui types.UI) {
 func (d *Debug) Activate() {
 	// Populate and show the submenu
 	utilsUI.BuildMenu(d.SubMenu(), d.UI.GetLayout().SubMenuList)
+	d.UI.SetOutputPanel(d.OutputPanel())
 	d.UI.SetFocus(d.UI.GetLayout().SplitSidebar)
 }
 
@@ -56,5 +57,14 @@ func (d *Debug) SubMenu() types.MenuDefinition {
 				},
 			},
 		},
+	}
+}
+
+// OutputPanel returns the panel definition to display in the main output area.
+func (d *Debug) OutputPanel() types.PanelDefinition {
+	// For now, returning an empty panel or you can implement a real view.
+	return types.PanelDefinition{
+		Name: "Debug Output",
+		View: nil, // Replace with actual tview.Primitive if available
 	}
 }
