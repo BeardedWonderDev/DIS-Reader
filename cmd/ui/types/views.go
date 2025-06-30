@@ -6,5 +6,5 @@ type ComponentLayout struct {
 	MainMenu    MainMenuDefinition
 	SubMenuList *tview.List
 	LogList     *tview.TextView
-	OutputPanel InitOutputPanelComponents
+	OutputPanel *tview.Flex
 }

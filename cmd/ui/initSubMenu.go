@@ -22,7 +22,7 @@ func (u *UI) initSubMenu_SetInputCapture(subMenuList *tview.List) {
 	subMenuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTAB:
-			u.SetFocus(u.Layout.OutputPanel.Layout)
+			u.SetFocus(u.Layout.OutputPanel)
 			return nil
 		}
 		return event

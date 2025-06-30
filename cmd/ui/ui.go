@@ -132,7 +132,7 @@ func (u *UI) setupAppLayout() *tview.Flex {
 		AddItem(u.Layout.SubMenuList, 0, 1, false)
 
 	splitMainPanel := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(u.Layout.OutputPanel.Layout, 0, 3, false).
+		AddItem(u.Layout.OutputPanel, 0, 3, false).
 		AddItem(u.Layout.LogList, 0, 1, false)
 
 	childLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
