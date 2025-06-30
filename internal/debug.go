@@ -65,6 +65,8 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 
 	ensureBatchStatusTable(db)
 
+	s.logger.Info("Starting Search for search term", "term", searchTerm)
+
 	completed := loadCompletedFromDB(runID, db)
 
 	progressChan <- types.ProgressStatus{

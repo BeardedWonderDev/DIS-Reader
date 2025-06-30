@@ -117,6 +117,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 			a.Authenticate(func(success bool, err error) {
 				if success {
 					a.UI.CloseModalDialog(wnd, a.UI.GetLayout().MainMenu)
+					a.UI.RunPendingAction()
 				} else {
 					btnConnect.SetLabel("Connect")
 					btnConnect.SetDisabled(false)

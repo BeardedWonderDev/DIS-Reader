@@ -23,6 +23,8 @@ type UI struct {
 	Log  *logUI.LogPanelWriter
 
 	Theme *types.Theme
+
+	pendingAction func()
 }
 
 // GetApp implements types.UI.
@@ -52,6 +54,17 @@ func (u *UI) GetWinMan() *winman.Manager {
 
 func (u *UI) GetAuth() types.Auth {
 	return u.Auth
+}
+
+func (u *UI) RunPendingAction() {
+	if u.pendingAction != nil {
+		u.pendingAction()
+		u.pendingAction = nil
+	}
+}
+
+func (u *UI) SetPendingAction(f func()) {
+	u.pendingAction = f
 }
 
 func (u *UI) GetLogger() *slog.Logger {
@@ -86,7 +99,8 @@ func NewUI(cfg *types.Config, modules []types.ViewModule) *UI {
 	}
 
 	ui.Log = logUI.InitLogPanel(&ui)
-	ui.DIS = disreader.NewDISReaderService(cfg, ui.GetLogger())
+	raw := disreader.NewDISReaderService(cfg, ui.GetLogger())
+	ui.DIS = authUI.NewAuthGuard(raw, &ui)
 	ui.Auth.UI = &ui
 	ui.Log.UI = &ui
 

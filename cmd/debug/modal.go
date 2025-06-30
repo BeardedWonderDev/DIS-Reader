@@ -84,16 +84,9 @@ func (d *Debug) showDebugModal_SetInputCapture(wnd *winman.WindowBase) {
 }
 
 func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
-	if !d.UI.GetAuth().IsAuthenticated() {
-		d.UI.GetAuth().ShowAuthModal()
-		return
-	}
-
 	go func() {
 		searchTerm := txtDebugSearch.GetText()
 		sqliteFile := "test.db"
-
-		d.UI.GetLogger().Info("Starting Search for search term", "term", searchTerm)
 
 		d.UI.GetDIS().RunDebugSearch(
 			searchTerm,

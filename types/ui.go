@@ -30,6 +30,8 @@ type UI interface {
 	GetApp() *tview.Application
 	GetWinMan() *winman.Manager
 	GetAuth() Auth
+	RunPendingAction()
+	SetPendingAction(f func())
 	GetLogger() *slog.Logger
 
 	CreateModalDialog(param CreateModalDialogParam) *winman.WindowBase
