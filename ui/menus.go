@@ -33,6 +33,7 @@ func (u *UI) initSubMenu() *tview.List {
 	subMenuList.SetBorder(true)
 	subMenuList.SetBorderPadding(1, 1, 1, 1)
 	subMenuList.SetTitle(" Sub Menu ")
+	subMenuList.SetSelectedStyle(u.Theme.Style.ListSelectedStyle)
 
 	return subMenuList
 }
