@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	debugUI "github.com/BeardedWonderDev/DIS-Reader/cmd/debug"
-	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	authUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/auth"
 	logUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/log"
@@ -15,6 +14,7 @@ import (
 )
 
 type UI struct {
+	Config *types.Config
 	App    *tview.Application
 	WinMan *winman.Manager
 	Layout *types.ComponentLayout
@@ -24,7 +24,7 @@ type UI struct {
 	Debug *debugUI.Debug
 	Log   *logUI.LogPanelWriter
 
-	Theme *entity.Theme
+	Theme *types.Theme
 }
 
 // GetApp implements types.UI.
@@ -43,7 +43,7 @@ func (u *UI) GetLayout() *types.ComponentLayout {
 }
 
 // GetTheme implements types.UI.
-func (u *UI) GetTheme() *entity.Theme {
+func (u *UI) GetTheme() *types.Theme {
 	return u.Theme
 }
 
@@ -80,9 +80,10 @@ func NewUI(cfg *types.Config) *UI {
 	wm := winman.NewWindowManager()
 
 	ui := UI{
+		Config: cfg,
 		App:    app,
 		WinMan: wm,
-		Theme:  &entity.TerminalTheme,
+		Theme:  &types.DefualtTerminalTheme,
 		Auth:   authUI.NewAuthService(),
 		Debug:  debugUI.NewDebugService(),
 	}
@@ -113,10 +114,10 @@ func NewUI(cfg *types.Config) *UI {
 
 // setupTitle sets up the header title of the application.
 // containing the application name and version.
-func setupAppTitle() *tview.TextView {
+func (u *UI) setupAppTitle() *tview.TextView {
 	title := tview.NewTextView()
 	title.SetBorder(true)
-	title.SetText(fmt.Sprintf("%s v%s", entity.APP_NAME, entity.APP_VERSION))
+	title.SetText(fmt.Sprintf("%s v%s", u.Config.AppName, u.Config.AppVersion))
 	title.SetTextAlign(tview.AlignCenter)
 
 	return title
@@ -139,7 +140,7 @@ func (u *UI) setupAppLayout() *tview.Flex {
 		AddItem(splitMainPanel, 0, 4, false)
 
 	layout := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(setupAppTitle(), 3, 1, false).
+		AddItem(u.setupAppTitle(), 3, 1, false).
 		AddItem(childLayout, 0, 1, true)
 
 	return layout

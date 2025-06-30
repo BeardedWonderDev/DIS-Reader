@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 
-	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	utilsUI "github.com/BeardedWonderDev/DIS-Reader/ui/utils"
 )
 
@@ -25,5 +24,5 @@ func (u *UI) loadStartupUI() {
 	utilsUI.BuildMenu(u.Layout.MainMenu.RootMenu, u.Layout.MainMenu.MenuList)
 	u.App.SetRoot(u.WinMan, true)
 
-	u.GetLogger().Info(fmt.Sprintf("✨ Welcome to DIS Reader v%s", entity.APP_VERSION))
+	u.GetLogger().Info(fmt.Sprintf("✨ Welcome to DIS Reader v%s", u.Config.AppVersion))
 }

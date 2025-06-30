@@ -1,13 +1,15 @@
 package types
 
 type Config struct {
-	JavaPath string
-	JarPath  string
-	ClassDir string
-	JDBCPort string
-	User     string
-	Password string
-	Host     string
+	AppName    string
+	AppVersion string
+	JavaPath   string
+	JarPath    string
+	ClassDir   string
+	JDBCPort   string
+	User       string
+	Password   string
+	Host       string
 }
 
 type DISReaderService interface {

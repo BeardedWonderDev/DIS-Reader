@@ -3,7 +3,6 @@ package types
 import (
 	"log/slog"
 
-	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	"github.com/epiclabs-io/winman"
 	"github.com/rivo/tview"
 )
@@ -15,7 +14,7 @@ type UI interface {
 
 	GetLayout() *ComponentLayout
 	GetDIS() DISReaderService
-	GetTheme() *entity.Theme
+	GetTheme() *Theme
 	GetApp() *tview.Application
 	GetWinMan() *winman.Manager
 	GetAuth() Auth

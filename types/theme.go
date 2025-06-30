@@ -1,4 +1,4 @@
-package entity
+package types
 
 import "github.com/gdamore/tcell/v2"
 
@@ -27,7 +27,7 @@ type Theme struct {
 }
 
 var (
-	TerminalTheme = Theme{
+	DefualtTerminalTheme = Theme{
 		Name: "Terminal",
 		Colors: ColorValue{
 			Error:           tcell.GetColor("red"),
