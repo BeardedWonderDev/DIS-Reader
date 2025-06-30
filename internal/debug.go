@@ -2,13 +2,9 @@ package internal
 
 import (
 	"bufio"
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"log"
-	"os"
-	"os/exec"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +39,7 @@ func ensureBatchStatusTable(db *sql.DB) {
         PRIMARY KEY (run_id, query_index)
     )`)
 	if err != nil {
-		log.Fatalf("Failed to ensure batch_status table: %v", err)
+		slog.Error("Failed to ensure batch_status table", "error", err)
 	}
 }
 
@@ -62,7 +58,8 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	// Open or create the SQLite database
 	db, err := sql.Open("sqlite3", sqliteDBFile)
 	if err != nil {
-		log.Fatalf("Failed to open SQLite DB: %v", err)
+		s.logger.Error("Failed to open SQLite DB", "error", err)
+		return
 	}
 	defer db.Close()
 
@@ -117,15 +114,15 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	// After all batches, check if all queries are completed
 	completed = loadCompletedFromDB(runID, db)
 	if len(completed) == len(queryTemplates) {
-		fmt.Println("All queries completed.")
+		s.logger.Info("All queries completed.")
 	} else {
 		remaining := len(queryTemplates) - len(completed)
-		fmt.Printf("Batch processing done. %d queries remain incomplete.\n", remaining)
+		s.logger.Info("Batch processing done with incomplete queries", "remaining", remaining)
 	}
 }
 
 func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batch []queryItem, db *sql.DB, tableCols map[string]map[string]struct{}, eventChan chan<- types.TableEvent) {
-	fmt.Printf("\nRunning batch of %d queries...\n", len(batch))
+	s.logger.Info("Running batch of queries", "count", len(batch))
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallelism)
@@ -140,22 +137,13 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 			query := strings.TrimSuffix(item.Query, " UNION ALL")
 			query = strings.TrimSuffix(query, "UNION ALL")
 			query = strings.TrimSpace(query)
-			fmt.Printf("Executing line %d: %s\n", item.Index, query)
-			cmd := exec.Command(
-				s.config.JavaPath,
-				"-cp", fmt.Sprintf("%s:.", s.config.JarPath),
-				className,
-				s.config.Host,
-				s.config.User,
-				s.config.Password,
-				query,
-			)
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				errMsg := fmt.Sprintf("Query %d failed: %v\nOutput:\n%s", item.Index, err, output)
-				fmt.Fprintln(os.Stderr, errMsg)
+			s.logger.Debug("Executing query", "index", item.Index, "query", query)
 
-				// Insert into a query_errors table
+			rows, err := s.db.Query(query)
+			if err != nil {
+				errMsg := fmt.Sprintf("Query %d failed: %v", item.Index, err)
+				s.logger.Error("Query failed", "index", item.Index, "error", err)
+
 				_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS query_errors (
           run_id TEXT,
           query_index INTEGER,
@@ -167,7 +155,6 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 				_, _ = db.Exec(`INSERT INTO query_errors (run_id, query_index, query, error_message) VALUES (?, ?, ?, ?)`,
 					runID, item.Index, query, errMsg)
 
-				// Send over event channel
 				eventChan <- types.TableEvent{
 					TableName:   "query_errors",
 					EventType:   "query_failed",
@@ -182,28 +169,19 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 				return
 			}
 
-			scanner := bufio.NewScanner(bytes.NewReader(output))
-			for scanner.Scan() {
-				line := scanner.Bytes()
-				if len(bytes.TrimSpace(line)) == 0 {
-					continue
-				}
-				var obj map[string]interface{}
-				if err := json.Unmarshal(line, &obj); err != nil {
-					log.Printf("Line %d: bad JSON: %s", item.Index, string(line))
-					continue
-				}
+			if len(rows) == 0 {
+				// No rows returned, mark completed and skip
+				mu.Lock()
+				markCompletedInDB(runID, searchTerm, item.Index, db)
+				mu.Unlock()
+				return
+			}
 
-				if len(obj) == 2 && obj["status"] == "ok" && obj["message"] == "Query completed" {
-					// Query succeeded but returned no rows; mark completed and skip
-					mu.Lock()
-					markCompletedInDB(runID, searchTerm, item.Index, db)
-					mu.Unlock()
-					return
-				}
+			for _, row := range rows {
+				data := row
 
 				// Table name from SRC_TABLE, fallback "unknown"
-				tableName, ok := obj["SRC_TABLE"].(string)
+				tableName, ok := data["SRC_TABLE"].(string)
 				if !ok || tableName == "" {
 					tableName = "unknown"
 				}
@@ -215,7 +193,7 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 				}
 
 				// Check for new columns and alter table if needed
-				for col := range obj {
+				for col := range data {
 					if _, seen := tableCols[tableName][col]; !seen {
 						addColumnIfNotExists(db, tableName, col)
 						tableCols[tableName][col] = struct{}{}
@@ -223,9 +201,9 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 				}
 
 				// Ensure table exists
-				createTableIfNotExists(db, tableName, obj, eventChan)
+				createTableIfNotExists(db, tableName, row, eventChan)
 				// Insert row
-				insertRow(db, tableName, obj, eventChan)
+				insertRow(db, tableName, row, eventChan)
 				mu.Unlock()
 			}
 			markCompletedInDB(runID, searchTerm, item.Index, db)
@@ -234,7 +212,7 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 	wg.Wait()
 }
 
-func createTableIfNotExists(db *sql.DB, table string, row map[string]interface{}, eventChan chan<- types.TableEvent) {
+func createTableIfNotExists(db *sql.DB, table string, row types.ResultRow, eventChan chan<- types.TableEvent) {
 	cols := []string{}
 	for col := range row {
 		cols = append(cols, fmt.Sprintf("%q TEXT", col))
@@ -264,7 +242,7 @@ func addColumnIfNotExists(db *sql.DB, table, col string) {
 	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE "%s" ADD COLUMN "%s" TEXT`, table, col))
 }
 
-func insertRow(db *sql.DB, table string, row map[string]interface{}, eventChan chan<- types.TableEvent) {
+func insertRow(db *sql.DB, table string, row types.ResultRow, eventChan chan<- types.TableEvent) {
 	cols := []string{}
 	vals := []interface{}{}
 	holders := []string{}
@@ -289,7 +267,7 @@ func insertRow(db *sql.DB, table string, row map[string]interface{}, eventChan c
 func loadCompletedFromDB(runID string, db *sql.DB) map[int]struct{} {
 	rows, err := db.Query(`SELECT query_index FROM batch_status WHERE run_id = ?`, runID)
 	if err != nil {
-		log.Printf("Warning: failed to load completed queries: %v", err)
+		slog.Warn("Failed to load completed queries", "error", err)
 		return map[int]struct{}{}
 	}
 	defer rows.Close()
@@ -307,6 +285,6 @@ func loadCompletedFromDB(runID string, db *sql.DB) map[int]struct{} {
 func markCompletedInDB(runID string, searchTerm string, idx int, db *sql.DB) {
 	_, err := db.Exec(`INSERT OR IGNORE INTO batch_status (run_id, search_term, query_index) VALUES (?, ?, ?)`, runID, searchTerm, idx)
 	if err != nil {
-		log.Printf("Warning: failed to mark query %d as completed: %v", idx, err)
+		slog.Warn("Failed to mark query as completed", "index", idx, "error", err)
 	}
 }

@@ -3,7 +3,6 @@ package authUI
 import (
 	"strings"
 
-	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/gdamore/tcell/v2"
@@ -115,23 +114,16 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 			btnConnect.SetLabel("Connecting...")
 			btnConnect.SetDisabled(true)
 
-			if err := a.Authenticate(); err != nil {
-				a.UI.PrintLog(entity.Log{
-					Content: "Error Connecting to DIS, check host and credentials: " + err.Error(),
-					Type:    entity.LOG_ERROR,
-				})
-				btnConnect.SetLabel("Connect")
-				btnConnect.SetDisabled(false)
-				return
-			}
-
-			// Remove the window and restore focus to menu list
-			a.UI.CloseModalDialog(wnd, a.UI.GetLayout().MainMenu.MenuList)
-		} else {
-			a.UI.PrintLog(entity.Log{
-				Content: "A valid Username and Password must be entered",
-				Type:    entity.LOG_ERROR,
+			a.Authenticate(func(success bool, err error) {
+				if success {
+					a.UI.CloseModalDialog(wnd, a.UI.GetLayout().MainMenu.MenuList)
+				} else {
+					btnConnect.SetLabel("Connect")
+					btnConnect.SetDisabled(false)
+				}
 			})
+		} else {
+			a.UI.GetLogger().Error("A valid Username and Password must be entered")
 		}
 	}
 

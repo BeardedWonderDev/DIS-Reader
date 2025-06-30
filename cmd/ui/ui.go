@@ -1,7 +1,11 @@
 package ui
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
+	"strings"
+	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	authUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/auth"
@@ -11,6 +15,7 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -25,6 +30,8 @@ type UI struct {
 	Log   *logUI.Log
 
 	Theme *entity.Theme
+
+	Logger *slog.Logger
 }
 
 // GetApp implements typesUI.UI.
@@ -56,6 +63,10 @@ func (u *UI) GetAuth() typesUI.Auth {
 	return u.Auth
 }
 
+func (u *UI) GetLogger() *slog.Logger {
+	return u.Logger
+}
+
 func (u *UI) SetFocus(p tview.Primitive) {
 	go u.App.QueueUpdateDraw(func() {
 		u.App.SetFocus(p)
@@ -67,33 +78,141 @@ func (u *UI) Run() error {
 }
 
 func (u *UI) QuitApplication() {
+	u.DIS.Shutdown()
 	u.App.Stop()
+}
+
+type textViewWriter struct {
+	app     *tview.Application
+	view    *tview.TextView
+	logChan chan string
+}
+
+func (tw *textViewWriter) Write(p []byte) (n int, err error) {
+	logLine := string(p)
+
+	levelColor := "[white]"
+	switch {
+	case strings.Contains(logLine, "DEBUG"):
+		levelColor = "[gray]"
+	case strings.Contains(logLine, "INFO"):
+		levelColor = "[green]"
+	case strings.Contains(logLine, "WARN"):
+		levelColor = "[yellow]"
+	case strings.Contains(logLine, "ERROR"):
+		levelColor = "[red]"
+	}
+
+	timestamp := time.Now().Format("15:04:05")
+	formatted := fmt.Sprintf("%s[%s]%s %s\n", levelColor, timestamp, "[white]", strings.TrimSpace(logLine))
+
+	tw.logChan <- formatted
+	return len(p), nil
+}
+
+type TUIViewHandler struct {
+	tw *textViewWriter
+}
+
+func (h *TUIViewHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelDebug
+}
+
+func (h *TUIViewHandler) Handle(ctx context.Context, r slog.Record) error {
+	var levelColor string
+	switch r.Level {
+	case slog.LevelDebug:
+		levelColor = "[gray]"
+	case slog.LevelInfo:
+		levelColor = "[green]"
+	case slog.LevelWarn:
+		levelColor = "[yellow]"
+	case slog.LevelError:
+		levelColor = "[red]"
+	default:
+		levelColor = "[white]"
+	}
+
+	timestamp := time.Now().Format("15:04:05")
+	msg := r.Message
+	formatted := fmt.Sprintf("%s[%s]%s %s\n", levelColor, timestamp, "[white]", msg)
+
+	h.tw.logChan <- formatted
+	return nil
+}
+
+func (h *TUIViewHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return h
+}
+
+func (h *TUIViewHandler) WithGroup(name string) slog.Handler {
+	return h
 }
 
 func NewUI(cfg *types.Config) *UI {
 	app := tview.NewApplication()
+
+	logPanel := tview.NewTextView()
+	logPanel.SetDynamicColors(true)
+	logPanel.SetTitle(" 📃 Logs ")
+	logPanel.SetBorder(true)
+	logPanel.SetWordWrap(true)
+	logPanel.SetBorderPadding(1, 1, 1, 1)
+
+	tw := &textViewWriter{
+		app:     app,
+		view:    logPanel,
+		logChan: make(chan string, 100),
+	}
+
+	go func() {
+		for line := range tw.logChan {
+			tw.app.QueueUpdate(func() {
+				fmt.Fprint(tw.view, line)
+				tw.view.ScrollToEnd()
+			})
+		}
+	}()
+
+	handler := &TUIViewHandler{tw: tw}
+
+	logger := slog.New(handler)
+
 	wm := winman.NewWindowManager()
 
 	ui := UI{
 		App:    app,
 		WinMan: wm,
-		DIS:    disreader.NewDISReaderService(cfg),
+		DIS:    disreader.NewDISReaderService(cfg, logger),
 		Theme:  &entity.TerminalTheme,
 		Auth:   authUI.NewAuthService(),
 		Debug:  debugUI.NewDebugService(),
 		Log:    logUI.NewLogService(),
+		Logger: logger,
 	}
 
 	ui.Auth.UI = &ui
 	ui.Debug.UI = &ui
 	ui.Log.UI = &ui
 
+	logPanel.SetScrollable(true).SetChangedFunc(func() {
+		ui.App.Draw()
+	})
+
 	ui.Layout = &typesUI.ComponentLayout{
 		MainMenu:    ui.InitMainMenu(),
 		SubMenuList: ui.initSubMenu(),
-		LogList:     ui.Log.InitLogList(),
+		LogList:     logPanel,
 		OutputPanel: ui.InitOutputPanel(),
 	}
+
+	logPanel.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyTAB {
+			app.SetFocus(ui.Layout.MainMenu.MenuList)
+			return nil
+		}
+		return event
+	})
 
 	window := wm.NewWindow().
 		Show().

@@ -16,6 +16,7 @@ func main() {
 		JavaPath: os.Getenv("JAVA_PATH"),
 		JarPath:  os.Getenv("JAR_PATH"),
 		Host:     os.Getenv("DIS_HOST"),
+		JDBCPort: os.Getenv("JDBC_PORT"),
 	}
 
 	err := ui.NewUI(&cfg).Run()

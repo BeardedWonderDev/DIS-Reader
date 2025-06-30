@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"encoding/base64"
 	"fmt"
 
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
@@ -12,12 +11,11 @@ func (u *UI) startupSequence() {
 	u.loadStartupUI()
 
 	if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
-		if err := u.Auth.Authenticate(); err != nil {
-			u.PrintLog(entity.Log{
-				Content: fmt.Sprintf("Error Authenticating To DIS: ", err),
-				Type:    entity.LOG_ERROR,
-			})
-		}
+		u.Auth.Authenticate(func(success bool, err error) {
+			if err != nil {
+				u.Logger.Error("Error Authenticating To DIS", "error", err)
+			}
+		})
 	} else {
 		u.Auth.ShowAuthModal()
 	}
@@ -27,15 +25,5 @@ func (u *UI) loadStartupUI() {
 	utilsUI.BuildMenu(u.Layout.MainMenu.RootMenu, u.Layout.MainMenu.MenuList)
 	u.App.SetRoot(u.WinMan, true)
 
-	u.PrintLog(entity.Log{
-		Content: fmt.Sprintf("✨ Welcome to DIS Reader v%s", entity.APP_VERSION),
-		Type:    entity.LOG_INFO,
-	})
-
-	banner, _ := base64.StdEncoding.DecodeString(entity.BANNER)
-	u.PrintOutput(entity.Output{
-		Content:     string(banner),
-		WithHeader:  false,
-		CursorAtEnd: false,
-	})
+	u.Logger.Info(fmt.Sprintf("✨ Welcome to DIS Reader v%s", entity.APP_VERSION))
 }

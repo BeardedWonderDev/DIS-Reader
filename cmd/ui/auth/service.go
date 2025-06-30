@@ -1,7 +1,6 @@
 package authUI
 
 import (
-	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 )
 
@@ -18,21 +17,21 @@ func (a *Auth) IsAuthenticated() bool {
 	return a.Authenticated
 }
 
-func (a *Auth) Authenticate() error {
-	a.UI.PrintLog(entity.Log{
-		Content: "🌏 Verifying DIS Connection to [blue]" + txtServerURL.GetText() + ", connecting...",
-		Type:    entity.LOG_INFO,
-	})
+func (a *Auth) Authenticate(onComplete func(success bool, err error)) {
+	a.UI.GetLogger().Info("🌏 Verifying DIS Connection", "url", txtServerURL.GetText())
 
-	if conErr := a.UI.GetDIS().TestDISConnection(); conErr != nil {
-		return conErr
-	}
+	go func() {
+		err := a.UI.GetDIS().TestDISConnection()
+		success := err == nil
+		if err != nil {
+			a.UI.GetLogger().Error("DIS Connection Failed", "error", err)
+		} else {
+			a.Authenticated = true
+			a.UI.GetLogger().Info("DIS Connection Successful")
+		}
 
-	a.Authenticated = true
-	a.UI.PrintLog(entity.Log{
-		Content: "DIS Connection [green] Succesful",
-		Type:    entity.LOG_INFO,
-	})
-
-	return nil
+		if onComplete != nil {
+			onComplete(success, err)
+		}
+	}()
 }

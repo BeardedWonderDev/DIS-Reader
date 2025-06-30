@@ -1,6 +1,8 @@
 package typesUI
 
 import (
+	"log/slog"
+
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
@@ -18,16 +20,15 @@ type UI interface {
 	GetApp() *tview.Application
 	GetWinMan() *winman.Manager
 	GetAuth() Auth
+	GetLogger() *slog.Logger
 
 	CreateModalDialog(param CreateModalDialogParam) *winman.WindowBase
 	CloseModalDialog(wnd *winman.WindowBase, focus tview.Primitive)
 	RevertToMainMenu()
-
-	PrintLog(param entity.Log)
 }
 
 type Auth interface {
 	IsAuthenticated() bool
-	Authenticate() error
+	Authenticate(onComplete func(success bool, err error))
 	ShowAuthModal()
 }

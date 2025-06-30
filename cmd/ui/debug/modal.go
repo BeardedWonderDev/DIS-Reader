@@ -3,7 +3,6 @@ package debugUI
 import (
 	"fmt"
 
-	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
 	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/gdamore/tcell/v2"
@@ -94,10 +93,7 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 		searchTerm := txtDebugSearch.GetText()
 		sqliteFile := "test.db"
 
-		d.UI.PrintLog(entity.Log{
-			Content: "Starting Search for [blue]" + searchTerm + "...",
-			Type:    entity.LOG_INFO,
-		})
+		d.UI.GetLogger().Info("Starting Search for search term", "term", searchTerm)
 
 		d.UI.GetDIS().RunDebugSearch(
 			searchTerm,
@@ -109,31 +105,24 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 
 	go func() {
 		for progress := range d.ProgressChan {
-			d.UI.PrintLog(entity.Log{
-				Content: "Progress: " + progress.RunID + " - " +
-					"Completed " + fmt.Sprintf("%d/%d (%.2f%%)",
-					progress.CompletedQueries, progress.TotalQueries, progress.PercentComplete),
-				Type: entity.LOG_INFO,
-			})
+			d.UI.GetLogger().Info("Search progress update",
+				"runID", progress.RunID,
+				"completed", progress.CompletedQueries,
+				"total", progress.TotalQueries,
+				"percent", fmt.Sprintf("%.2f", progress.PercentComplete),
+			)
 		}
 	}()
 
 	go func() {
 		for event := range d.EventChan {
-			message := fmt.Sprintf("Event on Table: [yellow]%s[-] | Type: [green]%s[-] | Rows: [blue]%d[-] | Cols: %d",
-				event.TableName, event.EventType, event.RowCount, event.ColumnCount)
-
-			if len(event.SampleRow) > 0 {
-				message += " | Sample Row: "
-				for k, v := range event.SampleRow {
-					message += fmt.Sprintf("%s=%v ", k, v)
-				}
-			}
-
-			d.UI.PrintLog(entity.Log{
-				Content: message,
-				Type:    entity.LOG_INFO,
-			})
+			d.UI.GetLogger().Info("Debug search event",
+				"table", event.TableName,
+				"type", event.EventType,
+				"rows", event.RowCount,
+				"cols", event.ColumnCount,
+				"sample", event.SampleRow,
+			)
 		}
 	}()
 

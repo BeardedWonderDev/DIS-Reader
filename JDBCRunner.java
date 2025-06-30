@@ -1,40 +1,141 @@
+import java.io.*;
+import java.net.*;
 import java.sql.*;
 import java.util.*;
 
 public class JDBCRunner {
+    private static Connection conn = null;
+    private static String host;
+    private static String user;
+    private static String pass;
+    private static String url;
+
     public static void main(String[] args) throws Exception {
         if (args.length < 4) {
-            printStatus("error", "Usage: java -cp jt400.jar:. JDBCRunner <host> <user> <pass> <sql|test>");
-            return;
+            System.err.println("Usage: java -cp jt400.jar:. JDBCRunner <host> <user> <pass> <port>");
+            System.exit(1);
         }
 
-        String host = args[0];
-        String user = args[1];
-        String pass = args[2];
+        host = args[0];
+        user = args[1];
+        pass = args[2];
+        url = "jdbc:as400://" + host + ";naming=system";
+        int port = Integer.parseInt(args[3]);
 
-        boolean testConnection = args.length >= 4 && "test".equalsIgnoreCase(args[3]);
-        String url = "jdbc:as400://" + host + ";naming=system";
+        ServerSocket serverSocket = new ServerSocket(port);
+        System.out.println("{\"status\":\"ok\",\"message\":\"Server started on port " + port + "\"}");
 
-        if (testConnection) {
-            try (Connection conn = DriverManager.getConnection(url, user, pass)) {
-                printStatus("ok", "Connection successful");
-            } catch (Exception ex) {
-                printStatus("error", "Connection failed: " + ex.getMessage());
-                System.exit(1);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (conn != null && !conn.isClosed()) {
+                    conn.close();
+                    conn = null;
+                }
+                serverSocket.close();
+                System.out.println("{\"status\":\"ok\",\"message\":\"Server stopped\"}");
+            } catch (IOException | SQLException e) {
+                // ignore
             }
+        }));
+
+        while (!serverSocket.isClosed()) {
+            try {
+                Socket clientSocket = serverSocket.accept();
+                new Thread(() -> handleClient(clientSocket)).start();
+            } catch (SocketException se) {
+                // Server socket closed, exit loop
+                break;
+            }
+        }
+    }
+
+    private static void handleClient(Socket socket) {
+        try (
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"))
+        ) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                Map<String, String> cmdMap = parseJson(line);
+                if (cmdMap == null || !cmdMap.containsKey("cmd")) {
+                    writeLine(writer, "{\"status\":\"error\",\"message\":\"Invalid command format\"}");
+                    continue;
+                }
+
+                String cmd = cmdMap.get("cmd").toLowerCase();
+                switch (cmd) {
+                    case "connect":
+                        handleConnect(writer);
+                        break;
+                    case "disconnect":
+                        handleDisconnect(writer);
+                        break;
+                    case "query":
+                        if (!cmdMap.containsKey("sql")) {
+                            writeLine(writer, "{\"status\":\"error\",\"message\":\"Missing 'sql' field in query command\"}");
+                        } else {
+                            handleQuery(writer, cmdMap.get("sql"));
+                        }
+                        break;
+                    default:
+                        writeLine(writer, "{\"status\":\"error\",\"message\":\"Unknown command: " + escapeJson(cmd) + "\"}");
+                        break;
+                }
+            }
+        } catch (IOException e) {
+            // Client disconnected or error occurred
+        } finally {
+            try {
+                if (conn != null && !conn.isClosed()) {
+                    conn.close();
+                    conn = null;
+                }
+            } catch (SQLException ignore) {}
+            try {
+                socket.close();
+            } catch (IOException ignore) {}
+        }
+    }
+
+    private static void handleConnect(BufferedWriter writer) throws IOException {
+        try {
+            if (conn != null && !conn.isClosed()) {
+                writeLine(writer, "{\"status\":\"ok\",\"message\":\"Already connected\"}");
+                return;
+            }
+            conn = DriverManager.getConnection(url, user, pass);
+            writeLine(writer, "{\"status\":\"ok\",\"message\":\"Connection successful\"}");
+        } catch (Exception ex) {
+            writeLine(writer, "{\"status\":\"error\",\"message\":\"Connection failed: " + escapeJson(ex.getMessage()) + "\"}");
+            conn = null;
+        }
+    }
+
+    private static void handleDisconnect(BufferedWriter writer) throws IOException {
+        try {
+            if (conn != null && !conn.isClosed()) {
+                conn.close();
+                conn = null;
+                writeLine(writer, "{\"status\":\"ok\",\"message\":\"Disconnected\"}");
+            } else {
+                writeLine(writer, "{\"status\":\"ok\",\"message\":\"No active connection\"}");
+            }
+        } catch (Exception ex) {
+            writeLine(writer, "{\"status\":\"error\",\"message\":\"Error during disconnect: " + escapeJson(ex.getMessage()) + "\"}");
+        }
+    }
+
+    private static void handleQuery(BufferedWriter writer, String sql) throws IOException {
+        if (conn == null) {
+            writeLine(writer, "{\"status\":\"error\",\"message\":\"Not connected\"}");
             return;
         }
-
-        String sql = args[3];
-
-        try (Connection conn = DriverManager.getConnection(url, user, pass);
-             Statement stmt = conn.createStatement();
+        try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
             ResultSetMetaData md = rs.getMetaData();
             int colCount = md.getColumnCount();
 
-            // For each row, print NDJSON (one JSON object per line)
             while (rs.next()) {
                 Map<String, String> row = new LinkedHashMap<>();
                 row.put("SRC_TABLE", extractTableName(sql));
@@ -42,13 +143,23 @@ public class JDBCRunner {
                     String val = rs.getString(i);
                     row.put(md.getColumnName(i), val != null ? val : "");
                 }
-                System.out.println(toJson(row));
+                writeLine(writer, toJson(row));
             }
-            printStatus("ok", "Query completed");
+            writeLine(writer, "{\"status\":\"ok\",\"message\":\"Query completed\"}");
         } catch (Exception ex) {
-            printStatus("error", "Query failed: " + ex.getMessage());
-            System.exit(1);
+            writeLine(writer, "{\"status\":\"error\",\"message\":\"Query failed: " + escapeJson(ex.getMessage()) + "\"}");
+            try {
+                if (conn != null && conn.isClosed()) {
+                    conn = null; // connection lost, reset
+                }
+            } catch (Exception ignore) {}
         }
+    }
+
+    private static void writeLine(BufferedWriter writer, String line) throws IOException {
+        writer.write(line);
+        writer.write("\n");
+        writer.flush();
     }
 
     // Simple manual JSON serializer (handles strings only, escapes quotes/backslashes)
@@ -77,8 +188,97 @@ public class JDBCRunner {
                 .replace("\t", "\\t");
     }
 
-    private static void printStatus(String status, String message) {
-        System.out.println("{\"status\":\"" + escapeJson(status) + "\",\"message\":\"" + escapeJson(message) + "\"}");
+    private static Map<String, String> parseJson(String json) {
+        // Very simple JSON parser expecting flat JSON objects with string values only
+        // Format: {"key":"value",...}
+        Map<String, String> map = new HashMap<>();
+        json = json.trim();
+        if (!json.startsWith("{") || !json.endsWith("}")) return null;
+        json = json.substring(1, json.length() - 1).trim();
+        if (json.isEmpty()) return map;
+
+        int i = 0;
+        while (i < json.length()) {
+            // parse key
+            if (json.charAt(i) != '"') return null;
+            int keyStart = i + 1;
+            int keyEnd = json.indexOf('"', keyStart);
+            if (keyEnd == -1) return null;
+            String key = unescapeJson(json.substring(keyStart, keyEnd));
+            i = keyEnd + 1;
+
+            // skip colon
+            while (i < json.length() && Character.isWhitespace(json.charAt(i))) i++;
+            if (i >= json.length() || json.charAt(i) != ':') return null;
+            i++;
+            while (i < json.length() && Character.isWhitespace(json.charAt(i))) i++;
+            if (i >= json.length()) return null;
+
+            // parse value
+            if (json.charAt(i) != '"') return null;
+            int valStart = i + 1;
+            int valEnd = valStart;
+            boolean escape = false;
+            StringBuilder valBuilder = new StringBuilder();
+            while (valEnd < json.length()) {
+                char c = json.charAt(valEnd);
+                if (escape) {
+                    valBuilder.append(c);
+                    escape = false;
+                } else {
+                    if (c == '\\') {
+                        escape = true;
+                    } else if (c == '"') {
+                        break;
+                    } else {
+                        valBuilder.append(c);
+                    }
+                }
+                valEnd++;
+            }
+            if (valEnd >= json.length()) return null;
+            String value = unescapeJson(valBuilder.toString());
+            i = valEnd + 1;
+
+            map.put(key, value);
+
+            // skip comma or end
+            while (i < json.length() && Character.isWhitespace(json.charAt(i))) i++;
+            if (i == json.length()) break;
+            if (json.charAt(i) == ',') {
+                i++;
+                while (i < json.length() && Character.isWhitespace(json.charAt(i))) i++;
+            } else {
+                return null;
+            }
+        }
+        return map;
+    }
+
+    private static String unescapeJson(String s) {
+        StringBuilder sb = new StringBuilder();
+        boolean escape = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (escape) {
+                switch (c) {
+                    case 'b': sb.append('\b'); break;
+                    case 'f': sb.append('\f'); break;
+                    case 'n': sb.append('\n'); break;
+                    case 'r': sb.append('\r'); break;
+                    case 't': sb.append('\t'); break;
+                    case '\\': sb.append('\\'); break;
+                    case '"': sb.append('"'); break;
+                    default: sb.append(c); break;
+                }
+                escape = false;
+            } else if (c == '\\') {
+                escape = true;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     private static String extractTableName(String sql) {

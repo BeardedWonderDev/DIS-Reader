@@ -3,6 +3,7 @@ package types
 type Config struct {
 	JavaPath string
 	JarPath  string
+	JDBCPort string
 	User     string
 	Password string
 	Host     string
@@ -10,6 +11,8 @@ type Config struct {
 
 type DISReaderService interface {
 	GetConfig() *Config
+	Shutdown()
+	AttachShutdownHook()
 	TestDISConnection() error
 	RunDebugSearch(searchTerm string, sqliteDBFile string, progressChan chan<- ProgressStatus, eventChan chan<- TableEvent)
 }
