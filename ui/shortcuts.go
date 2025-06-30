@@ -53,7 +53,9 @@ func (u *UI) initShortcuts(modules []types.ViewModule) {
 					}
 				}
 			}
-			u.shortcuts[r2] = item.Selected
+			if item.Selected != nil {
+				u.shortcuts[r2] = item.Selected
+			}
 		}
 	}
 }
