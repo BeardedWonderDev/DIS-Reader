@@ -15,7 +15,7 @@ func (u *UI) InitOutputPanel() *tview.Flex {
 	layout.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// Change focus to menu list when pressed TAB
 		if event.Key() == tcell.KeyTAB {
-			u.SetFocus(u.Layout.LogList)
+			u.SetFocus(u.Layout.SplitSidebar)
 			return nil
 		}
 

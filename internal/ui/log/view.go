@@ -1,7 +1,6 @@
 package logUI
 
 import (
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -16,14 +15,6 @@ func (l *LogPanelWriter) initLogPanelView() *tview.TextView {
 
 	logPanel.SetScrollable(true).SetChangedFunc(func() {
 		l.UI.GetApp().Draw()
-	})
-
-	logPanel.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTAB:
-			l.UI.GetApp().SetFocus(l.UI.GetLayout().SplitSidebar)
-		}
-		return event
 	})
 
 	return logPanel

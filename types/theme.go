@@ -16,6 +16,7 @@ type ComponentStyle struct {
 	PlaceholderStyle  tcell.Style
 	FieldStyle        tcell.Style
 	ListMainTextStyle tcell.Style
+	ListSelectedStyle tcell.Style
 	ListBorderStyle   tcell.Style
 	TextAreaStyle     tcell.Style
 }
@@ -46,6 +47,8 @@ var (
 				Background(tcell.GetColor("#666666")),
 			ListMainTextStyle: tcell.StyleDefault.
 				Background(tcell.GetColor("#444444")),
+			ListSelectedStyle: tcell.StyleDefault.
+				Background(tcell.ColorNone),
 			ListBorderStyle: tcell.StyleDefault.
 				Background(tcell.GetColor("#444444")),
 			TextAreaStyle: tcell.StyleDefault.

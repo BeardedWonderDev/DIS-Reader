@@ -53,7 +53,7 @@ func (a *Auth) ShowAuthModal() {
 		RootView:      layout,
 		Draggable:     true,
 		Size:          types.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
-		FallbackFocus: a.UI.GetLayout().MainMenu,
+		FallbackFocus: a.UI.GetLayout().SplitSidebar,
 	})
 
 	a.showAuthModal_SetInputCapture(wnd)

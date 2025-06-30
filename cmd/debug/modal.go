@@ -42,7 +42,7 @@ func (d *Debug) showDebugModal() {
 		RootView:      layout,
 		Draggable:     true,
 		Size:          types.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
-		FallbackFocus: d.UI.GetLayout().MainMenu,
+		FallbackFocus: d.UI.GetLayout().SplitSidebar,
 	})
 
 	d.showDebugModal_SetInputCapture(wnd)

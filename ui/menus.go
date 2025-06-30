@@ -6,11 +6,12 @@ import (
 )
 
 // InitMainMenu is used to initialize and style sidebar menu list
-func (u *UI) InitMainMenu(modules []types.ViewModule) *tview.List {
+func (u *UI) initMainMenu(modules []types.ViewModule) *tview.List {
 	menu := tview.NewList().ShowSecondaryText(false)
 	menu.SetBorder(true)
 	menu.SetBorderPadding(1, 1, 1, 1)
 	menu.SetTitle(" Main Menu ")
+	menu.SetSelectedStyle(u.Theme.Style.ListSelectedStyle)
 
 	// Dynamic modules
 	for _, m := range modules {
@@ -23,4 +24,15 @@ func (u *UI) InitMainMenu(modules []types.ViewModule) *tview.List {
 	menu.AddItem("Quit", "", 'q', u.QuitApplication)
 
 	return menu
+}
+
+// initSubMenu initializes the bookmark sidebar menu
+func (u *UI) initSubMenu() *tview.List {
+	subMenuList := tview.NewList().ShowSecondaryText(false)
+
+	subMenuList.SetBorder(true)
+	subMenuList.SetBorderPadding(1, 1, 1, 1)
+	subMenuList.SetTitle(" Sub Menu ")
+
+	return subMenuList
 }
