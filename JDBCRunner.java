@@ -59,7 +59,7 @@ public class JDBCRunner {
                 Map<String, String> cmdMap = parseJson(line);
                 if (cmdMap == null || !cmdMap.containsKey("cmd")) {
                     writeLine(writer, "{\"status\":\"error\",\"message\":\"Invalid command format\"}");
-                    continue;
+                    break;
                 }
 
                 String cmd = cmdMap.get("cmd").toLowerCase();
@@ -69,12 +69,13 @@ public class JDBCRunner {
                         break;
                     case "disconnect":
                         handleDisconnect(writer);
-                        break;
+                        socket.close();
+                        return;
                     case "query":
                         if (!cmdMap.containsKey("sql")) {
                             writeLine(writer, "{\"status\":\"error\",\"message\":\"Missing 'sql' field in query command\"}");
                         } else {
-                            handleQuery(writer, cmdMap.get("sql"));
+                            handleQuery(writer, cmdMap.get("sql"), socket);
                         }
                         break;
                     default:
@@ -85,12 +86,7 @@ public class JDBCRunner {
         } catch (IOException e) {
             // Client disconnected or error occurred
         } finally {
-            try {
-                if (conn != null && !conn.isClosed()) {
-                    conn.close();
-                    conn = null;
-                }
-            } catch (SQLException ignore) {}
+            // Do NOT close the shared JDBC connection here; only close the client socket.
             try {
                 socket.close();
             } catch (IOException ignore) {}
@@ -125,9 +121,10 @@ public class JDBCRunner {
         }
     }
 
-    private static void handleQuery(BufferedWriter writer, String sql) throws IOException {
+    private static void handleQuery(BufferedWriter writer, String sql, Socket socket) throws IOException {
         if (conn == null) {
             writeLine(writer, "{\"status\":\"error\",\"message\":\"Not connected\"}");
+            writer.flush();
             return;
         }
         try (Statement stmt = conn.createStatement();
@@ -146,13 +143,18 @@ public class JDBCRunner {
                 writeLine(writer, toJson(row));
             }
             writeLine(writer, "{\"status\":\"ok\",\"message\":\"Query completed\"}");
+            writeLine(writer, "{\"status\":\"done\"}");
+            writer.flush();
+            return;
         } catch (Exception ex) {
             writeLine(writer, "{\"status\":\"error\",\"message\":\"Query failed: " + escapeJson(ex.getMessage()) + "\"}");
+            writer.flush();
             try {
                 if (conn != null && conn.isClosed()) {
                     conn = null; // connection lost, reset
                 }
             } catch (Exception ignore) {}
+            return;
         }
     }
 

@@ -20,6 +20,7 @@ const (
 type JDBCRunnerService struct {
 	config  *types.Config
 	javaCmd *exec.Cmd
+	conn    net.Conn
 	Logger  *slog.Logger
 }
 
@@ -87,6 +88,10 @@ func (j *JDBCRunnerService) Start() error {
 }
 
 func (j *JDBCRunnerService) Shutdown() {
+	if j.conn != nil {
+		j.conn.Close()
+		j.conn = nil
+	}
 	if j.javaCmd != nil && j.javaCmd.Process != nil {
 		if err := j.javaCmd.Process.Kill(); err != nil {
 			j.Logger.Error("Failed to kill Java process", "error", err)
@@ -98,54 +103,53 @@ func (j *JDBCRunnerService) Shutdown() {
 }
 
 func (j *JDBCRunnerService) Connect() error {
-	j.Logger.Debug("Attempting to connect to JDBC socket", "port", j.config.JDBCPort)
-	conn, err := net.Dial("tcp", "localhost:"+j.config.JDBCPort)
-	if err != nil {
-		j.Logger.Error("Failed to connect to JDBC socket", "error", err)
-		return fmt.Errorf("failed to connect to JDBC runner: %w", err)
-	}
-	defer conn.Close()
-
-	msg := `{"cmd":"connect"}`
-	if _, err := conn.Write([]byte(msg + "\n")); err != nil {
-		j.Logger.Error("Failed to send connect command", "error", err)
-		return fmt.Errorf("failed to send connect command: %w", err)
-	}
-
-	scanner := bufio.NewScanner(conn)
-	if scanner.Scan() {
-		var res types.JDBCResult
-		if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
-			j.Logger.Error("Failed to parse response", "error", err)
-			return fmt.Errorf("failed to parse response: %w", err)
+	if j.conn == nil {
+		j.Logger.Debug("Attempting to connect to JDBC socket", "port", j.config.JDBCPort)
+		conn, err := net.Dial("tcp", "localhost:"+j.config.JDBCPort)
+		if err != nil {
+			j.Logger.Error("Failed to connect to JDBC socket", "error", err)
+			return fmt.Errorf("failed to connect to JDBC runner: %w", err)
 		}
-		if res.Status != "ok" {
-			err := fmt.Errorf("connect error: %s", res.Message)
-			j.Logger.Error("Connect error", "message", res.Message)
-			return err
+		j.conn = conn
+
+		msg := `{"cmd":"connect"}`
+		if _, err := j.conn.Write([]byte(msg + "\n")); err != nil {
+			j.Logger.Error("Failed to send connect command", "error", err)
+			return fmt.Errorf("failed to send connect command: %w", err)
 		}
+
+		scanner := bufio.NewScanner(j.conn)
+		if scanner.Scan() {
+			var res types.JDBCResult
+			if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
+				j.Logger.Error("Failed to parse response", "error", err)
+				return fmt.Errorf("failed to parse response: %w", err)
+			}
+			if res.Status != "ok" {
+				err := fmt.Errorf("connect error: %s", res.Message)
+				j.Logger.Error("Connect error", "message", res.Message)
+				return err
+			}
+		}
+		j.Logger.Info("Successfully connected to JDBC socket", "port", j.config.JDBCPort)
 	}
-	j.Logger.Info("Successfully connected to JDBC socket", "port", j.config.JDBCPort)
 	return nil
 }
 
 func (j *JDBCRunnerService) Query(sql string) ([]types.ResultRow, error) {
 	j.Logger.Debug("Sending query to JDBC socket", "sql", sql)
-	conn, err := net.Dial("tcp", "localhost:"+j.config.JDBCPort)
-	if err != nil {
-		j.Logger.Error("Query failed", "error", err)
-		return nil, fmt.Errorf("failed to connect for query: %w", err)
+	if j.conn == nil {
+		return nil, fmt.Errorf("not connected to JDBC runner")
 	}
-	defer conn.Close()
 
 	queryCmd := fmt.Sprintf(`{"cmd":"query","sql":%q}`, sql)
-	if _, err := conn.Write([]byte(queryCmd + "\n")); err != nil {
+	if _, err := j.conn.Write([]byte(queryCmd + "\n")); err != nil {
 		j.Logger.Error("Query failed", "error", err)
 		return nil, fmt.Errorf("failed to send query: %w", err)
 	}
 
 	var results []types.ResultRow
-	scanner := bufio.NewScanner(conn)
+	scanner := bufio.NewScanner(j.conn)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		var result types.ResultRow
@@ -154,10 +158,22 @@ func (j *JDBCRunnerService) Query(sql string) ([]types.ResultRow, error) {
 			return nil, fmt.Errorf("failed to parse row: %w", err)
 		}
 		if status, exists := result["status"]; exists {
-			if status != "ok" {
+			switch status {
+			case "ok":
+				// Query completed successfully, continue reading until "done"
+				continue
+			case "error":
 				err := fmt.Errorf("query error: %s", result["message"])
 				j.Logger.Error("Query failed", "error", err)
 				return nil, err
+			case "done":
+				// End of query results
+				break
+			default:
+				results = append(results, result)
+			}
+			if status == "done" {
+				break
 			}
 		} else {
 			results = append(results, result)
