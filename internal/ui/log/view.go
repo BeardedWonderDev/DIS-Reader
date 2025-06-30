@@ -21,7 +21,7 @@ func (l *LogPanelWriter) initLogPanelView() *tview.TextView {
 	logPanel.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTAB:
-			l.UI.GetApp().SetFocus(l.UI.GetLayout().MainMenu.MenuList)
+			l.UI.GetApp().SetFocus(l.UI.GetLayout().MainMenu)
 		}
 		return event
 	})

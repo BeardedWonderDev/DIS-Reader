@@ -7,6 +7,18 @@ import (
 	"github.com/rivo/tview"
 )
 
+// ViewModule represents a pluggable UI component.
+type ViewModule interface {
+	// Name is the display text for the main menu.
+	Name() string
+	// Shortcut is the rune key to activate this module.
+	Shortcut() rune
+	// Init is called once after UI and Logger are ready.
+	Init(ui UI)
+	// Activate is called when the user selects this module.
+	Activate()
+}
+
 type UI interface {
 	SetFocus(p tview.Primitive)
 	Run() error
@@ -22,7 +34,7 @@ type UI interface {
 
 	CreateModalDialog(param CreateModalDialogParam) *winman.WindowBase
 	CloseModalDialog(wnd *winman.WindowBase, focus tview.Primitive)
-	RevertToMainMenu()
+	// RevertToMainMenu()
 }
 
 type Auth interface {
@@ -32,7 +44,7 @@ type Auth interface {
 }
 
 type ComponentLayout struct {
-	MainMenu    MainMenuDefinition
+	MainMenu    *tview.List
 	SubMenuList *tview.List
 	LogList     *tview.TextView
 	OutputPanel *tview.Flex
@@ -52,13 +64,6 @@ type CreateModalDialogParam struct {
 	Resizeable    bool
 	Size          WinSize
 	FallbackFocus tview.Primitive
-}
-
-type MainMenuDefinition struct {
-	MenuList *tview.List
-
-	RootMenu  MenuDefinition
-	DebugMenu MenuDefinition
 }
 
 type MenuDefinition struct {

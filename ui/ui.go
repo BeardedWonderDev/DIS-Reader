@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	debugUI "github.com/BeardedWonderDev/DIS-Reader/cmd/debug"
 	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	authUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/auth"
 	logUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/log"
@@ -19,10 +18,9 @@ type UI struct {
 	WinMan *winman.Manager
 	Layout *types.ComponentLayout
 
-	DIS   types.DISReaderService
-	Auth  *authUI.Auth
-	Debug *debugUI.Debug
-	Log   *logUI.LogPanelWriter
+	DIS  types.DISReaderService
+	Auth *authUI.Auth
+	Log  *logUI.LogPanelWriter
 
 	Theme *types.Theme
 }
@@ -75,7 +73,7 @@ func (u *UI) QuitApplication() {
 	u.App.Stop()
 }
 
-func NewUI(cfg *types.Config) *UI {
+func NewUI(cfg *types.Config, modules []types.ViewModule) *UI {
 	app := tview.NewApplication()
 	wm := winman.NewWindowManager()
 
@@ -85,17 +83,20 @@ func NewUI(cfg *types.Config) *UI {
 		WinMan: wm,
 		Theme:  &types.DefualtTerminalTheme,
 		Auth:   authUI.NewAuthService(),
-		Debug:  debugUI.NewDebugService(),
 	}
 
 	ui.Log = logUI.InitLogPanel(&ui)
 	ui.DIS = disreader.NewDISReaderService(cfg, ui.GetLogger())
 	ui.Auth.UI = &ui
-	ui.Debug.UI = &ui
 	ui.Log.UI = &ui
 
+	// Initialize each module with the UI and shared logger
+	for _, m := range modules {
+		m.Init(&ui)
+	}
+
 	ui.Layout = &types.ComponentLayout{
-		MainMenu:    ui.InitMainMenu(),
+		MainMenu:    ui.InitMainMenu(modules),
 		SubMenuList: ui.initSubMenu(),
 		LogList:     ui.Log.View,
 		OutputPanel: ui.InitOutputPanel(),
@@ -128,7 +129,7 @@ func (u *UI) setupAppLayout() *tview.Flex {
 
 	// Setup the main layout
 	splitSidebar := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(u.Layout.MainMenu.MenuList, 15, 1, true).
+		AddItem(u.Layout.MainMenu, 15, 1, true).
 		AddItem(u.Layout.SubMenuList, 0, 1, false)
 
 	splitMainPanel := tview.NewFlex().SetDirection(tview.FlexRow).

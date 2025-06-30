@@ -53,7 +53,7 @@ func (a *Auth) ShowAuthModal() {
 		RootView:      layout,
 		Draggable:     true,
 		Size:          types.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
-		FallbackFocus: a.UI.GetLayout().MainMenu.MenuList,
+		FallbackFocus: a.UI.GetLayout().MainMenu,
 	})
 
 	a.showAuthModal_SetInputCapture(wnd)
@@ -65,7 +65,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			a.UI.GetWinMan().RemoveWindow(wnd)
-			a.UI.SetFocus(a.UI.GetLayout().MainMenu.MenuList)
+			a.UI.SetFocus(a.UI.GetLayout().MainMenu)
 			return nil
 
 		case tcell.KeyTAB:
@@ -79,7 +79,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			a.UI.GetWinMan().RemoveWindow(wnd)
-			a.UI.SetFocus(a.UI.GetLayout().MainMenu.MenuList)
+			a.UI.SetFocus(a.UI.GetLayout().MainMenu)
 			return nil
 
 		case tcell.KeyTAB:
@@ -94,7 +94,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			a.UI.GetWinMan().RemoveWindow(wnd)
-			a.UI.SetFocus(a.UI.GetLayout().MainMenu.MenuList)
+			a.UI.SetFocus(a.UI.GetLayout().MainMenu)
 			return nil
 
 		case tcell.KeyTAB:
@@ -116,7 +116,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 
 			a.Authenticate(func(success bool, err error) {
 				if success {
-					a.UI.CloseModalDialog(wnd, a.UI.GetLayout().MainMenu.MenuList)
+					a.UI.CloseModalDialog(wnd, a.UI.GetLayout().MainMenu)
 				} else {
 					btnConnect.SetLabel("Connect")
 					btnConnect.SetDisabled(false)

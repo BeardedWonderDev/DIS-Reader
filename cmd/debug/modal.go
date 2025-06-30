@@ -42,7 +42,7 @@ func (d *Debug) showDebugModal() {
 		RootView:      layout,
 		Draggable:     true,
 		Size:          types.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
-		FallbackFocus: d.UI.GetLayout().MainMenu.MenuList,
+		FallbackFocus: d.UI.GetLayout().MainMenu,
 	})
 
 	d.showDebugModal_SetInputCapture(wnd)
@@ -54,7 +54,7 @@ func (d *Debug) showDebugModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			d.UI.GetWinMan().RemoveWindow(wnd)
-			d.UI.SetFocus(d.UI.GetLayout().MainMenu.MenuList)
+			d.UI.SetFocus(d.UI.GetLayout().MainMenu)
 			return nil
 
 		case tcell.KeyTAB:
@@ -127,5 +127,5 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 	}()
 
 	// Remove the window and restore focus to menu list
-	d.UI.CloseModalDialog(wnd, d.UI.GetLayout().MainMenu.MenuList)
+	d.UI.CloseModalDialog(wnd, d.UI.GetLayout().MainMenu)
 }
