@@ -5,7 +5,6 @@ go 1.23.2
 require github.com/rivo/tview v0.0.0-20250501113434-0c592cd31026
 
 require (
-	github.com/atotto/clipboard v0.1.4
 	github.com/epiclabs-io/winman v0.0.0-20220901164457-3d8c4b3ae090
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.7.1

@@ -36,7 +36,17 @@ func (j *JDBCRunnerService) Start() error {
 		j.Logger.Debug("Java process already running", "pid", j.javaCmd.Process.Pid)
 		return nil // already running
 	}
-	cmd := exec.Command(j.config.JavaPath, "-cp", fmt.Sprintf("%s:.", j.config.JarPath), className, j.config.Host, j.config.User, j.config.Password, j.config.JDBCPort)
+	// Include both JAR and extracted classes directory in the classpath
+	classpath := fmt.Sprintf("%s:%s", j.config.JarPath, j.config.ClassDir)
+	cmd := exec.Command(
+		j.config.JavaPath,
+		"-cp", classpath,
+		className,
+		j.config.Host,
+		j.config.User,
+		j.config.Password,
+		j.config.JDBCPort,
+	)
 	stdoutPipe, _ := cmd.StdoutPipe()
 	stderrPipe, _ := cmd.StderrPipe()
 
