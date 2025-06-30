@@ -30,6 +30,14 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) *DISReaderSe
 		logger = slog.Default()
 	}
 
+	if config.JavaPath == "" {
+		config.JavaPath = "java"
+	}
+
+	if config.JDBCPort == "" {
+		config.JDBCPort = "8888"
+	}
+
 	// Write embedded assets to temp directory
 	tmp, err := os.MkdirTemp("", "disreader-jdbc-*")
 	if err != nil {
