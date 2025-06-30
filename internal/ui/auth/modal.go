@@ -3,7 +3,7 @@ package authUI
 import (
 	"strings"
 
-	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -48,11 +48,11 @@ func (a *Auth) ShowAuthModal() {
 	layout.AddItem(txtPassword, 1, 2, 1, 1, 0, 0, false)
 	layout.AddItem(btnConnect, 2, 0, 1, 3, 0, 0, false)
 
-	wnd := a.UI.CreateModalDialog(typesUI.CreateModalDialogParam{
+	wnd := a.UI.CreateModalDialog(types.CreateModalDialogParam{
 		Title:         " DIS Auth Config ",
 		RootView:      layout,
 		Draggable:     true,
-		Size:          typesUI.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
+		Size:          types.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
 		FallbackFocus: a.UI.GetLayout().MainMenu.MenuList,
 	})
 

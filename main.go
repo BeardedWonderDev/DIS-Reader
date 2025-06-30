@@ -4,8 +4,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/BeardedWonderDev/DIS-Reader/cmd/ui"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
+	"github.com/BeardedWonderDev/DIS-Reader/ui"
 	"github.com/joho/godotenv"
 )
 
@@ -13,10 +13,7 @@ func main() {
 	_ = godotenv.Load()
 
 	cfg := types.Config{
-		JavaPath: os.Getenv("JAVA_PATH"),
-		JarPath:  os.Getenv("JAR_PATH"),
-		Host:     os.Getenv("DIS_HOST"),
-		JDBCPort: os.Getenv("JDBC_PORT"),
+		Host: os.Getenv("DIS_HOST"),
 	}
 
 	err := ui.NewUI(&cfg).Run()

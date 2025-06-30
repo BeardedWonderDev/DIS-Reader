@@ -1,23 +1,23 @@
 package ui
 
 import (
-	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
-	utilsUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/utils"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
+	utilsUI "github.com/BeardedWonderDev/DIS-Reader/ui/utils"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
 // InitMainMenu is used to initialize and populate sidebar menu
-func (u *UI) InitMainMenu() typesUI.MainMenuDefinition {
+func (u *UI) InitMainMenu() types.MainMenuDefinition {
 	menuList := tview.NewList().ShowSecondaryText(false)
 	menuList.SetBorder(true)
 	menuList.SetBorderPadding(1, 1, 1, 1)
 
-	mainMenu := typesUI.MainMenuDefinition{
+	mainMenu := types.MainMenuDefinition{
 		MenuList: menuList,
-		RootMenu: typesUI.MenuDefinition{
+		RootMenu: types.MenuDefinition{
 			Title: " Main Menu ",
-			Items: []typesUI.MenuItem{
+			Items: []types.MenuItem{
 				{
 					MainText:      "Auth Config",
 					SecondaryText: "",

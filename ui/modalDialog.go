@@ -1,13 +1,13 @@
 package ui
 
 import (
-	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/rivo/tview"
 )
 
 // CreateModalDialogParam is a helper to create a modal dialog window
-func (u UI) CreateModalDialog(param typesUI.CreateModalDialogParam) *winman.WindowBase {
+func (u UI) CreateModalDialog(param types.CreateModalDialogParam) *winman.WindowBase {
 	wnd := winman.NewWindow().Show()
 
 	wnd.SetTitle(param.Title)

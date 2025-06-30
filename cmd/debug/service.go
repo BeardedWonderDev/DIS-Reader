@@ -1,12 +1,11 @@
 package debugUI
 
 import (
-	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 type Debug struct {
-	UI           typesUI.UI
+	UI           types.UI
 	ProgressChan chan types.ProgressStatus
 	EventChan    chan types.TableEvent
 }

@@ -7,18 +7,18 @@ import (
 	"strings"
 	"time"
 
-	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/rivo/tview"
 )
 
 type LogPanelWriter struct {
-	UI      typesUI.UI
+	UI      types.UI
 	View    *tview.TextView
 	Logger  *slog.Logger
 	LogChan chan string
 }
 
-func InitLogPanel(u typesUI.UI) *LogPanelWriter {
+func InitLogPanel(u types.UI) *LogPanelWriter {
 	logPanel := &LogPanelWriter{
 		UI:      u,
 		LogChan: make(chan string, 100),

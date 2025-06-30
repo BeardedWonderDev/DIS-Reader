@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
-	utilsUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/utils"
+	utilsUI "github.com/BeardedWonderDev/DIS-Reader/ui/utils"
 )
 
 func (u *UI) startupSequence() {

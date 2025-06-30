@@ -1,11 +1,9 @@
 package authUI
 
-import (
-	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
-)
+import "github.com/BeardedWonderDev/DIS-Reader/types"
 
 type Auth struct {
-	UI            typesUI.UI
+	UI            types.UI
 	Authenticated bool
 }
 

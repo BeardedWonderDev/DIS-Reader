@@ -1,11 +1,11 @@
 package debugUI
 
-import typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
+import "github.com/BeardedWonderDev/DIS-Reader/types"
 
-func (d *Debug) GetMainMenu() typesUI.MenuDefinition {
-	return typesUI.MenuDefinition{
+func (d *Debug) GetMainMenu() types.MenuDefinition {
+	return types.MenuDefinition{
 		Title: " Debug Menu ",
-		Items: []typesUI.MenuItem{
+		Items: []types.MenuItem{
 			{
 				MainText:      "Start Batch Search",
 				SecondaryText: "",

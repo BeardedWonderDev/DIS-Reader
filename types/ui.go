@@ -1,0 +1,75 @@
+package types
+
+import (
+	"log/slog"
+
+	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
+	"github.com/epiclabs-io/winman"
+	"github.com/rivo/tview"
+)
+
+type UI interface {
+	SetFocus(p tview.Primitive)
+	Run() error
+	QuitApplication()
+
+	GetLayout() *ComponentLayout
+	GetDIS() DISReaderService
+	GetTheme() *entity.Theme
+	GetApp() *tview.Application
+	GetWinMan() *winman.Manager
+	GetAuth() Auth
+	GetLogger() *slog.Logger
+
+	CreateModalDialog(param CreateModalDialogParam) *winman.WindowBase
+	CloseModalDialog(wnd *winman.WindowBase, focus tview.Primitive)
+	RevertToMainMenu()
+}
+
+type Auth interface {
+	IsAuthenticated() bool
+	Authenticate(onComplete func(success bool, err error))
+	ShowAuthModal()
+}
+
+type ComponentLayout struct {
+	MainMenu    MainMenuDefinition
+	SubMenuList *tview.List
+	LogList     *tview.TextView
+	OutputPanel *tview.Flex
+}
+
+type WinSize struct {
+	X      int
+	Y      int
+	Width  int
+	Height int
+}
+
+type CreateModalDialogParam struct {
+	Title         string
+	RootView      tview.Primitive
+	Draggable     bool
+	Resizeable    bool
+	Size          WinSize
+	FallbackFocus tview.Primitive
+}
+
+type MainMenuDefinition struct {
+	MenuList *tview.List
+
+	RootMenu  MenuDefinition
+	DebugMenu MenuDefinition
+}
+
+type MenuDefinition struct {
+	Title string
+	Items []MenuItem
+}
+
+type MenuItem struct {
+	MainText      string // The main text of the list item.
+	SecondaryText string // A secondary text to be shown underneath the main text.
+	Shortcut      rune   // The key to select the list item directly, 0 if there is no shortcut.
+	Selected      func() // The optional function which is called when the item is selected.
+}

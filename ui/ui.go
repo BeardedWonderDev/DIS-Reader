@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 
+	debugUI "github.com/BeardedWonderDev/DIS-Reader/cmd/debug"
 	"github.com/BeardedWonderDev/DIS-Reader/cmd/entity"
-	authUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/auth"
-	debugUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/debug"
-	logUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/log"
-	typesUI "github.com/BeardedWonderDev/DIS-Reader/cmd/ui/types"
 	"github.com/BeardedWonderDev/DIS-Reader/disreader"
+	authUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/auth"
+	logUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/log"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
 	"github.com/rivo/tview"
@@ -18,7 +17,7 @@ import (
 type UI struct {
 	App    *tview.Application
 	WinMan *winman.Manager
-	Layout *typesUI.ComponentLayout
+	Layout *types.ComponentLayout
 
 	DIS   types.DISReaderService
 	Auth  *authUI.Auth
@@ -28,32 +27,32 @@ type UI struct {
 	Theme *entity.Theme
 }
 
-// GetApp implements typesUI.UI.
+// GetApp implements types.UI.
 func (u *UI) GetApp() *tview.Application {
 	return u.App
 }
 
-// GetDIS implements typesUI.UI.
+// GetDIS implements types.UI.
 func (u *UI) GetDIS() types.DISReaderService {
 	return u.DIS
 }
 
-// GetLayout implements typesUI.UI.
-func (u *UI) GetLayout() *typesUI.ComponentLayout {
+// GetLayout implements types.UI.
+func (u *UI) GetLayout() *types.ComponentLayout {
 	return u.Layout
 }
 
-// GetTheme implements typesUI.UI.
+// GetTheme implements types.UI.
 func (u *UI) GetTheme() *entity.Theme {
 	return u.Theme
 }
 
-// GetWinMan implements typesUI.UI.
+// GetWinMan implements types.UI.
 func (u *UI) GetWinMan() *winman.Manager {
 	return u.WinMan
 }
 
-func (u *UI) GetAuth() typesUI.Auth {
+func (u *UI) GetAuth() types.Auth {
 	return u.Auth
 }
 
@@ -94,7 +93,7 @@ func NewUI(cfg *types.Config) *UI {
 	ui.Debug.UI = &ui
 	ui.Log.UI = &ui
 
-	ui.Layout = &typesUI.ComponentLayout{
+	ui.Layout = &types.ComponentLayout{
 		MainMenu:    ui.InitMainMenu(),
 		SubMenuList: ui.initSubMenu(),
 		LogList:     ui.Log.View,
