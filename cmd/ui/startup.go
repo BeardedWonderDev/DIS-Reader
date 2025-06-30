@@ -13,7 +13,7 @@ func (u *UI) startupSequence() {
 	if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
 		u.Auth.Authenticate(func(success bool, err error) {
 			if err != nil {
-				u.Logger.Error("Error Authenticating To DIS", "error", err)
+				u.GetLogger().Error("Error Authenticating To DIS", "error", err)
 			}
 		})
 	} else {
@@ -25,5 +25,5 @@ func (u *UI) loadStartupUI() {
 	utilsUI.BuildMenu(u.Layout.MainMenu.RootMenu, u.Layout.MainMenu.MenuList)
 	u.App.SetRoot(u.WinMan, true)
 
-	u.Logger.Info(fmt.Sprintf("✨ Welcome to DIS Reader v%s", entity.APP_VERSION))
+	u.GetLogger().Info(fmt.Sprintf("✨ Welcome to DIS Reader v%s", entity.APP_VERSION))
 }

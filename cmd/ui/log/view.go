@@ -6,7 +6,7 @@ import (
 )
 
 // InitLogList initializes the log panel on the main screen
-func (l *Log) InitLogList() *tview.TextView {
+func (l *LogPanelWriter) initLogPanelView() *tview.TextView {
 	logPanel := tview.NewTextView()
 	logPanel.SetDynamicColors(true)
 	logPanel.SetTitle(" 📃 Logs ")
@@ -18,12 +18,6 @@ func (l *Log) InitLogList() *tview.TextView {
 		l.UI.GetApp().Draw()
 	})
 
-	l.initLogList_SetInputCapture(logPanel)
-
-	return logPanel
-}
-
-func (l *Log) initLogList_SetInputCapture(logPanel *tview.TextView) {
 	logPanel.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTAB:
@@ -31,4 +25,6 @@ func (l *Log) initLogList_SetInputCapture(logPanel *tview.TextView) {
 		}
 		return event
 	})
+
+	return logPanel
 }
