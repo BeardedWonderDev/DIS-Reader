@@ -17,6 +17,8 @@ type ViewModule interface {
 	Init(ui UI)
 	// Activate is called when the user selects this module.
 	Activate()
+	// SubMenu returns a MenuDefinition for this module's submenu.
+	SubMenu() MenuDefinition
 }
 
 type UI interface {
@@ -46,10 +48,11 @@ type Auth interface {
 }
 
 type ComponentLayout struct {
-	MainMenu    *tview.List
-	SubMenuList *tview.List
-	LogList     *tview.TextView
-	OutputPanel *tview.Flex
+	SplitSidebar *tview.Flex
+	MainMenu     *tview.List
+	SubMenuList  *tview.List
+	LogList      *tview.TextView
+	OutputPanel  *tview.Flex
 }
 
 type WinSize struct {

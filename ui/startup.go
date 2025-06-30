@@ -6,7 +6,7 @@ import (
 
 func (u *UI) startupSequence() {
 	u.App.SetRoot(u.WinMan, true)
-	u.GetLogger().Info(fmt.Sprintf("✨ Welcome to DIS Reader v%s", u.Config.AppVersion))
+	u.GetLogger().Info(fmt.Sprintf("✨ Welcome to %s v%s", u.Config.AppName, u.Config.AppVersion))
 
 	if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
 		u.Auth.Authenticate(func(success bool, err error) {

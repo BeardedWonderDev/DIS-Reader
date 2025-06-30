@@ -49,7 +49,7 @@ func (a *Auth) ShowAuthModal() {
 	layout.AddItem(btnConnect, 2, 0, 1, 3, 0, 0, false)
 
 	wnd := a.UI.CreateModalDialog(types.CreateModalDialogParam{
-		Title:         " DIS Auth Config ",
+		Title:         " DIS Config ",
 		RootView:      layout,
 		Draggable:     true,
 		Size:          types.WinSize{X: 0, Y: 0, Width: 70, Height: 10},
@@ -65,7 +65,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			a.UI.GetWinMan().RemoveWindow(wnd)
-			a.UI.SetFocus(a.UI.GetLayout().MainMenu)
+			a.UI.SetFocus(a.UI.GetLayout().SplitSidebar)
 			return nil
 
 		case tcell.KeyTAB:
@@ -79,7 +79,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			a.UI.GetWinMan().RemoveWindow(wnd)
-			a.UI.SetFocus(a.UI.GetLayout().MainMenu)
+			a.UI.SetFocus(a.UI.GetLayout().SplitSidebar)
 			return nil
 
 		case tcell.KeyTAB:
@@ -94,7 +94,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			a.UI.GetWinMan().RemoveWindow(wnd)
-			a.UI.SetFocus(a.UI.GetLayout().MainMenu)
+			a.UI.SetFocus(a.UI.GetLayout().SplitSidebar)
 			return nil
 
 		case tcell.KeyTAB:
@@ -116,7 +116,7 @@ func (a *Auth) showAuthModal_SetInputCapture(wnd *winman.WindowBase) {
 
 			a.Authenticate(func(success bool, err error) {
 				if success {
-					a.UI.CloseModalDialog(wnd, a.UI.GetLayout().MainMenu)
+					a.UI.CloseModalDialog(wnd, a.UI.GetLayout().SplitSidebar)
 					a.UI.RunPendingAction()
 				} else {
 					btnConnect.SetLabel("Connect")

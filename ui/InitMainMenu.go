@@ -2,7 +2,6 @@ package ui
 
 import (
 	"github.com/BeardedWonderDev/DIS-Reader/types"
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -11,6 +10,7 @@ func (u *UI) InitMainMenu(modules []types.ViewModule) *tview.List {
 	menu := tview.NewList().ShowSecondaryText(false)
 	menu.SetBorder(true)
 	menu.SetBorderPadding(1, 1, 1, 1)
+	menu.SetTitle(" Main Menu ")
 
 	// Dynamic modules
 	for _, m := range modules {
@@ -19,17 +19,8 @@ func (u *UI) InitMainMenu(modules []types.ViewModule) *tview.List {
 			mod.Activate()
 		})
 	}
-	menu.AddItem("Auth Config", "", 'a', u.Auth.ShowAuthModal)
+	menu.AddItem("DIS Config", "", 'c', u.Auth.ShowAuthModal)
 	menu.AddItem("Quit", "", 'q', u.QuitApplication)
-
-	menu.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTAB:
-			u.SetFocus(u.Layout.SubMenuList)
-			return nil
-		}
-		return event
-	})
 
 	return menu
 }

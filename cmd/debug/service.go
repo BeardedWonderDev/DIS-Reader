@@ -38,11 +38,12 @@ func (d *Debug) Init(ui types.UI) {
 // It makes the submenu visible and sets focus to it.
 func (d *Debug) Activate() {
 	// Populate and show the submenu
-	utilsUI.BuildMenu(d.getSubMenu(), d.UI.GetLayout().SubMenuList)
-	d.UI.SetFocus(d.UI.GetLayout().SubMenuList)
+	utilsUI.BuildMenu(d.SubMenu(), d.UI.GetLayout().SubMenuList)
+	d.UI.SetFocus(d.UI.GetLayout().SplitSidebar)
 }
 
-func (d *Debug) getSubMenu() types.MenuDefinition {
+// SubMenu returns this module's submenu definition.
+func (d *Debug) SubMenu() types.MenuDefinition {
 	return types.MenuDefinition{
 		Title: " Debug Menu ",
 		Items: []types.MenuItem{

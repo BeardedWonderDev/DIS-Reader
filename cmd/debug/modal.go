@@ -54,7 +54,7 @@ func (d *Debug) showDebugModal_SetInputCapture(wnd *winman.WindowBase) {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			d.UI.GetWinMan().RemoveWindow(wnd)
-			d.UI.SetFocus(d.UI.GetLayout().MainMenu)
+			d.UI.SetFocus(d.UI.GetLayout().SplitSidebar)
 			return nil
 
 		case tcell.KeyTAB:
@@ -120,5 +120,5 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 	}()
 
 	// Remove the window and restore focus to menu list
-	d.UI.CloseModalDialog(wnd, d.UI.GetLayout().MainMenu)
+	d.UI.CloseModalDialog(wnd, d.UI.GetLayout().SplitSidebar)
 }
