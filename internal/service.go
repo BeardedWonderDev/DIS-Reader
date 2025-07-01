@@ -81,6 +81,10 @@ func (s DISReaderService) TestDISConnection() error {
 	return s.db.Connect()
 }
 
+func (s DISReaderService) Query(sql string) ([]types.ResultRow, error) {
+	return s.db.Query(sql)
+}
+
 func (s *DISReaderService) Shutdown() {
 	s.logger.Info("Shutting down DISReaderService")
 	s.db.Shutdown()

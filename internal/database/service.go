@@ -206,3 +206,12 @@ func DecodeRows[T any](rows []types.ResultRow) ([]T, error) {
 	}
 	return results, nil
 }
+
+// As400DateExpr returns the SQL expression to convert a 6-digit AS/400 numeric date column into YYYY-MM-DD.
+func As400DateExpr(col string) string {
+	return "DATE(" +
+		"'20'||SUBSTR(RIGHT('000000'||TRIM(CHAR(" + col + ")),6),5,2)||'-'" +
+		"||SUBSTR(RIGHT('000000'||TRIM(CHAR(" + col + ")),6),1,2)||'-'" +
+		"||SUBSTR(RIGHT('000000'||TRIM(CHAR(" + col + ")),6),3,2)" +
+		")"
+}
