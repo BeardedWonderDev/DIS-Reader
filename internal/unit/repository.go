@@ -6,17 +6,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/service"
-	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 type UnitRepository struct {
-	DIS            types.DISReaderService
+	DIS            internal.DISReaderPvtService
 	allowedColumns map[string]string
 }
 
-func NewRoleRepository(d types.DISReaderService) *UnitRepository {
+func NewRoleRepository(d internal.DISReaderPvtService) *UnitRepository {
 	return &UnitRepository{
 		DIS: d,
 		allowedColumns: map[string]string{

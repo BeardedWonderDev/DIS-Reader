@@ -18,5 +18,4 @@ type DISReaderService interface {
 	AttachShutdownHook()
 	TestDISConnection() error
 	RunDebugSearch(searchTerm string, sqliteDBFile string, progressChan chan<- ProgressStatus, eventChan chan<- TableEvent)
-	Query(sql string) ([]ResultRow, error)
 }

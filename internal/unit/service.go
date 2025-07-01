@@ -1,13 +1,13 @@
 package unit
 
-import "github.com/BeardedWonderDev/DIS-Reader/types"
+import "github.com/BeardedWonderDev/DIS-Reader/internal"
 
 type UnitService struct {
-	dis  types.DISReaderService
+	dis  internal.DISReaderPvtService
 	repo UnitRepository
 }
 
-func NewUnitService(d types.DISReaderService) *UnitService {
+func NewUnitService(d internal.DISReaderPvtService) *UnitService {
 	return &UnitService{
 		dis:  d,
 		repo: *NewRoleRepository(d),

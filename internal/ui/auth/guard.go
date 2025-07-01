@@ -29,15 +29,6 @@ func (a *AuthGuard) RunDebugSearch(term, file string, pCh chan<- types.ProgressS
 	a.inner.RunDebugSearch(term, file, pCh, eCh)
 }
 
-func (a *AuthGuard) Query(sql string) ([]types.ResultRow, error) {
-	if !a.ui.GetAuth().IsAuthenticated() {
-		a.ui.SetPendingAction(func() { a.inner.Query(sql) })
-		a.ui.GetAuth().ShowAuthModal()
-		return nil, nil
-	}
-	return a.inner.Query(sql)
-}
-
 func (a *AuthGuard) Shutdown() {
 	a.inner.Shutdown()
 }
