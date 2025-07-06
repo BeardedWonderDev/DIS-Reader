@@ -181,8 +181,45 @@ func (j *JDBCRunnerService) Query(ctx context.Context, sql string) ([]types.Resu
 	return j.rawQuery(ctx, payload)
 }
 
-// Ping checks that the Java server is running and that the DB pool is connected.
-func (j *JDBCRunnerService) Ping(ctx context.Context) error {
+// PingService checks that the Java service process is alive and responding to commands.
+func (j *JDBCRunnerService) PingService(ctx context.Context) error {
+	requestID, _ := ctx.Value(requestIDKey).(string)
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", "localhost:"+j.config.JDBCConfig.JDBCPort)
+	if err != nil {
+		return fmt.Errorf("java service not running: %w", err)
+	}
+	defer conn.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(dl)
+	}
+	// Send ping command
+	payload := fmt.Sprintf(`{"cmd":"ping","requestId":%q}`, requestID)
+	if _, err := conn.Write([]byte(payload + "\n")); err != nil {
+		return fmt.Errorf("failed to send ping service command: %w", err)
+	}
+	// Read response
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		return fmt.Errorf("no response from JDBC server to ping service")
+	}
+	var res types.ResultRow
+	if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
+		return fmt.Errorf("invalid ping service response: %w", err)
+	}
+	status, hasStatus := res["status"]
+	message := res["message"]
+	if !hasStatus {
+		return fmt.Errorf("ping service response missing status field")
+	}
+	if status == "ok" || message == "Not connected to DB" {
+		return nil
+	}
+	return fmt.Errorf("ping service error: %v", message)
+}
+
+// PingDatabase checks that the Java service is connected to the database.
+func (j *JDBCRunnerService) PingDatabase(ctx context.Context) error {
 	requestID, _ := ctx.Value(requestIDKey).(string)
 	dialer := &net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", "localhost:"+j.config.JDBCConfig.JDBCPort)
@@ -216,11 +253,7 @@ func (j *JDBCRunnerService) Ping(ctx context.Context) error {
 		return nil
 	}
 	// Server responded with error status
-	if message == "Not connected to DB" {
-		j.Logger.Info("JDBC server is running but not connected to the database")
-		return nil
-	}
-	return fmt.Errorf("ping error: %v", message)
+	return fmt.Errorf("ping database error: %v", message)
 }
 
 // rawQuery sends a pre-built JSON payload over TCP and returns parsed ResultRows.

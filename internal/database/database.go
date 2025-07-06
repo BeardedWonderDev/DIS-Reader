@@ -18,7 +18,10 @@ type DB interface {
 	StopJDBCRunner() error
 	Connect(ctx context.Context) error
 	Disconnect(ctx context.Context) error
-	Ping(ctx context.Context) error
+	// PingService checks that the Java TCP service is running.
+	PingService(ctx context.Context) error
+	// PingDatabase checks that the Java service is connected to the AS/400 database.
+	PingDatabase(ctx context.Context) error
 	Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 	Query(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error)
 	QueryRow(ctx context.Context, query string, args ...interface{}) (types.ResultRow, error)
@@ -70,12 +73,20 @@ func (ds *IBMi400) Disconnect(ctx context.Context) error {
 	return ds.JDBCRunner.Disconnect(ctx)
 }
 
-// Ping performs a health check by sending a ping command to the JDBC runner.
-func (ds *IBMi400) Ping(ctx context.Context) error {
+// PingService checks the Java service process is alive and responding to commands.
+func (ds *IBMi400) PingService(ctx context.Context) error {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB Ping", "requestId", requestID)
-	return ds.JDBCRunner.Ping(ctx)
+	ds.Logger.Debug("DB PingService", "requestId", requestID)
+	return ds.JDBCRunner.PingService(ctx)
+}
+
+// PingDatabase performs a health check ensuring the Java service is connected to the database.
+func (ds *IBMi400) PingDatabase(ctx context.Context) error {
+	requestID := uuid.New().String()
+	ctx = context.WithValue(ctx, requestIDKey, requestID)
+	ds.Logger.Debug("DB PingDatabase", "requestId", requestID)
+	return ds.JDBCRunner.PingDatabase(ctx)
 }
 
 // Query executes a SQL query that may return multiple rows.

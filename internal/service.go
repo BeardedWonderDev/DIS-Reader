@@ -70,7 +70,7 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 	}
 
 	// Verify the runner is responsive
-	if err := s.db.Ping(context.Background()); err != nil {
+	if err := s.db.PingService(context.Background()); err != nil {
 		s.logger.Error("JDBC runner ping failed after start", "error", err)
 		s.db.StopJDBCRunner()
 		os.RemoveAll(tmp)
@@ -95,10 +95,15 @@ func (s *DISReaderService) SetLogger(logger *slog.Logger) {
 	s.logger.Info("DIS Logger Attached")
 }
 
-// TestConnection runs a ping health check on the JDBC runner.
+// TestConnection verifies both the Java service is running and the database is connected.
 func (s *DISReaderService) TestConnection(ctx context.Context) error {
-	if err := s.db.Ping(ctx); err != nil {
-		return fmt.Errorf("failed to ping JDBC runner: %w", err)
+	// Check Java service responsiveness
+	if err := s.db.PingService(ctx); err != nil {
+		return fmt.Errorf("service ping failed: %w", err)
+	}
+	// Check AS/400 database connectivity
+	if err := s.db.PingDatabase(ctx); err != nil {
+		return fmt.Errorf("database ping failed: %w", err)
 	}
 	return nil
 }

@@ -24,4 +24,6 @@ func main() {
 	u.AttachToDISLogger()
 
 	u.Run()
+
+	disReader.Shutdown()
 }

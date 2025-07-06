@@ -91,6 +91,5 @@ func (u *UI) Run() error {
 }
 
 func (u *UI) QuitApplication() {
-	u.DIS.Shutdown()
 	u.App.Stop()
 }
