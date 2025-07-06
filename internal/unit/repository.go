@@ -6,19 +6,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BeardedWonderDev/DIS-Reader/internal"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/service"
 )
 
 type UnitRepository struct {
-	DIS            internal.DISReaderPvtService
+	db             database.DB
 	allowedColumns map[string]string
 }
 
-func NewRoleRepository(d internal.DISReaderPvtService) *UnitRepository {
+func NewUnitRepository(d database.DB) *UnitRepository {
 	return &UnitRepository{
-		DIS: d,
+		db: d,
 		allowedColumns: map[string]string{
 			"unit":     "UNIT",
 			"year":     "YEAR",
@@ -35,23 +34,12 @@ func NewRoleRepository(d internal.DISReaderPvtService) *UnitRepository {
 	}
 }
 
-func (repo *UnitRepository) GetByUnitNumber(unitNum string) (Model, error) {
+func (repo *UnitRepository) GetByUnitNumber(ctx context.Context, unitNum string) (Model, error) {
 	query := fmt.Sprintf("SELECT * FROM FILEC.DMUNITM1 WHERE UNIT = %s", unitNum)
-	results, err := repo.DIS.Query(query)
-	if err != nil {
+	var unit Unit
+	if err := repo.db.Get(ctx, &unit, query); err != nil {
 		return nil, err
 	}
-
-	units, err := database.DecodeRows[Unit](results)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(units) > 1 {
-		return nil, fmt.Errorf("more than one result was returned: %v", units)
-	}
-
-	unit := units[len(units)-1]
 
 	return &unit, nil
 }
@@ -104,13 +92,10 @@ func (repo *UnitRepository) ListUnits(ctx context.Context, lp service.ListParams
 		base += fmt.Sprintf(" LIMIT %d", lp.Limit)
 	}
 	// Execute
-	rows, err := repo.DIS.Query(base)
-	if err != nil {
+	var units []Unit
+	if err := repo.db.Select(ctx, &units, base); err != nil {
 		return nil, err
 	}
-	units, err := database.DecodeRows[Unit](rows)
-	if err != nil {
-		return nil, err
-	}
+
 	return units, nil
 }

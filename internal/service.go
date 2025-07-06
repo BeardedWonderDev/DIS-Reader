@@ -13,7 +13,7 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
-//go:embed dis-runner-1.0.0.jar
+//go:embed dis-runner-0.0.4.jar
 var runnerJar []byte
 
 // DISReaderService manages the lifecycle of the Java JDBC runner and exposes query APIs.

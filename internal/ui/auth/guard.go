@@ -1,6 +1,10 @@
 package authUI
 
-import "github.com/BeardedWonderDev/DIS-Reader/types"
+import (
+	"context"
+
+	"github.com/BeardedWonderDev/DIS-Reader/types"
+)
 
 // AuthGuard wraps DISReaderService to enforce authentication transparently.
 type AuthGuard struct {
@@ -12,12 +16,12 @@ func NewAuthGuard(inner types.DISReaderService, ui types.UI) types.DISReaderServ
 	return &AuthGuard{inner: inner, ui: ui}
 }
 
-func (a *AuthGuard) GetConfig() *types.Config {
+func (a *AuthGuard) GetConfig() *types.DISConfig {
 	return a.inner.GetConfig()
 }
 
-func (a *AuthGuard) TestDISConnection() error {
-	return a.inner.TestDISConnection()
+func (a *AuthGuard) TestConnection(ctx context.Context) error {
+	return a.inner.TestConnection(ctx)
 }
 
 func (a *AuthGuard) RunDebugSearch(term, file string, pCh chan<- types.ProgressStatus, eCh chan<- types.TableEvent) {
@@ -29,8 +33,8 @@ func (a *AuthGuard) RunDebugSearch(term, file string, pCh chan<- types.ProgressS
 	a.inner.RunDebugSearch(term, file, pCh, eCh)
 }
 
-func (a *AuthGuard) Shutdown() {
-	a.inner.Shutdown()
+func (a *AuthGuard) Shutdown() error {
+	return a.inner.Shutdown()
 }
 
 func (a *AuthGuard) AttachShutdownHook() {

@@ -1,21 +1,25 @@
 package unit
 
-import "github.com/BeardedWonderDev/DIS-Reader/internal"
+import (
+	"context"
+
+	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
+)
 
 type UnitService struct {
-	dis  internal.DISReaderPvtService
+	db   database.DB
 	repo UnitRepository
 }
 
-func NewUnitService(d internal.DISReaderPvtService) *UnitService {
+func NewUnitService(d database.DB) *UnitService {
 	return &UnitService{
-		dis:  d,
-		repo: *NewRoleRepository(d),
+		db:   d,
+		repo: *NewUnitRepository(d),
 	}
 }
 
-func (u *UnitService) GetByUnitNumber(unitNum string) (*UnitSpec, error) {
-	unit, err := u.repo.GetByUnitNumber(unitNum)
+func (u *UnitService) GetByUnitNumber(ctx context.Context, unitNum string) (*UnitSpec, error) {
+	unit, err := u.repo.GetByUnitNumber(ctx, unitNum)
 	if err != nil {
 		return nil, err
 	}

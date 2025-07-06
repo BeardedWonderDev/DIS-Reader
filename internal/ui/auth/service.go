@@ -1,6 +1,10 @@
 package authUI
 
-import "github.com/BeardedWonderDev/DIS-Reader/types"
+import (
+	"context"
+
+	"github.com/BeardedWonderDev/DIS-Reader/types"
+)
 
 type Auth struct {
 	UI            types.UI
@@ -19,7 +23,7 @@ func (a *Auth) Authenticate(onComplete func(success bool, err error)) {
 	a.UI.GetLogger().Info("🌏 Verifying DIS Connection", "url", txtServerURL.GetText())
 
 	go func() {
-		err := a.UI.GetDIS().TestDISConnection()
+		err := a.UI.GetDIS().TestConnection(context.TODO())
 		success := err == nil
 		if err != nil {
 			a.UI.GetLogger().Error("DIS Connection Failed", "error", err)
