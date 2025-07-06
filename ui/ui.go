@@ -3,7 +3,6 @@ package ui
 import (
 	"log/slog"
 
-	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	authUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/auth"
 	logUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/log"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
@@ -86,7 +85,7 @@ func (u *UI) QuitApplication() {
 	u.App.Stop()
 }
 
-func NewUI(cfg *types.Config, modules []types.ViewModule) *UI {
+func NewUI(cfg *types.Config, dis types.DISReaderService, modules []types.ViewModule) *UI {
 	app := tview.NewApplication()
 	wm := winman.NewWindowManager()
 
@@ -99,8 +98,7 @@ func NewUI(cfg *types.Config, modules []types.ViewModule) *UI {
 	}
 
 	ui.Log = logUI.InitLogPanel(&ui)
-	raw := disreader.NewDISReaderService(cfg, ui.GetLogger())
-	ui.DIS = authUI.NewAuthGuard(raw, &ui)
+	ui.DIS = authUI.NewAuthGuard(dis, &ui)
 	ui.Auth.UI = &ui
 	ui.Log.UI = &ui
 

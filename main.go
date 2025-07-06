@@ -1,21 +1,25 @@
 package main
 
 import (
-	"os"
-
-	"github.com/BeardedWonderDev/DIS-Reader/cmd"
+	debugUI "github.com/BeardedWonderDev/DIS-Reader/cmd/debug"
+	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
-	"github.com/joho/godotenv"
+	"github.com/BeardedWonderDev/DIS-Reader/ui"
 )
 
 func main() {
-	_ = godotenv.Load()
+	cfg := disreader.NewConfig()
 
-	cfg := &types.Config{
-		AppName:    os.Getenv("APP_NAME"),
-		AppVersion: os.Getenv("APP_VERSION"),
-		Host:       os.Getenv("DIS_HOST"),
+	disReader, err := disreader.NewDISReaderService(cfg.DIS, nil)
+	if err != nil {
+		panic(err)
 	}
 
-	cmd.StartUI(cfg)
+	modules := []types.ViewModule{
+		debugUI.NewDebugService(),
+	}
+
+	if err := ui.NewUI(cfg, disReader, modules).Run(); err != nil {
+		panic(err)
+	}
 }

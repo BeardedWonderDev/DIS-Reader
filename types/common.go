@@ -1,21 +1,11 @@
 package types
 
-type Config struct {
-	AppName    string
-	AppVersion string
-	JavaPath   string
-	JarPath    string
-	ClassDir   string
-	JDBCPort   string
-	User       string
-	Password   string
-	Host       string
-}
+import "context"
 
 type DISReaderService interface {
-	GetConfig() *Config
-	Shutdown()
+	GetConfig() *DISConfig
+	Shutdown() error
 	AttachShutdownHook()
-	TestDISConnection() error
+	TestConnection(ctx context.Context) error
 	RunDebugSearch(searchTerm string, sqliteDBFile string, progressChan chan<- ProgressStatus, eventChan chan<- TableEvent)
 }

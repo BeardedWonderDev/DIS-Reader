@@ -2,6 +2,7 @@ package database
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -14,17 +15,23 @@ import (
 )
 
 const (
-	className = "JDBCRunner"
+	className           = "JDBCRunner"
+	serverStartRetries  = 10
+	serverStartInterval = 500 * time.Millisecond
 )
 
+// Context key for request ID propagation
+type contextKey string
+
+const requestIDKey contextKey = "requestId"
+
 type JDBCRunnerService struct {
-	config  *types.Config
+	config  *types.DISConfig
 	javaCmd *exec.Cmd
-	conn    net.Conn
 	Logger  *slog.Logger
 }
 
-func NewJDBCRunnerService(config *types.Config, logger *slog.Logger) *JDBCRunnerService {
+func NewJDBCRunnerService(config *types.DISConfig, logger *slog.Logger) *JDBCRunnerService {
 	return &JDBCRunnerService{
 		config: config,
 		Logger: logger,
@@ -34,18 +41,17 @@ func NewJDBCRunnerService(config *types.Config, logger *slog.Logger) *JDBCRunner
 func (j *JDBCRunnerService) Start() error {
 	if j.javaCmd != nil && j.javaCmd.ProcessState == nil {
 		j.Logger.Debug("Java process already running", "pid", j.javaCmd.Process.Pid)
-		return nil // already running
+		return nil
 	}
-	// Include both JAR and extracted classes directory in the classpath
-	classpath := fmt.Sprintf("%s:%s", j.config.JarPath, j.config.ClassDir)
+	classpath := fmt.Sprintf("%s:%s", j.config.JDBCConfig.JarPath, j.config.JDBCConfig.ClassDir)
 	cmd := exec.Command(
-		j.config.JavaPath,
+		j.config.JDBCConfig.JavaPath,
 		"-cp", classpath,
 		className,
 		j.config.Host,
 		j.config.User,
 		j.config.Password,
-		j.config.JDBCPort,
+		j.config.JDBCConfig.JDBCPort,
 	)
 	stdoutPipe, _ := cmd.StdoutPipe()
 	stderrPipe, _ := cmd.StderrPipe()
@@ -56,14 +62,12 @@ func (j *JDBCRunnerService) Start() error {
 			j.Logger.Debug(fmt.Sprintf("Database Service: %s", scanner.Text()))
 		}
 	}()
-
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			j.Logger.Warn(fmt.Sprintf("Database Service: %s", scanner.Text()))
 		}
 	}()
-
 	if err := cmd.Start(); err != nil {
 		j.Logger.Error("Failed to start java process", "error", err)
 		return fmt.Errorf("failed to start java process: %w", err)
@@ -71,7 +75,6 @@ func (j *JDBCRunnerService) Start() error {
 	j.javaCmd = cmd
 	j.Logger.Info("Started java process", "pid", cmd.Process.Pid)
 
-	// Monitor java process in background
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
@@ -82,26 +85,20 @@ func (j *JDBCRunnerService) Start() error {
 		j.javaCmd = nil
 	}()
 
-	// Wait for Java server port to be open
-	retries := 10
-	for i := 0; i < retries; i++ {
-		conn, err := net.DialTimeout("tcp", "localhost:"+j.config.JDBCPort, 500*time.Millisecond)
+	for i := 0; i < serverStartRetries; i++ {
+		connTest, err := net.DialTimeout("tcp", "localhost:"+j.config.JDBCConfig.JDBCPort, serverStartInterval)
 		if err == nil {
-			conn.Close()
-			j.Logger.Info("Java server port is open", "port", j.config.JDBCPort)
+			connTest.Close()
+			j.Logger.Info("Java server port is open", "port", j.config.JDBCConfig.JDBCPort)
 			return nil
 		}
-		j.Logger.Debug("Waiting for java server port to open...", "port", j.config.JDBCPort, "attempt", i+1, "max", retries)
-		time.Sleep(500 * time.Millisecond)
+		j.Logger.Debug("Waiting for java server port to open...", "port", j.config.JDBCConfig.JDBCPort, "attempt", i+1, "max", serverStartRetries)
+		time.Sleep(serverStartInterval)
 	}
-	return fmt.Errorf("java server port %s did not open after %d retries", j.config.JDBCPort, retries)
+	return fmt.Errorf("java server port %s did not open after %d retries", j.config.JDBCConfig.JDBCPort, serverStartRetries)
 }
 
 func (j *JDBCRunnerService) Shutdown() {
-	if j.conn != nil {
-		j.conn.Close()
-		j.conn = nil
-	}
 	if j.javaCmd != nil && j.javaCmd.Process != nil {
 		if err := j.javaCmd.Process.Kill(); err != nil {
 			j.Logger.Error("Failed to kill Java process", "error", err)
@@ -112,84 +109,115 @@ func (j *JDBCRunnerService) Shutdown() {
 	}
 }
 
-func (j *JDBCRunnerService) Connect() error {
-	if j.conn == nil {
-		j.Logger.Debug("Attempting to connect to JDBC socket", "port", j.config.JDBCPort)
-		conn, err := net.Dial("tcp", "localhost:"+j.config.JDBCPort)
-		if err != nil {
-			j.Logger.Error("Failed to connect to JDBC socket", "error", err)
-			return fmt.Errorf("failed to connect to JDBC runner: %w", err)
-		}
-		j.conn = conn
-
-		msg := `{"cmd":"connect"}`
-		if _, err := j.conn.Write([]byte(msg + "\n")); err != nil {
-			j.Logger.Error("Failed to send connect command", "error", err)
-			return fmt.Errorf("failed to send connect command: %w", err)
-		}
-
-		scanner := bufio.NewScanner(j.conn)
-		if scanner.Scan() {
-			var res types.JDBCResult
-			if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
-				j.Logger.Error("Failed to parse response", "error", err)
-				return fmt.Errorf("failed to parse response: %w", err)
-			}
-			if res.Status != "ok" {
-				err := fmt.Errorf("connect error: %s", res.Message)
-				j.Logger.Error("Connect error", "message", res.Message)
-				return err
-			}
-		}
-		j.Logger.Info("Successfully connected to JDBC socket", "port", j.config.JDBCPort)
+func (j *JDBCRunnerService) Connect(ctx context.Context) error {
+	requestID, _ := ctx.Value(requestIDKey).(string)
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", "localhost:"+j.config.JDBCConfig.JDBCPort)
+	if err != nil {
+		return fmt.Errorf("failed to dial java server: %w", err)
 	}
-	return nil
+	defer conn.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(dl)
+	}
+	cmd := fmt.Sprintf(`{"cmd":"connect","requestId":%q}`, requestID)
+	if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
+		return fmt.Errorf("failed to send connect: %w", err)
+	}
+	scanner := bufio.NewScanner(conn)
+	if scanner.Scan() {
+		var res types.ResultRow
+		if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
+			return fmt.Errorf("invalid connect response: %w", err)
+		}
+		if status, ok := res["status"]; !ok || status != "ok" {
+			return fmt.Errorf("connect error: %v", res["message"])
+		}
+		return nil
+	}
+	return fmt.Errorf("no connect response")
 }
 
-func (j *JDBCRunnerService) Query(sql string) ([]types.ResultRow, error) {
-	j.Logger.Debug("Sending query to JDBC socket", "sql", sql)
-	if j.conn == nil {
-		return nil, fmt.Errorf("not connected to JDBC runner")
+func (j *JDBCRunnerService) Query(ctx context.Context, sql string) ([]types.ResultRow, error) {
+	requestID, _ := ctx.Value(requestIDKey).(string)
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", "localhost:"+j.config.JDBCConfig.JDBCPort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial java server: %w", err)
 	}
-
-	queryCmd := fmt.Sprintf(`{"cmd":"query","sql":%q}`, sql)
-	if _, err := j.conn.Write([]byte(queryCmd + "\n")); err != nil {
-		j.Logger.Error("Query failed", "error", err)
-		return nil, fmt.Errorf("failed to send query: %w", err)
+	defer conn.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(dl)
 	}
+	j.Logger.Debug("Sending query", "requestId", requestID, "sql", sql)
+	payload := fmt.Sprintf(`{"cmd":"query","requestId":%q,"sql":%q}`, requestID, sql)
+	return j.rawQuery(ctx, payload)
+}
 
+func (j *JDBCRunnerService) Ping(ctx context.Context) error {
+	requestID, _ := ctx.Value(requestIDKey).(string)
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", "localhost:"+j.config.JDBCConfig.JDBCPort)
+	if err != nil {
+		return fmt.Errorf("failed to dial java server: %w", err)
+	}
+	defer conn.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(dl)
+	}
+	cmd := fmt.Sprintf(`{"cmd":"ping","requestId":%q}`, requestID)
+	if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
+		return fmt.Errorf("failed to send ping: %w", err)
+	}
+	scanner := bufio.NewScanner(conn)
+	if scanner.Scan() {
+		var res types.ResultRow
+		if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
+			return fmt.Errorf("invalid ping response: %w", err)
+		}
+		if status, ok := res["status"]; !ok || status != "ok" {
+			return fmt.Errorf("ping error: %v", res["message"])
+		}
+		return nil
+	}
+	return fmt.Errorf("no ping response")
+}
+
+// rawQuery sends a pre-built JSON payload over TCP and returns parsed ResultRows.
+func (j *JDBCRunnerService) rawQuery(ctx context.Context, payload string) ([]types.ResultRow, error) {
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", "localhost:"+j.config.JDBCConfig.JDBCPort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial java server: %w", err)
+	}
+	defer conn.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(dl)
+	}
+	if _, err := conn.Write([]byte(payload + "\n")); err != nil {
+		return nil, fmt.Errorf("failed to send payload: %w", err)
+	}
 	var results []types.ResultRow
-	scanner := bufio.NewScanner(j.conn)
+	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		var result types.ResultRow
-		if err := json.Unmarshal(line, &result); err != nil {
-			j.Logger.Error("Query failed", "error", err)
+		var m types.ResultRow
+		if err := json.Unmarshal(scanner.Bytes(), &m); err != nil {
 			return nil, fmt.Errorf("failed to parse row: %w", err)
 		}
-		if status, exists := result["status"]; exists {
+		if status, ok := m["status"]; ok {
 			switch status {
-			case "ok":
-				// Query completed successfully, continue reading until "done"
-				continue
 			case "error":
-				err := fmt.Errorf("query error: %s", result["message"])
-				j.Logger.Error("Query failed", "error", err)
-				return nil, err
+				return nil, fmt.Errorf("query error: %s", m["message"])
 			case "done":
-				// End of query results
-				break
-			default:
-				results = append(results, result)
-			}
-			if status == "done" {
-				break
+				return results, nil
 			}
 		} else {
-			results = append(results, result)
+			results = append(results, m)
 		}
 	}
-	j.Logger.Info("Query completed", "rows", len(results))
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
