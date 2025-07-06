@@ -18,18 +18,25 @@ var runnerJar []byte
 
 // DISReaderService manages the lifecycle of the Java JDBC runner and exposes query APIs.
 type DISReaderService struct {
-	config  *types.DISConfig
-	db      database.DB
-	logger  *slog.Logger
-	tempDir string
+	config   *types.Config
+	db       database.DB
+	logger   *slog.Logger
+	logLevel *slog.LevelVar
+	tempDir  string
 }
 
 // NewDISReaderService creates a DISReaderService, writes embedded JAR,
 // starts the JDBC runner, verifies connectivity, and returns an error on failure.
 // Note: This only starts the Java process; AS/400 connectivity is established via Connect.
-func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISReaderService, error) {
+func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderService, error) {
+	var logLevel slog.LevelVar
+	logLevel.Set(config.LogLevel)
+
 	if logger == nil {
-		logger = slog.Default()
+		handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: &logLevel,
+		})
+		logger = slog.New(handler)
 	}
 
 	tmp, err := os.MkdirTemp("", "disreader-jdbc-*")
@@ -44,10 +51,10 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 		os.RemoveAll(tmp)
 		return nil, err
 	}
-	config.JDBCConfig.JarPath = jarPath
+	config.DIS.JDBCConfig.JarPath = jarPath
 
 	// Initialize and start the JDBC runner
-	db := database.NewIBMi400(config, logger)
+	db := database.NewIBMi400(config.DIS, logger)
 	if err := db.StartJDBCRunner(); err != nil {
 		logger.Error("Failed to start JDBC runner", "error", err)
 		os.RemoveAll(tmp)
@@ -55,10 +62,11 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 	}
 
 	s := &DISReaderService{
-		config:  config,
-		db:      db,
-		logger:  logger,
-		tempDir: tmp,
+		config:   config,
+		db:       db,
+		logger:   logger,
+		logLevel: &logLevel,
+		tempDir:  tmp,
 	}
 
 	// Verify the runner is responsive
@@ -74,7 +82,17 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 
 // GetConfig returns the underlying configuration.
 func (s *DISReaderService) GetConfig() *types.DISConfig {
-	return s.config
+	return s.config.DIS
+}
+
+// GetLogger returns the underlying logger.
+func (s *DISReaderService) GetLogger() *slog.Logger {
+	return s.logger
+}
+
+func (s *DISReaderService) SetLogger(logger *slog.Logger) {
+	s.logger = logger
+	s.logger.Info("DIS Logger Attached")
 }
 
 // TestConnection runs a ping health check on the JDBC runner.

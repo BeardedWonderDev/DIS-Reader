@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +30,7 @@ type queryItem struct {
 	Query string
 }
 
-func ensureBatchStatusTable(db *sql.DB) {
+func (s DISReaderService) ensureBatchStatusTable(db *sql.DB) {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS batch_status (
         run_id TEXT NOT NULL,
         search_term TEXT NOT NULL,
@@ -40,7 +39,7 @@ func ensureBatchStatusTable(db *sql.DB) {
         PRIMARY KEY (run_id, query_index)
     )`)
 	if err != nil {
-		slog.Error("Failed to ensure batch_status table", "error", err)
+		s.logger.Error("Failed to ensure batch_status table", "error", err)
 	}
 }
 
@@ -64,11 +63,11 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	}
 	defer db.Close()
 
-	ensureBatchStatusTable(db)
+	s.ensureBatchStatusTable(db)
 
 	s.logger.Info("Starting Search for search term", "term", searchTerm)
 
-	completed := loadCompletedFromDB(runID, db)
+	completed := s.loadCompletedFromDB(runID, db)
 
 	progressChan <- types.ProgressStatus{
 		RunID:            runID,
@@ -92,7 +91,7 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 			batch = []queryItem{}
 			time.Sleep(delay)
 			// Re-load completed from DB after each batch in case another process is marking completions
-			completed = loadCompletedFromDB(runID, db)
+			completed = s.loadCompletedFromDB(runID, db)
 			progressChan <- types.ProgressStatus{
 				RunID:            runID,
 				TotalQueries:     len(queryTemplates),
@@ -105,7 +104,7 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	// Final batch, if any remain
 	if len(batch) > 0 {
 		s.runBatchToSQLite(runID, searchTerm, batch, db, tableCols, eventChan)
-		completed = loadCompletedFromDB(runID, db)
+		completed = s.loadCompletedFromDB(runID, db)
 		progressChan <- types.ProgressStatus{
 			RunID:            runID,
 			TotalQueries:     len(queryTemplates),
@@ -115,7 +114,7 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	}
 
 	// After all batches, check if all queries are completed
-	completed = loadCompletedFromDB(runID, db)
+	completed = s.loadCompletedFromDB(runID, db)
 	if len(completed) == len(queryTemplates) {
 		s.logger.Info("All queries completed.")
 	} else {
@@ -175,7 +174,7 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 			if len(rows) == 0 {
 				// No rows returned, mark completed and skip
 				mu.Lock()
-				markCompletedInDB(runID, searchTerm, item.Index, db)
+				s.markCompletedInDB(runID, searchTerm, item.Index, db)
 				mu.Unlock()
 				return
 			}
@@ -209,7 +208,7 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 				insertRow(db, tableName, row, eventChan)
 				mu.Unlock()
 			}
-			markCompletedInDB(runID, searchTerm, item.Index, db)
+			s.markCompletedInDB(runID, searchTerm, item.Index, db)
 		}(item)
 	}
 	wg.Wait()
@@ -267,10 +266,10 @@ func insertRow(db *sql.DB, table string, row types.ResultRow, eventChan chan<- t
 	}
 }
 
-func loadCompletedFromDB(runID string, db *sql.DB) map[int]struct{} {
+func (s DISReaderService) loadCompletedFromDB(runID string, db *sql.DB) map[int]struct{} {
 	rows, err := db.Query(`SELECT query_index FROM batch_status WHERE run_id = ?`, runID)
 	if err != nil {
-		slog.Warn("Failed to load completed queries", "error", err)
+		s.logger.Warn("Failed to load completed queries", "error", err)
 		return map[int]struct{}{}
 	}
 	defer rows.Close()
@@ -285,9 +284,9 @@ func loadCompletedFromDB(runID string, db *sql.DB) map[int]struct{} {
 	return completed
 }
 
-func markCompletedInDB(runID string, searchTerm string, idx int, db *sql.DB) {
+func (s DISReaderService) markCompletedInDB(runID string, searchTerm string, idx int, db *sql.DB) {
 	_, err := db.Exec(`INSERT OR IGNORE INTO batch_status (run_id, search_term, query_index) VALUES (?, ?, ?)`, runID, searchTerm, idx)
 	if err != nil {
-		slog.Warn("Failed to mark query as completed", "index", idx, "error", err)
+		s.logger.Warn("Failed to mark query as completed", "index", idx, "error", err)
 	}
 }

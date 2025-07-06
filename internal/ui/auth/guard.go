@@ -2,6 +2,7 @@ package authUI
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
@@ -18,6 +19,14 @@ func NewAuthGuard(inner types.DISReaderService, ui types.UI) types.DISReaderServ
 
 func (a *AuthGuard) GetConfig() *types.DISConfig {
 	return a.inner.GetConfig()
+}
+
+func (a *AuthGuard) GetLogger() *slog.Logger {
+	return a.inner.GetLogger()
+}
+
+func (a *AuthGuard) SetLogger(logger *slog.Logger) {
+	a.inner.SetLogger(logger)
 }
 
 func (a *AuthGuard) Connect(ctx context.Context) error {

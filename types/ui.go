@@ -46,6 +46,7 @@ type UI interface {
 	RunPendingAction()
 	SetPendingAction(f func())
 	GetLogger() *slog.Logger
+	AttachToDISLogger() error
 
 	CreateModalDialog(param CreateModalDialogParam) *winman.WindowBase
 	CloseModalDialog(wnd *winman.WindowBase, focus tview.Primitive)

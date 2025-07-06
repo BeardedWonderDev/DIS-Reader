@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 
 	authUI "github.com/BeardedWonderDev/DIS-Reader/internal/ui/auth"
@@ -68,6 +69,15 @@ func (u *UI) SetPendingAction(f func()) {
 
 func (u *UI) GetLogger() *slog.Logger {
 	return u.Log.Logger
+}
+
+func (u *UI) AttachToDISLogger() error {
+	if u.Log.Logger != nil {
+		u.DIS.SetLogger(u.Log.Logger)
+		return nil
+	}
+
+	return fmt.Errorf("UI logger not configured")
 }
 
 func (u *UI) SetFocus(p tview.Primitive) {

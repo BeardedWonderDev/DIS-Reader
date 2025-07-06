@@ -10,7 +10,7 @@ import (
 func main() {
 	cfg := disreader.NewConfig()
 
-	disReader, err := disreader.NewDISReaderService(cfg.DIS, nil)
+	disReader, err := disreader.NewDISReaderService(cfg, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -19,7 +19,9 @@ func main() {
 		debugUI.NewDebugService(),
 	}
 
-	if err := ui.NewUI(cfg, disReader, nil, modules).Run(); err != nil {
-		panic(err)
-	}
+	u := ui.NewUI(cfg, disReader, nil, modules)
+
+	u.AttachToDISLogger()
+
+	u.Run()
 }

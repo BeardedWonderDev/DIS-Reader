@@ -1,9 +1,11 @@
 package types
 
+import "log/slog"
+
 type Config struct {
 	AppName    string     `mapstructure:"appName"`
 	AppVersion string     `mapstructure:"appVersion"`
-	LogLevel   string     `mapstructure:"logLevel"`
+	LogLevel   slog.Level `mapstructure:"logLevel"`
 	DIS        *DISConfig `mapstructure:"disConfig"`
 }
 

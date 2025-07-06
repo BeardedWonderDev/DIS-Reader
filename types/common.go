@@ -1,9 +1,14 @@
 package types
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 type DISReaderService interface {
 	GetConfig() *DISConfig
+	GetLogger() *slog.Logger
+	SetLogger(logger *slog.Logger)
 	Shutdown() error
 	AttachShutdownHook()
 	Connect(ctx context.Context) error
