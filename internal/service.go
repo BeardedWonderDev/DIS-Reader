@@ -19,7 +19,7 @@ var runnerJar []byte
 
 // DISReaderService manages the lifecycle of the Java JDBC runner and exposes query APIs.
 type DISReaderService struct {
-	config   *types.Config
+	config   *types.DISConfig
 	db       database.DB
 	logger   *slog.Logger
 	logLevel *slog.LevelVar
@@ -31,7 +31,7 @@ type DISReaderService struct {
 // NewDISReaderService creates a DISReaderService, writes embedded JAR,
 // starts the JDBC runner, verifies connectivity, and returns an error on failure.
 // Note: This only starts the Java process; AS/400 connectivity is established via Connect.
-func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderService, error) {
+func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISReaderService, error) {
 	var logLevel slog.LevelVar
 	logLevel.Set(config.LogLevel)
 
@@ -54,10 +54,10 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 		os.RemoveAll(tmp)
 		return nil, err
 	}
-	config.DIS.JDBCConfig.JarPath = jarPath
+	config.JDBCConfig.JarPath = jarPath
 
 	// Initialize and start the JDBC runner
-	db := database.NewIBMi400(config.DIS, logger)
+	db := database.NewIBMi400(config, logger)
 	if err := db.StartJDBCRunner(); err != nil {
 		types.LogError(logger, "Failed to start JDBC runner", err)
 		os.RemoveAll(tmp)
@@ -81,7 +81,7 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 		return nil, err
 	}
 
-	if config.DIS.Host != "" && config.DIS.User != "" && config.DIS.Password != "" {
+	if config.Host != "" && config.User != "" && config.Password != "" {
 		ctx := context.TODO()
 		if err := s.Connect(ctx); err != nil {
 			types.LogError(logger, "DIS Connection Failed", err)
@@ -99,7 +99,7 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 
 // GetConfig returns the underlying configuration.
 func (s *DISReaderService) GetConfig() *types.DISConfig {
-	return s.config.DIS
+	return s.config
 }
 
 // GetLogger returns the underlying logger.

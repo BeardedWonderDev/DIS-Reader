@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
-	cfg := disreader.NewConfig()
+	cfg := NewConfig()
 
-	disReader, err := disreader.NewDISReaderService(cfg, nil)
+	disReader, err := disreader.NewDISReaderService(cfg.DIS, nil)
 	if err != nil {
 		panic(err)
 	}

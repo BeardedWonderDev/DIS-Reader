@@ -2,14 +2,14 @@ package types
 
 import "log/slog"
 
-type Config struct {
+type DISUIConfig struct {
 	AppName    string     `mapstructure:"appName"`
 	AppVersion string     `mapstructure:"appVersion"`
-	LogLevel   slog.Level `mapstructure:"logLevel"`
 	DIS        *DISConfig `mapstructure:"disConfig"`
 }
 
 type DISConfig struct {
+	LogLevel           slog.Level  `mapstructure:"logLevel"`
 	JDBCConfig         *JDBCConfig `mapstructure:"jdbcConfig"`
 	Host               string      `mapstructure:"host"`
 	User               string      `mapstructure:"user"`

@@ -10,7 +10,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-func NewUI(cfg *types.Config, dis types.DISReaderService, screen *tcell.Screen, modules []types.ViewModule) types.UI {
+func NewUI(cfg *types.DISUIConfig, dis types.DISReaderService, screen *tcell.Screen, modules []types.ViewModule) types.UI {
 	app := tview.NewApplication()
 	if screen != nil {
 		app.SetScreen(*screen)

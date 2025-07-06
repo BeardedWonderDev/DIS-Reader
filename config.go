@@ -1,4 +1,4 @@
-package disreader
+package main
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 
 const (
 	DefaultAppName    = "DIS Reader"
-	DefaultAppVersion = "0.0.4"
+	DefaultAppVersion = "0.0.5"
 	DefaultJavaPath   = "java"
 	DefaultJDBCPort   = "8888"
 	DefualtLogLevel   = slog.LevelInfo
@@ -22,11 +22,11 @@ const (
 	ConfigFileName    = "disreader.yaml"
 )
 
-func NewConfig() *types.Config {
+func NewConfig() *types.DISUIConfig {
 	viper.SetConfigFile(ConfigFileName)
-	viper.SetDefault("logLevel", DefualtLogLevel)
 	viper.SetDefault("appName", DefaultAppName)
 	viper.SetDefault("appVersion", DefaultAppVersion)
+	viper.SetDefault("disConfig.logLevel", DefualtLogLevel)
 	viper.SetDefault("disConfig.jdbcConfig.javaPath", DefaultJavaPath)
 	viper.SetDefault("disConfig.jdbcConfig.jdbcPort", DefaultJDBCPort)
 
@@ -44,7 +44,7 @@ func NewConfig() *types.Config {
 		}
 	}
 
-	var config types.Config
+	var config types.DISUIConfig
 	// If available, use env vars for config
 	for _, fieldName := range getFlattenedStructFields(reflect.TypeOf(config)) {
 		envKey := strings.ToUpper(fmt.Sprintf("%s_%s", Prefix, strings.ReplaceAll(fieldName, ".", "_")))

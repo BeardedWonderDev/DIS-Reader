@@ -12,7 +12,7 @@ import (
 )
 
 type UI struct {
-	Config *types.Config
+	Config *types.DISUIConfig
 	App    *tview.Application
 	WinMan *winman.Manager
 	Layout *types.ComponentLayout

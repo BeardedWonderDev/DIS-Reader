@@ -7,6 +7,6 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
-func NewDISReaderService(config *types.Config, logger *slog.Logger) (types.DISReaderService, error) {
+func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (types.DISReaderService, error) {
 	return internal.NewDISReaderService(config, logger)
 }
