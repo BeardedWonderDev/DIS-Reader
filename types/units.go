@@ -1,6 +1,14 @@
-package unit
+package types
 
-import "time"
+import (
+	"context"
+	"time"
+)
+
+type UnitService interface {
+	GetByUnitNumber(ctx context.Context, unitNum string) (*UnitSpec, error)
+	ListUnits(ctx context.Context, lp ListParams) ([]*UnitSpec, error)
+}
 
 type UnitSpec struct {
 	UnitID        string    `json:"unitId" validate:"required"`

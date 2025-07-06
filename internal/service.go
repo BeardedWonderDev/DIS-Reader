@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/unit"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
@@ -23,6 +24,8 @@ type DISReaderService struct {
 	logger   *slog.Logger
 	logLevel *slog.LevelVar
 	tempDir  string
+
+	unitService types.UnitService
 }
 
 // NewDISReaderService creates a DISReaderService, writes embedded JAR,
@@ -62,11 +65,12 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 	}
 
 	s := &DISReaderService{
-		config:   config,
-		db:       db,
-		logger:   logger,
-		logLevel: &logLevel,
-		tempDir:  tmp,
+		config:      config,
+		db:          db,
+		logger:      logger,
+		logLevel:    &logLevel,
+		tempDir:     tmp,
+		unitService: unit.NewUnitService(db),
 	}
 
 	// Verify the runner is responsive

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
-	"github.com/BeardedWonderDev/DIS-Reader/internal/service"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 type UnitRepository struct {
@@ -44,7 +44,7 @@ func (repo *UnitRepository) GetByUnitNumber(ctx context.Context, unitNum string)
 	return &unit, nil
 }
 
-func (repo *UnitRepository) ListUnits(ctx context.Context, lp service.ListParams) ([]Unit, error) {
+func (repo *UnitRepository) ListUnits(ctx context.Context, lp types.ListParams) ([]Unit, error) {
 	base := "SELECT * FROM FILEC.DMUNITM1 WHERE 1=1"
 	// Apply full-text search
 	if lp.Query != "" {

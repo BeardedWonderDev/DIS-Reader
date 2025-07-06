@@ -3,6 +3,8 @@ package unit
 import (
 	"strings"
 	"time"
+
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 type Model interface {
@@ -45,7 +47,7 @@ type Model interface {
 	GetSoldToCity() *string
 	GetSoldToZip() *string
 	GetPhoneNumber() *string
-	ToUnitSpec() *UnitSpec
+	ToUnitSpec() *types.UnitSpec
 }
 
 type Unit struct {
@@ -128,8 +130,8 @@ func (u Unit) GetSoldToAddress() *string      { return u.SoldToAddress }
 func (u Unit) GetSoldToCity() *string         { return u.SoldToCity }
 func (u Unit) GetSoldToZip() *string          { return u.SoldToZip }
 func (u Unit) GetPhoneNumber() *string        { return u.PhoneNumber }
-func (u Unit) ToUnitSpec() *UnitSpec {
-	return &UnitSpec{
+func (u Unit) ToUnitSpec() *types.UnitSpec {
+	return &types.UnitSpec{
 		UnitID:        u.UnitID,
 		Year:          u.Year,
 		Make:          u.Make,

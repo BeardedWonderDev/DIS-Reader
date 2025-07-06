@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
-	"github.com/BeardedWonderDev/DIS-Reader/internal/service"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 type UnitService struct {
@@ -19,7 +19,7 @@ func NewUnitService(d database.DB) *UnitService {
 	}
 }
 
-func (u *UnitService) GetByUnitNumber(ctx context.Context, unitNum string) (*UnitSpec, error) {
+func (u *UnitService) GetByUnitNumber(ctx context.Context, unitNum string) (*types.UnitSpec, error) {
 	unit, err := u.repo.GetByUnitNumber(ctx, unitNum)
 	if err != nil {
 		return nil, err
@@ -29,13 +29,13 @@ func (u *UnitService) GetByUnitNumber(ctx context.Context, unitNum string) (*Uni
 }
 
 // ListUnits fetches a list of units based on ListParams and returns their specs.
-func (u *UnitService) ListUnits(ctx context.Context, lp service.ListParams) ([]*UnitSpec, error) {
+func (u *UnitService) ListUnits(ctx context.Context, lp types.ListParams) ([]*types.UnitSpec, error) {
 	units, err := u.repo.ListUnits(ctx, lp)
 	if err != nil {
 		return nil, err
 	}
 
-	specs := make([]*UnitSpec, len(units))
+	specs := make([]*types.UnitSpec, len(units))
 	for i, unit := range units {
 		specs[i] = unit.ToUnitSpec()
 	}
