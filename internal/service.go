@@ -1,95 +1,100 @@
 package internal
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
-//go:embed JDBCRunner.class
-var jdbcRunnerClass []byte
+//go:embed dis-runner-1.0.0.jar
+var runnerJar []byte
 
-//go:embed jt400-21.0.4.jar
-var jt400Jar []byte
-
+// DISReaderService manages the lifecycle of the Java JDBC runner and exposes query APIs.
 type DISReaderService struct {
-	config *types.Config
-	db     *database.JDBCRunnerService
-	logger *slog.Logger
+	config  *types.DISConfig
+	db      database.DB
+	logger  *slog.Logger
+	tempDir string
 }
 
-func NewDISReaderService(config *types.Config, logger *slog.Logger) *DISReaderService {
+// NewDISReaderService creates a DISReaderService, writes embedded JAR,
+// starts the JDBC runner, verifies connectivity, and returns an error on failure.
+func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISReaderService, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	if config.JavaPath == "" {
-		config.JavaPath = "java"
-	}
-
-	if config.JDBCPort == "" {
-		config.JDBCPort = "8888"
-	}
-
-	// Write embedded assets to temp directory
 	tmp, err := os.MkdirTemp("", "disreader-jdbc-*")
 	if err != nil {
 		logger.Error("Failed to create temp directory", "error", err)
-	} else {
-		// write JAR
-		jarPath := filepath.Join(tmp, "jt400-21.0.4.jar")
-		if err := os.WriteFile(jarPath, jt400Jar, 0644); err != nil {
-			logger.Error("Failed to write jt400 jar", "error", err)
-		}
-		// write class into classes/ directory
-		classDir := filepath.Join(tmp, "classes")
-		if err := os.Mkdir(classDir, 0755); err != nil {
-			logger.Error("Failed to create class dir", "error", err)
-		}
-		classFile := filepath.Join(classDir, "JDBCRunner.class")
-		if err := os.WriteFile(classFile, jdbcRunnerClass, 0644); err != nil {
-			logger.Error("Failed to write JDBCRunner.class", "error", err)
-		}
-		// update config
-		config.JarPath = jarPath
-		config.ClassDir = classDir
+		return nil, err
 	}
 
-	db := database.NewJDBCRunnerService(config, logger)
-	s := &DISReaderService{config: config, db: db, logger: logger}
-	// Keep s.tempDir = tmp if needed (if field exists)
-	// s.tempDir = tmp
-	return s
+	jarPath := tmp + string(os.PathSeparator) + "dis-runner-1.0.0.jar"
+	if err := os.WriteFile(jarPath, runnerJar, 0644); err != nil {
+		logger.Error("Failed to write runner jar", "error", err)
+		os.RemoveAll(tmp)
+		return nil, err
+	}
+	config.JDBCConfig.JarPath = jarPath
+
+	// Initialize and start the JDBC runner
+	db := database.NewIBMi400(config, logger)
+	if err := db.StartJDBCRunner(); err != nil {
+		logger.Error("Failed to start JDBC runner", "error", err)
+		os.RemoveAll(tmp)
+		return nil, err
+	}
+
+	s := &DISReaderService{
+		config:  config,
+		db:      db,
+		logger:  logger,
+		tempDir: tmp,
+	}
+
+	// Verify the runner is responsive
+	if err := s.db.Ping(context.Background()); err != nil {
+		s.logger.Error("JDBC runner ping failed after start", "error", err)
+		s.db.StopJDBCRunner()
+		os.RemoveAll(tmp)
+		return nil, err
+	}
+
+	return s, nil
 }
 
-func (s DISReaderService) GetConfig() *types.Config {
+// GetConfig returns the underlying configuration.
+func (s *DISReaderService) GetConfig() *types.DISConfig {
 	return s.config
 }
 
-// TestDISConnection tests the JDBC connection using the embedded Java class.
-func (s DISReaderService) TestDISConnection() error {
-	if err := s.db.Start(); err != nil {
-		return fmt.Errorf("failed to start JDBC server: %w", err)
+// TestConnection runs a ping health check on the JDBC runner.
+func (s *DISReaderService) TestConnection(ctx context.Context) error {
+	if err := s.db.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to ping JDBC runner: %w", err)
 	}
-	return s.db.Connect()
+	return nil
 }
 
-func (s DISReaderService) Query(sql string) ([]types.ResultRow, error) {
-	return s.db.Query(sql)
-}
-
-func (s *DISReaderService) Shutdown() {
+// Shutdown stops the JDBC runner and cleans up temporary files.
+func (s *DISReaderService) Shutdown() error {
 	s.logger.Info("Shutting down DISReaderService")
-	s.db.Shutdown()
+	err := s.db.StopJDBCRunner()
+	if remErr := os.RemoveAll(s.tempDir); remErr != nil {
+		s.logger.Error("Failed to remove temp directory", "error", remErr)
+	}
+	return err
 }
 
+// AttachShutdownHook registers SIGINT/SIGTERM handlers to gracefully shutdown.
 func (s *DISReaderService) AttachShutdownHook() {
 	go func() {
 		sigChan := make(chan os.Signal, 1)

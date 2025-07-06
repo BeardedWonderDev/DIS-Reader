@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -141,7 +142,7 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 			query = strings.TrimSpace(query)
 			s.logger.Debug("Executing query", "index", item.Index, "query", query)
 
-			rows, err := s.db.Query(query)
+			rows, err := s.db.QueryWithSource(context.TODO(), query)
 			if err != nil {
 				errMsg := fmt.Sprintf("Query %d failed: %v", item.Index, err)
 				s.logger.Error("Query failed", "index", item.Index, "error", err)
