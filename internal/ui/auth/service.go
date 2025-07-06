@@ -27,6 +27,10 @@ func (a *Auth) Authenticate(onComplete func(success bool, err error)) {
 		ctx := context.TODO()
 		if err := a.UI.GetDIS().Connect(ctx); err != nil {
 			a.UI.GetLogger().Error(fmt.Sprintf("DIS Connection Failed: %s", err))
+			if onComplete != nil {
+				onComplete(false, err)
+			}
+			return
 		}
 
 		err := a.UI.GetDIS().TestConnection(ctx)

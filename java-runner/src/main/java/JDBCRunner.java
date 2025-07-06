@@ -79,11 +79,28 @@ public class JDBCRunner {
                 String cmd = cmdMap.get("cmd").toLowerCase();
                 switch (cmd) {
                     case "ping":
-                        writeLine(writer, mapper.writeValueAsString(Map.of(
-                            "status","ok",
-                            "message","pong",
-                            "requestId", requestId
-                        )));
+                        // Health check: ensure Java server and database connection are alive
+                        if (dataSource == null) {
+                            writeLine(writer, mapper.writeValueAsString(Map.of(
+                                "status","error",
+                                "message","Not connected to DB",
+                                "requestId", requestId
+                            )));
+                        } else {
+                            try (Connection testConn = dataSource.getConnection()) {
+                                writeLine(writer, mapper.writeValueAsString(Map.of(
+                                    "status","ok",
+                                    "message","pong",
+                                    "requestId", requestId
+                                )));
+                            } catch (Exception ex) {
+                                writeLine(writer, mapper.writeValueAsString(Map.of(
+                                    "status","error",
+                                    "message","DB ping failed: " + ex.getMessage(),
+                                    "requestId", requestId
+                                )));
+                            }
+                        }
                         break;
                     case "connect":
                         handleConnect(writer, cmdMap);
