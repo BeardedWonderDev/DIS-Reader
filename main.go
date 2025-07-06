@@ -19,7 +19,7 @@ func main() {
 		debugUI.NewDebugService(),
 	}
 
-	if err := ui.NewUI(cfg, disReader, modules).Run(); err != nil {
+	if err := ui.NewUI(cfg, disReader, nil, modules).Run(); err != nil {
 		panic(err)
 	}
 }

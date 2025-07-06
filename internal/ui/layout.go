@@ -8,7 +8,7 @@ import (
 )
 
 // setupAppLayout sets up the main grid layout of the application.
-func (u *UI) setupAppLayout(modules []types.ViewModule) *tview.Flex {
+func (u *UI) SetupAppLayout(modules []types.ViewModule) *tview.Flex {
 	u.Layout = &types.ComponentLayout{
 		LogList:     u.Log.View,
 		OutputPanel: u.InitOutputPanel(),

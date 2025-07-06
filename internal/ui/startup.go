@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func (u *UI) startupSequence() {
+func (u *UI) StartupSequence() {
 	u.App.SetRoot(u.WinMan, true)
 	u.GetLogger().Info(fmt.Sprintf("✨ Welcome to %s v%s", u.Config.AppName, u.Config.AppVersion))
 
