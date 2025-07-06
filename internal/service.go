@@ -81,6 +81,19 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 		return nil, err
 	}
 
+	if config.DIS.Host != "" && config.DIS.User != "" && config.DIS.Password != "" {
+		ctx := context.TODO()
+		if err := s.Connect(ctx); err != nil {
+			types.LogError(logger, "DIS Connection Failed", err)
+			return nil, err
+		}
+
+		if err := s.db.PingDatabase(ctx); err != nil {
+			types.LogError(logger, "DIS Connection Failed", err)
+			return nil, err
+		}
+	}
+
 	return s, nil
 }
 

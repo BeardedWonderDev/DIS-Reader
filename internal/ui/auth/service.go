@@ -21,7 +21,7 @@ func (a *Auth) IsAuthenticated() bool {
 }
 
 func (a *Auth) Authenticate(onComplete func(success bool, err error)) {
-	a.UI.GetLogger().Info("🌏 Verifying DIS Connection", slog.String("url", txtServerURL.GetText()))
+	a.UI.GetLogger().Info("🌏 Verifying DIS Connection", slog.String("url", a.UI.GetDIS().GetConfig().Host))
 	go func() {
 		ctx := context.TODO()
 		if err := a.UI.GetDIS().TestConnection(ctx); err != nil {
