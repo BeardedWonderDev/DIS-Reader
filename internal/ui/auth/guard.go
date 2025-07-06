@@ -20,6 +20,14 @@ func (a *AuthGuard) GetConfig() *types.DISConfig {
 	return a.inner.GetConfig()
 }
 
+func (a *AuthGuard) Connect(ctx context.Context) error {
+	return a.inner.Connect(ctx)
+}
+
+func (a *AuthGuard) Disconnect(ctx context.Context) error {
+	return a.inner.Disconnect(ctx)
+}
+
 func (a *AuthGuard) TestConnection(ctx context.Context) error {
 	return a.inner.TestConnection(ctx)
 }

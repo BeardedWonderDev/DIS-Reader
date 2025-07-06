@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	className           = "JDBCRunner"
 	serverStartRetries  = 10
 	serverStartInterval = 500 * time.Millisecond
 )
@@ -43,14 +42,9 @@ func (j *JDBCRunnerService) Start() error {
 		j.Logger.Debug("Java process already running", "pid", j.javaCmd.Process.Pid)
 		return nil
 	}
-	classpath := fmt.Sprintf("%s:%s", j.config.JDBCConfig.JarPath, j.config.JDBCConfig.ClassDir)
 	cmd := exec.Command(
 		j.config.JDBCConfig.JavaPath,
-		"-cp", classpath,
-		className,
-		j.config.Host,
-		j.config.User,
-		j.config.Password,
+		"-jar", j.config.JDBCConfig.JarPath,
 		j.config.JDBCConfig.JDBCPort,
 	)
 	stdoutPipe, _ := cmd.StdoutPipe()
@@ -120,7 +114,10 @@ func (j *JDBCRunnerService) Connect(ctx context.Context) error {
 	if dl, ok := ctx.Deadline(); ok {
 		conn.SetDeadline(dl)
 	}
-	cmd := fmt.Sprintf(`{"cmd":"connect","requestId":%q}`, requestID)
+	cmd := fmt.Sprintf(
+		`{"cmd":"connect","requestId":%q,"host":%q,"user":%q,"pass":%q}`,
+		requestID, j.config.Host, j.config.User, j.config.Password,
+	)
 	if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
 		return fmt.Errorf("failed to send connect: %w", err)
 	}
@@ -136,6 +133,36 @@ func (j *JDBCRunnerService) Connect(ctx context.Context) error {
 		return nil
 	}
 	return fmt.Errorf("no connect response")
+}
+
+// Disconnect sends a disconnect command to the Java server to close the pool.
+func (j *JDBCRunnerService) Disconnect(ctx context.Context) error {
+	requestID, _ := ctx.Value(requestIDKey).(string)
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", "localhost:"+j.config.JDBCConfig.JDBCPort)
+	if err != nil {
+		return fmt.Errorf("failed to dial java server for disconnect: %w", err)
+	}
+	defer conn.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(dl)
+	}
+	cmd := fmt.Sprintf(`{"cmd":"disconnect","requestId":%q}`, requestID)
+	if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
+		return fmt.Errorf("failed to send disconnect: %w", err)
+	}
+	scanner := bufio.NewScanner(conn)
+	if scanner.Scan() {
+		var res types.ResultRow
+		if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
+			return fmt.Errorf("invalid disconnect response: %w", err)
+		}
+		if status, ok := res["status"]; !ok || status != "ok" {
+			return fmt.Errorf("disconnect error: %v", res["message"])
+		}
+		return nil
+	}
+	return fmt.Errorf("no disconnect response")
 }
 
 func (j *JDBCRunnerService) Query(ctx context.Context, sql string) ([]types.ResultRow, error) {

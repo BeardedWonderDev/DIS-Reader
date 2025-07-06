@@ -23,7 +23,12 @@ func (a *Auth) Authenticate(onComplete func(success bool, err error)) {
 	a.UI.GetLogger().Info("🌏 Verifying DIS Connection", "url", txtServerURL.GetText())
 
 	go func() {
-		err := a.UI.GetDIS().TestConnection(context.TODO())
+		ctx := context.TODO()
+		if err := a.UI.GetDIS().Connect(ctx); err != nil {
+			a.UI.GetLogger().Error("DIS Connection Failed", "error", err)
+		}
+
+		err := a.UI.GetDIS().TestConnection(ctx)
 		success := err == nil
 		if err != nil {
 			a.UI.GetLogger().Error("DIS Connection Failed", "error", err)

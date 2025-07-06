@@ -17,6 +17,7 @@ type DB interface {
 	StartJDBCRunner() error
 	StopJDBCRunner() error
 	Connect(ctx context.Context) error
+	Disconnect(ctx context.Context) error
 	Ping(ctx context.Context) error
 	Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 	Query(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error)
@@ -59,6 +60,14 @@ func (ds *IBMi400) Connect(ctx context.Context) error {
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
 	ds.Logger.Debug("DB Connect", "requestId", requestID)
 	return ds.JDBCRunner.Connect(ctx)
+}
+
+// Disconnect sends a disconnect command to close the connection pool.
+func (ds *IBMi400) Disconnect(ctx context.Context) error {
+	requestID := uuid.New().String()
+	ctx = context.WithValue(ctx, requestIDKey, requestID)
+	ds.Logger.Debug("DB Disconnect", "requestId", requestID)
+	return ds.JDBCRunner.Disconnect(ctx)
 }
 
 // Ping performs a health check by sending a ping command to the JDBC runner.

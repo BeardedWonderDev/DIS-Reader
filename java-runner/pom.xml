@@ -3,7 +3,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
                              https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>com.yourcompany</groupId>
+  <groupId>com.comanagedtechnology</groupId>
   <artifactId>dis-runner</artifactId>
   <version>0.0.4</version>
   <packaging>jar</packaging>
@@ -14,8 +14,6 @@
       <groupId>com.ibm</groupId>
       <artifactId>jt400</artifactId>
       <version>21.0.4</version>
-      <scope>system</scope>
-      <systemPath>${project.basedir}/jt400-21.0.4.jar</systemPath>
     </dependency>
 
     <!-- HikariCP for pooling -->

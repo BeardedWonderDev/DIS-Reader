@@ -10,35 +10,20 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 public class JDBCRunner {
     private static DataSource dataSource;
-    private static String host;
-    private static String user;
-    private static String pass;
-    private static String url;
     private static final ObjectMapper mapper = new ObjectMapper();
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 4) {
-            System.err.println("Usage: java -cp jt400.jar:. JDBCRunner <host> <user> <pass> <port>");
+        // Disable GUI-based sign-on prompts
+        System.setProperty("java.awt.headless", "true");
+        // Disable IBM Toolbox GUI dialogs via system property
+        System.setProperty("com.ibm.as400.access.guiAvailable", "false");
+
+        if (args.length < 1) {
+            System.err.println("Usage: java -jar <jar> <port>");
             System.exit(1);
         }
 
-        host = args[0];
-        user = args[1];
-        pass = args[2];
-        url = "jdbc:as400://" + host + ";naming=system";
-        int port = Integer.parseInt(args[3]);
-
-        // Initialize JDBC connection pool
-        HikariConfig poolConfig = new HikariConfig();
-        poolConfig.setJdbcUrl(url);
-        poolConfig.setUsername(user);
-        poolConfig.setPassword(pass);
-        // Optional pool tuning
-        poolConfig.addDataSourceProperty("maximumPoolSize", "10");
-        poolConfig.setMinimumIdle(2);
-        poolConfig.setIdleTimeout(300000);
-        poolConfig.setConnectionTestQuery("SELECT 1 FROM SYSIBM.SYSDUMMY1");
-        dataSource = new HikariDataSource(poolConfig);
+        int port = Integer.parseInt(args[0]);
 
         ServerSocket serverSocket = new ServerSocket(port);
         System.out.println(mapper.writeValueAsString(Map.of("status","ok","message","Server started on port "+port)));
@@ -101,7 +86,7 @@ public class JDBCRunner {
                         )));
                         break;
                     case "connect":
-                        handleConnect(writer, requestId);
+                        handleConnect(writer, cmdMap);
                         break;
                     case "disconnect":
                         handleDisconnect(writer, requestId);
@@ -129,13 +114,36 @@ public class JDBCRunner {
         }
     }
 
-    private static void handleConnect(BufferedWriter writer, String requestId) throws IOException {
-        try (Connection testConn = dataSource.getConnection()) {
-            writeLine(writer, mapper.writeValueAsString(Map.of(
-                "status","ok",
-                "message","Connection pool ready",
-                "requestId", requestId
-            )));
+    private static void handleConnect(BufferedWriter writer, Map<String,String> cmdMap) throws IOException {
+        String requestId = cmdMap.get("requestId");
+        String host = cmdMap.get("host");
+        String user = cmdMap.get("user");
+        String pass = cmdMap.get("pass");
+        String url = "jdbc:as400://" + host + ";naming=system";
+
+        try {
+            if (dataSource instanceof HikariDataSource) {
+                ((HikariDataSource)dataSource).close();
+                dataSource = null;
+            }
+            HikariConfig poolConfig = new HikariConfig();
+            poolConfig.setJdbcUrl(url);
+            poolConfig.setUsername(user);
+            poolConfig.setPassword(pass);
+            // Optional pool tuning
+            poolConfig.addDataSourceProperty("maximumPoolSize", "10");
+            poolConfig.setMinimumIdle(2);
+            poolConfig.setIdleTimeout(300000);
+            poolConfig.setConnectionTestQuery("SELECT 1 FROM SYSIBM.SYSDUMMY1");
+            dataSource = new HikariDataSource(poolConfig);
+
+            try (Connection testConn = dataSource.getConnection()) {
+                writeLine(writer, mapper.writeValueAsString(Map.of(
+                    "status","ok",
+                    "message","Connection pool ready",
+                    "requestId", requestId
+                )));
+            }
         } catch (Exception ex) {
             writeLine(writer, mapper.writeValueAsString(Map.of(
                 "status","error",

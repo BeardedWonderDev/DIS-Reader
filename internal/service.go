@@ -26,6 +26,7 @@ type DISReaderService struct {
 
 // NewDISReaderService creates a DISReaderService, writes embedded JAR,
 // starts the JDBC runner, verifies connectivity, and returns an error on failure.
+// Note: This only starts the Java process; AS/400 connectivity is established via Connect.
 func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISReaderService, error) {
 	if logger == nil {
 		logger = slog.Default()
@@ -37,7 +38,7 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 		return nil, err
 	}
 
-	jarPath := tmp + string(os.PathSeparator) + "dis-runner-1.0.0.jar"
+	jarPath := tmp + string(os.PathSeparator) + "dis-runner-0.0.4.jar"
 	if err := os.WriteFile(jarPath, runnerJar, 0644); err != nil {
 		logger.Error("Failed to write runner jar", "error", err)
 		os.RemoveAll(tmp)
@@ -82,6 +83,18 @@ func (s *DISReaderService) TestConnection(ctx context.Context) error {
 		return fmt.Errorf("failed to ping JDBC runner: %w", err)
 	}
 	return nil
+}
+
+// Connect forwards the connect command to the Java server to establish AS/400 connectivity.
+func (s *DISReaderService) Connect(ctx context.Context) error {
+	s.logger.Debug("DISReaderService Calling JDBC Connect")
+	return s.db.Connect(ctx)
+}
+
+// Disconnect forwards the disconnect command to the Java server to close AS/400 connectivity.
+func (s *DISReaderService) Disconnect(ctx context.Context) error {
+	s.logger.Debug("DISReaderService Calling JDBC Disconnect")
+	return s.db.Disconnect(ctx)
 }
 
 // Shutdown stops the JDBC runner and cleans up temporary files.
