@@ -23,6 +23,7 @@ require (
 )
 
 require (
+	github.com/dusted-go/logging v1.3.0
 	github.com/epiclabs-io/winman v0.0.0-20220901164457-3d8c4b3ae090
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.7.1

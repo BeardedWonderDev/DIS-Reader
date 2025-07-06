@@ -12,6 +12,7 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/unit"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
+	"github.com/dusted-go/logging/prettylog"
 )
 
 //go:embed dis-runner-0.0.4.jar
@@ -36,10 +37,9 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 	logLevel.Set(config.LogLevel)
 
 	if logger == nil {
-		handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		logger = slog.New(prettylog.NewHandler(&slog.HandlerOptions{
 			Level: &logLevel,
-		})
-		logger = slog.New(handler)
+		}))
 	}
 
 	tmp, err := os.MkdirTemp("", "disreader-jdbc-*")
