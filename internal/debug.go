@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +40,7 @@ func (s DISReaderService) ensureBatchStatusTable(db *sql.DB) {
         PRIMARY KEY (run_id, query_index)
     )`)
 	if err != nil {
-		s.logger.Error("Failed to ensure batch_status table", "error", err)
+		types.LogError(s.logger, "Failed to ensure batch_status table", err)
 	}
 }
 
@@ -58,14 +59,14 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	// Open or create the SQLite database
 	db, err := sql.Open("sqlite3", sqliteDBFile)
 	if err != nil {
-		s.logger.Error("Failed to open SQLite DB", "error", err)
+		types.LogError(s.logger, "Failed to open SQLite DB", err)
 		return
 	}
 	defer db.Close()
 
 	s.ensureBatchStatusTable(db)
 
-	s.logger.Info("Starting Search for search term", "term", searchTerm)
+	s.logger.Info("Starting search", slog.String("search_term", searchTerm))
 
 	completed := s.loadCompletedFromDB(runID, db)
 
@@ -116,15 +117,15 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, sqliteDBFile string,
 	// After all batches, check if all queries are completed
 	completed = s.loadCompletedFromDB(runID, db)
 	if len(completed) == len(queryTemplates) {
-		s.logger.Info("All queries completed.")
+		s.logger.Info("All queries completed")
 	} else {
 		remaining := len(queryTemplates) - len(completed)
-		s.logger.Info("Batch processing done with incomplete queries", "remaining", remaining)
+		s.logger.Info("Batch processing incomplete", slog.Int("remaining_queries", remaining))
 	}
 }
 
 func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batch []queryItem, db *sql.DB, tableCols map[string]map[string]struct{}, eventChan chan<- types.TableEvent) {
-	s.logger.Info("Running batch of queries", "count", len(batch))
+	s.logger.Info("Running batch", slog.Int("query_count", len(batch)))
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallelism)
@@ -139,12 +140,12 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 			query := strings.TrimSuffix(item.Query, " UNION ALL")
 			query = strings.TrimSuffix(query, "UNION ALL")
 			query = strings.TrimSpace(query)
-			s.logger.Debug("Executing query", "index", item.Index, "query", query)
+			s.logger.Debug("Executing query", slog.Int("query_index", item.Index), slog.String("query", query))
 
 			rows, err := s.db.QueryWithSource(context.TODO(), query)
 			if err != nil {
 				errMsg := fmt.Sprintf("Query %d failed: %v", item.Index, err)
-				s.logger.Error("Query failed", "index", item.Index, "error", err)
+				types.LogError(s.logger, "Query failed", err, slog.Int("index", item.Index))
 
 				_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS query_errors (
           run_id TEXT,

@@ -61,7 +61,7 @@ func (ds *IBMi400) StopJDBCRunner() error {
 func (ds *IBMi400) Connect(ctx context.Context) error {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB Connect", "requestId", requestID)
+	ds.Logger.Debug("DB Connect", slog.String("request_id", requestID))
 	return ds.JDBCRunner.Connect(ctx)
 }
 
@@ -69,7 +69,7 @@ func (ds *IBMi400) Connect(ctx context.Context) error {
 func (ds *IBMi400) Disconnect(ctx context.Context) error {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB Disconnect", "requestId", requestID)
+	ds.Logger.Debug("DB Disconnect", slog.String("request_id", requestID))
 	return ds.JDBCRunner.Disconnect(ctx)
 }
 
@@ -77,7 +77,7 @@ func (ds *IBMi400) Disconnect(ctx context.Context) error {
 func (ds *IBMi400) PingService(ctx context.Context) error {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB PingService", "requestId", requestID)
+	ds.Logger.Debug("DB PingService", slog.String("request_id", requestID))
 	return ds.JDBCRunner.PingService(ctx)
 }
 
@@ -85,7 +85,7 @@ func (ds *IBMi400) PingService(ctx context.Context) error {
 func (ds *IBMi400) PingDatabase(ctx context.Context) error {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB PingDatabase", "requestId", requestID)
+	ds.Logger.Debug("DB PingDatabase", slog.String("request_id", requestID))
 	return ds.JDBCRunner.PingDatabase(ctx)
 }
 
@@ -93,7 +93,7 @@ func (ds *IBMi400) PingDatabase(ctx context.Context) error {
 func (ds *IBMi400) Query(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error) {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB Query", "requestId", requestID, "query", query)
+	ds.Logger.Debug("DB Query", slog.String("request_id", requestID), slog.String("query", query))
 	return ds.JDBCRunner.Query(ctx, query)
 }
 
@@ -101,7 +101,7 @@ func (ds *IBMi400) Query(ctx context.Context, query string, args ...interface{})
 func (ds *IBMi400) QueryRow(ctx context.Context, query string, args ...interface{}) (types.ResultRow, error) {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB QueryRow", "requestId", requestID, "query", query)
+	ds.Logger.Debug("DB QueryRow", slog.String("request_id", requestID), slog.String("query", query))
 	rows, err := ds.JDBCRunner.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (ds *IBMi400) QueryRow(ctx context.Context, query string, args ...interface
 func (ds *IBMi400) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB Get", "requestId", requestID, "query", query)
+	ds.Logger.Debug("DB Get", slog.String("request_id", requestID), slog.String("query", query))
 	row, err := ds.QueryRow(ctx, query, args...)
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func (ds *IBMi400) Get(ctx context.Context, dest interface{}, query string, args
 func (ds *IBMi400) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB Select", "requestId", requestID, "query", query)
+	ds.Logger.Debug("DB Select", slog.String("request_id", requestID), slog.String("query", query))
 	rows, err := ds.JDBCRunner.Query(ctx, query)
 	if err != nil {
 		return err
@@ -140,7 +140,7 @@ func (ds *IBMi400) Select(ctx context.Context, dest interface{}, query string, a
 func (ds *IBMi400) QueryWithSource(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error) {
 	requestID := uuid.New().String()
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
-	ds.Logger.Debug("DB QueryWithSource", "requestId", requestID, "query", query)
+	ds.Logger.Debug("DB QueryWithSource", slog.String("request_id", requestID), slog.String("query", query))
 	payload := fmt.Sprintf(`{"cmd":"query","requestId":%q,"sql":%q,"includeSrc":"true"}`, requestID, query)
 	return ds.JDBCRunner.rawQuery(ctx, payload)
 }

@@ -37,6 +37,41 @@ func NewJDBCRunnerService(config *types.DISConfig, logger *slog.Logger) *JDBCRun
 	}
 }
 
+func logStructuredLine(logger *slog.Logger, line string, level slog.Level) {
+	var msg map[string]any
+	if err := json.Unmarshal([]byte(line), &msg); err != nil {
+		if level == slog.LevelError {
+			types.LogError(logger, "Database service stderr", err, slog.String("output", line))
+		} else {
+			logger.Info("Database service stdout", slog.String("output", line))
+		}
+		return
+	}
+
+	attrs := []any{}
+	if status, ok := msg["status"]; ok {
+		attrs = append(attrs, slog.String("status", fmt.Sprint(status)))
+	}
+	if message, ok := msg["message"]; ok {
+		attrs = append(attrs, slog.String("message", fmt.Sprint(message)))
+	}
+	if event, ok := msg["event"]; ok {
+		attrs = append(attrs, slog.String("event", fmt.Sprint(event)))
+	}
+	if requestID, ok := msg["requestId"]; ok {
+		attrs = append(attrs, slog.String("request_id", fmt.Sprint(requestID)))
+	}
+
+	switch level {
+	case slog.LevelInfo:
+		logger.Info("Database service", attrs...)
+	case slog.LevelError:
+		logger.Error("Database service", attrs...)
+	default:
+		logger.Debug("Database service", attrs...)
+	}
+}
+
 func (j *JDBCRunnerService) Start() error {
 	if j.javaCmd != nil && j.javaCmd.ProcessState == nil {
 		j.Logger.Debug("Java process already running", "pid", j.javaCmd.Process.Pid)
@@ -53,26 +88,27 @@ func (j *JDBCRunnerService) Start() error {
 	go func() {
 		scanner := bufio.NewScanner(stdoutPipe)
 		for scanner.Scan() {
-			j.Logger.Debug(fmt.Sprintf("Database Service: %s", scanner.Text()))
+			logStructuredLine(j.Logger, scanner.Text(), slog.LevelInfo)
 		}
 	}()
+
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			j.Logger.Warn(fmt.Sprintf("Database Service: %s", scanner.Text()))
+			logStructuredLine(j.Logger, scanner.Text(), slog.LevelError)
 		}
 	}()
 	if err := cmd.Start(); err != nil {
-		j.Logger.Error("Failed to start java process", "error", err)
+		types.LogError(j.Logger, "Failed to start java process", err)
 		return fmt.Errorf("failed to start java process: %w", err)
 	}
 	j.javaCmd = cmd
-	j.Logger.Info("Started java process", "pid", cmd.Process.Pid)
+	j.Logger.Info("Started java process", slog.Int("pid", cmd.Process.Pid))
 
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			j.Logger.Error("Java process exited with error", "error", err)
+			types.LogError(j.Logger, "Java process exited with error", err)
 		} else {
 			j.Logger.Info("Java process exited normally")
 		}
@@ -83,10 +119,10 @@ func (j *JDBCRunnerService) Start() error {
 		connTest, err := net.DialTimeout("tcp", "localhost:"+j.config.JDBCConfig.JDBCPort, serverStartInterval)
 		if err == nil {
 			connTest.Close()
-			j.Logger.Info("Java server port is open", "port", j.config.JDBCConfig.JDBCPort)
+			j.Logger.Info("Java server port is open", slog.String("port", j.config.JDBCConfig.JDBCPort))
 			return nil
 		}
-		j.Logger.Debug("Waiting for java server port to open...", "port", j.config.JDBCConfig.JDBCPort, "attempt", i+1, "max", serverStartRetries)
+		j.Logger.Debug("Waiting for java server port", slog.String("port", j.config.JDBCConfig.JDBCPort), slog.Int("attempt", i+1), slog.Int("max_attempts", serverStartRetries))
 		time.Sleep(serverStartInterval)
 	}
 	return fmt.Errorf("java server port %s did not open after %d retries", j.config.JDBCConfig.JDBCPort, serverStartRetries)
@@ -95,7 +131,7 @@ func (j *JDBCRunnerService) Start() error {
 func (j *JDBCRunnerService) Shutdown() {
 	if j.javaCmd != nil && j.javaCmd.Process != nil {
 		if err := j.javaCmd.Process.Kill(); err != nil {
-			j.Logger.Error("Failed to kill Java process", "error", err)
+			types.LogError(j.Logger, "Failed to kill Java process", err)
 		} else {
 			j.Logger.Info("Java process terminated")
 		}
@@ -176,7 +212,7 @@ func (j *JDBCRunnerService) Query(ctx context.Context, sql string) ([]types.Resu
 	if dl, ok := ctx.Deadline(); ok {
 		conn.SetDeadline(dl)
 	}
-	j.Logger.Debug("Sending query", "requestId", requestID, "sql", sql)
+	j.Logger.Debug("Sending query", slog.String("request_id", requestID), slog.String("sql", sql))
 	payload := fmt.Sprintf(`{"cmd":"query","requestId":%q,"sql":%q}`, requestID, sql)
 	return j.rawQuery(ctx, payload)
 }

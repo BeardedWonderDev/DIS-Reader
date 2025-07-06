@@ -44,13 +44,13 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 
 	tmp, err := os.MkdirTemp("", "disreader-jdbc-*")
 	if err != nil {
-		logger.Error("Failed to create temp directory", "error", err)
+		types.LogError(logger, "Failed to create temp directory", err)
 		return nil, err
 	}
 
 	jarPath := tmp + string(os.PathSeparator) + "dis-runner-0.0.4.jar"
 	if err := os.WriteFile(jarPath, runnerJar, 0644); err != nil {
-		logger.Error("Failed to write runner jar", "error", err)
+		types.LogError(logger, "Failed to write runner jar", err)
 		os.RemoveAll(tmp)
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 	// Initialize and start the JDBC runner
 	db := database.NewIBMi400(config.DIS, logger)
 	if err := db.StartJDBCRunner(); err != nil {
-		logger.Error("Failed to start JDBC runner", "error", err)
+		types.LogError(logger, "Failed to start JDBC runner", err)
 		os.RemoveAll(tmp)
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func NewDISReaderService(config *types.Config, logger *slog.Logger) (*DISReaderS
 
 	// Verify the runner is responsive
 	if err := s.db.PingService(context.Background()); err != nil {
-		s.logger.Error("JDBC runner ping failed after start", "error", err)
+		types.LogError(s.logger, "JDBC runner ping failed after start", err)
 		s.db.StopJDBCRunner()
 		os.RemoveAll(tmp)
 		return nil, err
@@ -129,7 +129,7 @@ func (s *DISReaderService) Shutdown() error {
 	s.logger.Info("Shutting down DISReaderService")
 	err := s.db.StopJDBCRunner()
 	if remErr := os.RemoveAll(s.tempDir); remErr != nil {
-		s.logger.Error("Failed to remove temp directory", "error", remErr)
+		types.LogError(s.logger, "Failed to remove temp directory", remErr)
 	}
 	return err
 }
