@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 func (u *UI) StartupSequence() {
@@ -11,7 +13,7 @@ func (u *UI) StartupSequence() {
 	if u.DIS.GetConfig().User != "" && u.DIS.GetConfig().Password != "" {
 		u.Auth.Authenticate(func(success bool, err error) {
 			if err != nil {
-				u.GetLogger().Error("Error Authenticating To DIS", "error", err)
+				types.LogError(u.GetLogger(), "Error authenticating to DIS", err)
 			}
 		})
 	} else {

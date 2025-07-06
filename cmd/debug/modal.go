@@ -1,7 +1,7 @@
 package debugUI
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/epiclabs-io/winman"
@@ -99,10 +99,10 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 	go func() {
 		for progress := range d.ProgressChan {
 			d.UI.GetLogger().Info("Search progress update",
-				"runID", progress.RunID,
-				"completed", progress.CompletedQueries,
-				"total", progress.TotalQueries,
-				"percent", fmt.Sprintf("%.2f", progress.PercentComplete),
+				slog.String("run_id", progress.RunID),
+				slog.Int("completed", progress.CompletedQueries),
+				slog.Int("total", progress.TotalQueries),
+				slog.Float64("percent", progress.PercentComplete),
 			)
 		}
 	}()
@@ -110,11 +110,11 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 	go func() {
 		for event := range d.EventChan {
 			d.UI.GetLogger().Info("Debug search event",
-				"table", event.TableName,
-				"type", event.EventType,
-				"rows", event.RowCount,
-				"cols", event.ColumnCount,
-				"sample", event.SampleRow,
+				slog.String("table", event.TableName),
+				slog.String("type", event.EventType),
+				slog.Int("rows", event.RowCount),
+				slog.Int("cols", event.ColumnCount),
+				slog.Any("sample", event.SampleRow),
 			)
 		}
 	}()

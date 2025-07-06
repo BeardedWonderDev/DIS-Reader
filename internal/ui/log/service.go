@@ -87,8 +87,37 @@ func (h *TUIViewHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	timestamp := time.Now().Format("15:04:05")
-	msg := r.Message
-	formatted := fmt.Sprintf("%s[%s]%s %s\n", levelColor, timestamp, "[white]", msg)
+
+	attrParts := []string{}
+	r.Attrs(func(a slog.Attr) bool {
+		key := strings.ToLower(a.Key)
+		val := fmt.Sprintf("%v", a.Value)
+
+		color := "[white]"
+		switch key {
+		case "status":
+			color = "[cyan]"
+		case "event":
+			color = "[magenta]"
+		case "request_id", "requestid":
+			color = "[blue]"
+		case "error", "err":
+			color = "[red]"
+		case "message":
+			color = "[white]"
+		}
+
+		attrParts = append(attrParts, fmt.Sprintf("%s%s:[white] %s", color, key, val))
+		return true
+	})
+
+	// Line-wrapped attribute section
+	attrBlock := ""
+	if len(attrParts) > 0 {
+		attrBlock = "\n  " + strings.Join(attrParts, "\n  ")
+	}
+
+	formatted := fmt.Sprintf("%s[%s]%s %s%s\n", levelColor, timestamp, "[white]", r.Message, attrBlock)
 
 	h.PW.LogChan <- formatted
 	return nil

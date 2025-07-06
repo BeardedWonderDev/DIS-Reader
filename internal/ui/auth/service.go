@@ -2,7 +2,7 @@ package authUI
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
@@ -21,12 +21,12 @@ func (a *Auth) IsAuthenticated() bool {
 }
 
 func (a *Auth) Authenticate(onComplete func(success bool, err error)) {
-	a.UI.GetLogger().Info("🌏 Verifying DIS Connection", "url", txtServerURL.GetText())
+	a.UI.GetLogger().Info("🌏 Verifying DIS Connection", slog.String("url", txtServerURL.GetText()))
 	go func() {
 		ctx := context.TODO()
 		if err := a.UI.GetDIS().TestConnection(ctx); err != nil {
 			if err := a.UI.GetDIS().Connect(ctx); err != nil {
-				a.UI.GetLogger().Error(fmt.Sprintf("DIS Connection Failed: %s", err))
+				types.LogError(a.UI.GetLogger(), "DIS Connection Failed", err)
 				if onComplete != nil {
 					onComplete(false, err)
 				}
@@ -36,7 +36,7 @@ func (a *Auth) Authenticate(onComplete func(success bool, err error)) {
 			err := a.UI.GetDIS().TestConnection(ctx)
 			success := err == nil
 			if err != nil {
-				a.UI.GetLogger().Error(fmt.Sprintf("DIS Connection Failed: %s", err))
+				types.LogError(a.UI.GetLogger(), "DIS Connection Failed", err)
 			} else {
 				a.Authenticated = true
 				a.UI.GetLogger().Info("DIS Connection Successful")
