@@ -12,7 +12,7 @@ type UnitService interface {
 
 type UnitSpec struct {
 	UnitID        string    `json:"unitId" validate:"required"`
-	Year          int       `json:"year"`
+	Year          string    `json:"year"`
 	Make          string    `json:"make"`
 	Model         string    `json:"model"`
 	Description   string    `json:"description"`

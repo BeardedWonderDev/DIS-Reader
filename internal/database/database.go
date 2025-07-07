@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reflect"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -112,6 +114,19 @@ func (ds *IBMi400) QueryRow(ctx context.Context, query string, args ...interface
 	return rows[0], nil
 }
 
+// decodeResult is a helper to decode raw data into dest using mapstructure with AS/400 date hook.
+func (ds *IBMi400) decodeResult(ctx context.Context, requestID string, raw interface{}, dest interface{}) error {
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: as400DateHook(),
+		Result:     dest,
+	}
+	decoder, err := mapstructure.NewDecoder(decoderConfig)
+	if err != nil {
+		return err
+	}
+	return decoder.Decode(raw)
+}
+
 // Get executes a single-row query and decodes the result into dest.
 func (ds *IBMi400) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	requestID := uuid.New().String()
@@ -121,7 +136,7 @@ func (ds *IBMi400) Get(ctx context.Context, dest interface{}, query string, args
 	if err != nil {
 		return err
 	}
-	return mapstructure.Decode(row, dest)
+	return ds.decodeResult(ctx, requestID, row, dest)
 }
 
 // Select executes the query and decodes all rows into dest.
@@ -133,7 +148,7 @@ func (ds *IBMi400) Select(ctx context.Context, dest interface{}, query string, a
 	if err != nil {
 		return err
 	}
-	return mapstructure.Decode(rows, dest)
+	return ds.decodeResult(ctx, requestID, rows, dest)
 }
 
 // QueryWithSource executes a SQL query with src_table included on each row.
@@ -143,4 +158,33 @@ func (ds *IBMi400) QueryWithSource(ctx context.Context, query string, args ...in
 	ds.Logger.Debug("DB QueryWithSource", slog.String("request_id", requestID), slog.String("query", query))
 	payload := fmt.Sprintf(`{"cmd":"query","requestId":%q,"sql":%q,"includeSrc":"true"}`, requestID, query)
 	return ds.JDBCRunner.rawQuery(ctx, payload)
+}
+
+// as400DateHook returns a DecodeHookFunc for mapstructure to decode AS/400 date formats (MMDDYY numeric).
+func as400DateHook() mapstructure.DecodeHookFunc {
+	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+		if from.Kind() == reflect.Float64 && to == reflect.TypeOf(time.Time{}) {
+			num := int(data.(float64))
+			if num <= 0 {
+				return time.Time{}, nil
+			}
+			str := fmt.Sprintf("%06d", num)
+			mm := str[0:2]
+			dd := str[2:4]
+			yy := str[4:6]
+
+			// Basic validation
+			if mm < "01" || mm > "12" || dd < "01" || dd > "31" {
+				return time.Time{}, nil
+			}
+
+			dateStr := fmt.Sprintf("20%s-%s-%s", yy, mm, dd)
+			t, err := time.Parse("2006-01-02", dateStr)
+			if err != nil {
+				return time.Time{}, nil
+			}
+			return t, nil
+		}
+		return data, nil
+	}
 }

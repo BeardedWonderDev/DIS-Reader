@@ -3,7 +3,6 @@ package unit
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
@@ -11,26 +10,12 @@ import (
 )
 
 type UnitRepository struct {
-	db             database.DB
-	allowedColumns map[string]string
+	db database.DB
 }
 
 func NewUnitRepository(d database.DB) *UnitRepository {
 	return &UnitRepository{
 		db: d,
-		allowedColumns: map[string]string{
-			"unit":     "UNIT",
-			"year":     "YEAR",
-			"make":     "MAKE",
-			"model":    "MODEL",
-			"location": "LOCATION",
-			"indate":   "INDATE",
-			"soldat":   "SOLDAT",
-			"soldto":   "SOLDTO",
-			"amount":   "AMOUNT",
-			"cost":     "COST",
-			"soldby":   "SOLDBY",
-		},
 	}
 }
 
@@ -62,35 +47,22 @@ func (repo *UnitRepository) ListUnits(ctx context.Context, lp types.ListParams) 
 			base += fmt.Sprintf(" AND %s %s DATE('%s')", expr, f.Operator, t.Format("2006-01-02"))
 			continue
 		}
-		col, ok := repo.allowedColumns[f.Field]
-		if !ok {
-			return nil, fmt.Errorf("unsupported filter field %q", f.Field)
-		}
-		// Handle slice for IN/NOT IN
-		switch v := f.Value.(type) {
-		case []string:
-			placeholders := make([]string, len(v))
-			for i, s := range v {
-				placeholders[i] = "'" + strings.ReplaceAll(s, "'", "''") + "'"
-			}
-			base += fmt.Sprintf(" AND %s %s (%s)", col, f.Operator, strings.Join(placeholders, ","))
-		case string:
-			base += fmt.Sprintf(" AND %s %s '%s'", col, f.Operator, v)
-		default:
-			base += fmt.Sprintf(" AND %s %s %v", col, f.Operator, v)
-		}
+
+		base += fmt.Sprintf(" AND %s %s %v", f.Column, f.Operator, f.Value)
 	}
 	// Sorting (handle AS/400 indate correctly)
-	if lp.SortBy == "indate" {
+	if lp.SortBy == "INDATE" {
 		expr := database.As400DateExpr("INDATE")
 		base += fmt.Sprintf(" ORDER BY %s %s", expr, lp.SortOrder.String())
-	} else if sortCol, ok := repo.allowedColumns[lp.SortBy]; ok {
-		base += fmt.Sprintf(" ORDER BY %s %s", sortCol, lp.SortOrder.String())
+	} else {
+		base += fmt.Sprintf(" ORDER BY %s %s", lp.SortBy, lp.SortOrder.String())
 	}
 	// Limit
 	if lp.Limit > 0 {
 		base += fmt.Sprintf(" LIMIT %d", lp.Limit)
 	}
+
+	fmt.Println(base)
 	// Execute
 	var units []Unit
 	if err := repo.db.Select(ctx, &units, base); err != nil {

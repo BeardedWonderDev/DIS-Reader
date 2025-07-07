@@ -10,13 +10,39 @@ import (
 type UnitListParamParser struct{}
 
 func (UnitListParamParser) GetDefaultSortBy() string {
-	return "indate"
+	return "unit"
 }
 
-func (UnitListParamParser) GetSupportedSortBys() []string {
-	return []string{
-		"unit", "year", "make", "model", "location",
-		"indate", "soldat", "soldto", "amount", "cost", "soldby",
+func (UnitListParamParser) GetAllowedSortByColumns() map[string]string {
+	return map[string]string{
+		"unit":     "UNIT",
+		"year":     "YEAR",
+		"make":     "MAKE",
+		"model":    "MODEL",
+		"location": "LOCATION",
+		"indate":   "INDATE",
+		"soldat":   "SOLDAT",
+		"soldto":   "SOLDTO",
+		"amount":   "AMOUNT",
+		"cost":     "COST",
+		"soldby":   "SOLDBY",
+	}
+}
+
+func (UnitListParamParser) GetAllowedFilterColumns() map[string]string {
+	return map[string]string{
+		"unit":        "UNIT",
+		"year":        "YEAR",
+		"make":        "MAKE",
+		"model":       "MODEL",
+		"productCode": "PRODCT",
+		"location":    "LOCATION",
+		"indate":      "INDATE",
+		"soldat":      "SOLDAT",
+		"soldto":      "SOLDTO",
+		"amount":      "AMOUNT",
+		"cost":        "COST",
+		"soldby":      "SOLDBY",
 	}
 }
 

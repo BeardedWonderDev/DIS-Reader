@@ -9,7 +9,7 @@ import (
 
 type Model interface {
 	GetUnitID() string
-	GetYear() int
+	GetYear() string
 	GetMake() string
 	GetModel() string
 	GetDescription() string
@@ -51,48 +51,48 @@ type Model interface {
 }
 
 type Unit struct {
-	UnitID          string     `mapstruct:"UNIT"`
-	Year            int        `mapstruct:"YEAR"`
-	Make            string     `mapstruct:"MAKE"`
-	Model           string     `mapstruct:"MODEL"`
-	Description     string     `mapstruct:"DESCR"`
-	Serial          *string    `mapstruct:"SERIAL"`
-	Engine          *string    `mapstruct:"ENGINE"`
-	Status          string     `mapstruct:"STATUS"`
-	ProductCode     *string    `mapstruct:"PRODCT"`
-	IsNew           string     `mapstruct:"NEWUSE"`
-	Color           *string    `mapstruct:"COLOR"`
-	HorsePower      *int       `mapstruct:"HRSPWR"`
-	EngineHours     *float64   `mapstruct:"HOUR"`
-	Location        string     `mapstruct:"LOCATE"`
-	Account         string     `mapstruct:"ACCT#"`
-	CreatedAt       time.Time  `mapstruct:"INDATE"`
-	SoldAt          time.Time  `mapstruct:"SALEDT"`
-	InvoiceNumber   *string    `mapstruct:"INV#"`
-	SoldAccount     *string    `mapstruct:"SOLDTO"`
-	RevenueAmount   *float64   `mapstruct:"AMOUNT"`
-	Cost            float64    `mapstruct:"COST"`
-	SoldBy          *string    `mapstruct:"SOLDBY"`
-	SoldByName      *string    `mapstruct:"BYNAME"`
-	WarrantyCode    *string    `mapstruct:"WARRCD"`
-	TradedOnUnit    *string    `mapstruct:"TRADE"`
-	GLAccount       *string    `mapstruct:"INACCT"`
-	SuggestedList   *float64   `mapstruct:"SLIST"`
-	DealerList      *float64   `mapstruct:"DLIST"`
-	FlooringDueDate *time.Time `mapstruct:"FLRDUE"`
-	FlooringAmount  *float64   `mapstruct:"FLRAMT"`
-	RentalStartDate *time.Time `mapstruct:"RENTDT"`
-	RentalRevenue   *float64   `mapstruct:"RENTRV"`
-	RentalCost      *float64   `mapstruct:"RENTCS"`
-	SoldToName      *string    `mapstruct:"TONAME"`
-	SoldToAddress   *string    `mapstruct:"TOADRS"`
-	SoldToCity      *string    `mapstruct:"TOCITY"`
-	SoldToZip       *string    `mapstruct:"TOZIP"`
-	PhoneNumber     *string    `mapstruct:"PHONE"`
+	UnitID          string     `mapstructure:"UNIT"`
+	Year            string     `mapstructure:"YEAR"`
+	Make            string     `mapstructure:"MAKE"`
+	Model           string     `mapstructure:"MODEL"`
+	Description     string     `mapstructure:"DESCR"`
+	Serial          *string    `mapstructure:"SERIAL"`
+	Engine          *string    `mapstructure:"ENGINE"`
+	Status          string     `mapstructure:"STATUS"`
+	ProductCode     *string    `mapstructure:"PRODCT"`
+	IsNew           string     `mapstructure:"NEWUSE"`
+	Color           *string    `mapstructure:"COLOR"`
+	HorsePower      *int       `mapstructure:"HRSPWR"`
+	EngineHours     *float64   `mapstructure:"HOUR"`
+	Location        string     `mapstructure:"LOCATE"`
+	Account         string     `mapstructure:"ACCT#"`
+	CreatedAt       time.Time  `mapstructure:"INDATE"`
+	SoldAt          time.Time  `mapstructure:"SALEDT"`
+	InvoiceNumber   *string    `mapstructure:"INV#"`
+	SoldAccount     *string    `mapstructure:"SOLDTO"`
+	RevenueAmount   *float64   `mapstructure:"AMOUNT"`
+	Cost            float64    `mapstructure:"COST"`
+	SoldBy          *string    `mapstructure:"SOLDBY"`
+	SoldByName      *string    `mapstructure:"BYNAME"`
+	WarrantyCode    *string    `mapstructure:"WARRCD"`
+	TradedOnUnit    *string    `mapstructure:"TRADE"`
+	GLAccount       *string    `mapstructure:"INACCT"`
+	SuggestedList   *float64   `mapstructure:"SLIST"`
+	DealerList      *float64   `mapstructure:"DLIST"`
+	FlooringDueDate *time.Time `mapstructure:"FLRDUE"`
+	FlooringAmount  *float64   `mapstructure:"FLRAMT"`
+	RentalStartDate *time.Time `mapstructure:"RENTDT"`
+	RentalRevenue   *float64   `mapstructure:"RENTRV"`
+	RentalCost      *float64   `mapstructure:"RENTCS"`
+	SoldToName      *string    `mapstructure:"TONAME"`
+	SoldToAddress   *string    `mapstructure:"TOADRS"`
+	SoldToCity      *string    `mapstructure:"TOCITY"`
+	SoldToZip       *string    `mapstructure:"TOZIP"`
+	PhoneNumber     *string    `mapstructure:"PHONE"`
 }
 
 func (u Unit) GetUnitID() string              { return u.UnitID }
-func (u Unit) GetYear() int                   { return u.Year }
+func (u Unit) GetYear() string                { return u.Year }
 func (u Unit) GetMake() string                { return u.Make }
 func (u Unit) GetModel() string               { return u.Model }
 func (u Unit) GetDescription() string         { return u.Description }

@@ -57,3 +57,7 @@ func (a *AuthGuard) Shutdown() error {
 func (a *AuthGuard) AttachShutdownHook() {
 	a.inner.AttachShutdownHook()
 }
+
+func (a *AuthGuard) UnitService() types.UnitService {
+	return a.inner.UnitService()
+}

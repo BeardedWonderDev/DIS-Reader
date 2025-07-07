@@ -205,10 +205,14 @@ public class JDBCRunner {
             int colCount = md.getColumnCount();
 
             while (rs.next()) {
-                Map<String, String> row = new LinkedHashMap<>();
+                Map<String, Object> row = new LinkedHashMap<>();
                 for (int i = 1; i <= colCount; i++) {
-                    String val = rs.getString(i);
-                    row.put(md.getColumnName(i), val != null ? val : "");
+                    Object val = rs.getObject(i);
+                    if (val == null) {
+                        row.put(md.getColumnName(i), null);
+                    } else {
+                        row.put(md.getColumnName(i), val);
+                    }
                 }
                 if (includeSrc) {
                     row.put("src_table", extractTableName(sql));

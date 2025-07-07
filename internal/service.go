@@ -158,3 +158,7 @@ func (s *DISReaderService) AttachShutdownHook() {
 		os.Exit(0)
 	}()
 }
+
+func (s *DISReaderService) UnitService() types.UnitService {
+	return s.unitService
+}
