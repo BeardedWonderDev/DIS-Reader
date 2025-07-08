@@ -15,7 +15,7 @@ import (
 	"github.com/dusted-go/logging/prettylog"
 )
 
-//go:embed dis-runner-0.0.4.jar
+//go:embed dis-runner-0.1.1.jar
 var runnerJar []byte
 
 // DISReaderService manages the lifecycle of the Java JDBC runner and exposes query APIs.
@@ -48,7 +48,7 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 		return nil, err
 	}
 
-	jarPath := tmp + string(os.PathSeparator) + "dis-runner-0.0.4.jar"
+	jarPath := tmp + string(os.PathSeparator) + "dis-runner-0.1.1.jar"
 	if err := os.WriteFile(jarPath, runnerJar, 0644); err != nil {
 		types.LogError(logger, "Failed to write runner jar", err)
 		os.RemoveAll(tmp)

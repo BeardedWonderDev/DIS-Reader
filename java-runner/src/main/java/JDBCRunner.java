@@ -136,7 +136,7 @@ public class JDBCRunner {
         String host = cmdMap.get("host");
         String user = cmdMap.get("user");
         String pass = cmdMap.get("pass");
-        String url = "jdbc:as400://" + host + ";naming=system";
+        String url = "jdbc:as400://" + host + ";naming=system;translate binary=true";
 
         try {
             if (dataSource instanceof HikariDataSource) {
@@ -210,6 +210,13 @@ public class JDBCRunner {
                     Object val = rs.getObject(i);
                     if (val == null) {
                         row.put(md.getColumnName(i), null);
+                    } else if (val instanceof byte[]) {
+                        try {
+                            String decoded = new String((byte[]) val, "Cp037").trim();
+                            row.put(md.getColumnName(i), decoded);
+                        } catch (Exception ex) {
+                            row.put(md.getColumnName(i), "[decode error]");
+                        }
                     } else {
                         row.put(md.getColumnName(i), val);
                     }
