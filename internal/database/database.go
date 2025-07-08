@@ -160,30 +160,60 @@ func (ds *IBMi400) QueryWithSource(ctx context.Context, query string, args ...in
 	return ds.JDBCRunner.rawQuery(ctx, payload)
 }
 
-// as400DateHook returns a DecodeHookFunc for mapstructure to decode AS/400 date formats (MMDDYY numeric).
+// as400DateHook returns a DecodeHookFunc for mapstructure to decode AS/400 date formats (YYYYMMDD or MMDDYY numeric).
 func as400DateHook() mapstructure.DecodeHookFunc {
 	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
-		if from.Kind() == reflect.Float64 && to == reflect.TypeOf(time.Time{}) {
+		if from.Kind() == reflect.Float64 && (to == reflect.TypeOf(time.Time{}) || to == reflect.TypeOf(&time.Time{})) {
 			num := int(data.(float64))
 			if num <= 0 {
-				return time.Time{}, nil
-			}
-			str := fmt.Sprintf("%06d", num)
-			mm := str[0:2]
-			dd := str[2:4]
-			yy := str[4:6]
-
-			// Basic validation
-			if mm < "01" || mm > "12" || dd < "01" || dd > "31" {
+				if to == reflect.TypeOf(&time.Time{}) {
+					return nil, nil
+				}
 				return time.Time{}, nil
 			}
 
-			dateStr := fmt.Sprintf("20%s-%s-%s", yy, mm, dd)
-			t, err := time.Parse("2006-01-02", dateStr)
+			str := fmt.Sprintf("%d", num)
+			var dateStr string
+
+			switch len(str) {
+			case 8:
+				// Assume YYYYMMDD
+				year := str[0:4]
+				month := str[4:6]
+				day := str[6:8]
+				dateStr = fmt.Sprintf("%s-%s-%s", year, month, day)
+			case 6:
+				// Assume MMDDYY
+				mm := str[0:2]
+				dd := str[2:4]
+				yy := str[4:6]
+				dateStr = fmt.Sprintf("20%s-%s-%s", yy, mm, dd)
+			case 5:
+				// Assume MDDYY
+				mm := "0" + str[0:1]
+				dd := str[1:3]
+				yy := str[3:5]
+				dateStr = fmt.Sprintf("20%s-%s-%s", yy, mm, dd)
+			default:
+				fmt.Printf("Unknown AS/400 date format: input=%d\n", num)
+				if to == reflect.TypeOf(&time.Time{}) {
+					return nil, nil
+				}
+				return time.Time{}, nil
+			}
+
+			parsed, err := time.Parse("2006-01-02", dateStr)
 			if err != nil {
+				fmt.Printf("Failed to parse AS/400 date: input=%d parsed=%s err=%v\n", num, dateStr, err)
+				if to == reflect.TypeOf(&time.Time{}) {
+					return nil, nil
+				}
 				return time.Time{}, nil
 			}
-			return t, nil
+			if to == reflect.TypeOf(&time.Time{}) {
+				return &parsed, nil
+			}
+			return parsed, nil
 		}
 		return data, nil
 	}

@@ -24,7 +24,7 @@ type Model interface {
 	GetLocation() string
 	GetAccount() string
 	GetCreatedAt() time.Time
-	GetSoldAt() time.Time
+	GetSoldAt() *time.Time
 	GetInvoiceNumber() *string
 	GetSoldAccount() *string
 	GetRevenueAmount() *float64
@@ -67,7 +67,7 @@ type Unit struct {
 	Location        string     `mapstructure:"LOCATE"`
 	Account         string     `mapstructure:"ACCT#"`
 	CreatedAt       time.Time  `mapstructure:"INDATE"`
-	SoldAt          time.Time  `mapstructure:"SALEDT"`
+	SoldAt          *time.Time `mapstructure:"SALEDT"`
 	InvoiceNumber   *string    `mapstructure:"INV#"`
 	SoldAccount     *string    `mapstructure:"SOLDTO"`
 	RevenueAmount   *float64   `mapstructure:"AMOUNT"`
@@ -107,7 +107,7 @@ func (u Unit) GetEngineHours() *float64       { return u.EngineHours }
 func (u Unit) GetLocation() string            { return u.Location }
 func (u Unit) GetAccount() string             { return u.Account }
 func (u Unit) GetCreatedAt() time.Time        { return u.CreatedAt }
-func (u Unit) GetSoldAt() time.Time           { return u.SoldAt }
+func (u Unit) GetSoldAt() *time.Time          { return u.SoldAt }
 func (u Unit) GetInvoiceNumber() *string      { return u.InvoiceNumber }
 func (u Unit) GetSoldAccount() *string        { return u.SoldAccount }
 func (u Unit) GetRevenueAmount() *float64     { return u.RevenueAmount }
