@@ -91,45 +91,169 @@ type Unit struct {
 	PhoneNumber     *string    `mapstructure:"PHONE"`
 }
 
-func (u Unit) GetUnitID() string              { return u.UnitID }
-func (u Unit) GetYear() string                { return u.Year }
-func (u Unit) GetMake() string                { return u.Make }
-func (u Unit) GetModel() string               { return u.Model }
-func (u Unit) GetDescription() string         { return u.Description }
-func (u Unit) GetSerial() *string             { return u.Serial }
-func (u Unit) GetEngine() *string             { return u.Engine }
-func (u Unit) GetStatus() string              { return u.Status }
-func (u Unit) GetProductCode() *string        { return u.ProductCode }
-func (u Unit) GetIsNew() bool                 { return strings.ToUpper(u.IsNew) == "N" }
-func (u Unit) GetColor() *string              { return u.Color }
-func (u Unit) GetHorsePower() *int            { return u.HorsePower }
-func (u Unit) GetEngineHours() *float64       { return u.EngineHours }
-func (u Unit) GetLocation() string            { return u.Location }
-func (u Unit) GetAccount() string             { return u.Account }
-func (u Unit) GetCreatedAt() time.Time        { return u.CreatedAt }
-func (u Unit) GetSoldAt() *time.Time          { return u.SoldAt }
-func (u Unit) GetInvoiceNumber() *string      { return u.InvoiceNumber }
-func (u Unit) GetSoldAccount() *string        { return u.SoldAccount }
-func (u Unit) GetRevenueAmount() *float64     { return u.RevenueAmount }
-func (u Unit) GetCost() float64               { return u.Cost }
-func (u Unit) GetSoldTo() *string             { return u.SoldAccount }
-func (u Unit) GetSoldBy() *string             { return u.SoldBy }
-func (u Unit) GetSoldByName() *string         { return u.SoldByName }
-func (u Unit) GetWarrantyCode() *string       { return u.WarrantyCode }
-func (u Unit) GetTradedOnUnit() *string       { return u.TradedOnUnit }
-func (u Unit) GetGLAccount() *string          { return u.GLAccount }
-func (u Unit) GetSuggestedList() *float64     { return u.SuggestedList }
-func (u Unit) GetDealerList() *float64        { return u.DealerList }
-func (u Unit) GetFlooringDueDate() *time.Time { return u.FlooringDueDate }
-func (u Unit) GetFlooringAmount() *float64    { return u.FlooringAmount }
-func (u Unit) GetRentalStartDate() *time.Time { return u.RentalStartDate }
-func (u Unit) GetRentalRevenue() *float64     { return u.RentalRevenue }
-func (u Unit) GetRentalCost() *float64        { return u.RentalCost }
-func (u Unit) GetSoldToName() *string         { return u.SoldToName }
-func (u Unit) GetSoldToAddress() *string      { return u.SoldToAddress }
-func (u Unit) GetSoldToCity() *string         { return u.SoldToCity }
-func (u Unit) GetSoldToZip() *string          { return u.SoldToZip }
-func (u Unit) GetPhoneNumber() *string        { return u.PhoneNumber }
+func (u Unit) GetUnitID() string {
+	return u.UnitID
+}
+
+func (u Unit) GetYear() string {
+	return u.Year
+}
+
+func (u Unit) GetMake() string {
+	return u.Make
+}
+
+func (u Unit) GetModel() string {
+	return u.Model
+}
+
+func (u Unit) GetDescription() string {
+	return u.Description
+}
+
+func (u Unit) GetSerial() *string {
+	return u.Serial
+}
+
+func (u Unit) GetEngine() *string {
+	return u.Engine
+}
+
+func (u Unit) GetStatus() string {
+	return u.Status
+}
+
+func (u Unit) GetProductCode() *string {
+	return u.ProductCode
+}
+
+func (u Unit) GetIsNew() bool {
+	return strings.ToUpper(u.IsNew) == "N"
+}
+
+func (u Unit) GetColor() *string {
+	return u.Color
+}
+
+func (u Unit) GetHorsePower() *int {
+	return u.HorsePower
+}
+
+func (u Unit) GetEngineHours() *float64 {
+	return u.EngineHours
+}
+
+func (u Unit) GetLocation() string {
+	return u.Location
+}
+
+func (u Unit) GetAccount() string {
+	return u.Account
+}
+
+func (u Unit) GetCreatedAt() time.Time {
+	return u.CreatedAt
+}
+
+func (u Unit) GetSoldAt() *time.Time {
+	return u.SoldAt
+}
+
+func (u Unit) GetInvoiceNumber() *string {
+	if u.InvoiceNumber == nil {
+		return nil
+	}
+
+	inv := strings.TrimSpace(*u.InvoiceNumber)
+	inv = strings.TrimSuffix(inv, " #*")
+
+	return &inv
+}
+
+func (u Unit) GetSoldAccount() *string {
+	return u.SoldAccount
+}
+
+func (u Unit) GetRevenueAmount() *float64 {
+	return u.RevenueAmount
+}
+
+func (u Unit) GetCost() float64 {
+	return u.Cost
+}
+
+func (u Unit) GetSoldTo() *string {
+	return u.SoldAccount
+}
+
+func (u Unit) GetSoldBy() *string {
+	return u.SoldBy
+}
+
+func (u Unit) GetSoldByName() *string {
+	return u.SoldByName
+}
+
+func (u Unit) GetWarrantyCode() *string {
+	return u.WarrantyCode
+}
+
+func (u Unit) GetTradedOnUnit() *string {
+	return u.TradedOnUnit
+}
+
+func (u Unit) GetGLAccount() *string {
+	return u.GLAccount
+}
+
+func (u Unit) GetSuggestedList() *float64 {
+	return u.SuggestedList
+}
+
+func (u Unit) GetDealerList() *float64 {
+	return u.DealerList
+}
+
+func (u Unit) GetFlooringDueDate() *time.Time {
+	return u.FlooringDueDate
+}
+
+func (u Unit) GetFlooringAmount() *float64 {
+	return u.FlooringAmount
+}
+
+func (u Unit) GetRentalStartDate() *time.Time {
+	return u.RentalStartDate
+}
+
+func (u Unit) GetRentalRevenue() *float64 {
+	return u.RentalRevenue
+}
+
+func (u Unit) GetRentalCost() *float64 {
+	return u.RentalCost
+}
+
+func (u Unit) GetSoldToName() *string {
+	return u.SoldToName
+}
+
+func (u Unit) GetSoldToAddress() *string {
+	return u.SoldToAddress
+}
+
+func (u Unit) GetSoldToCity() *string {
+	return u.SoldToCity
+}
+
+func (u Unit) GetSoldToZip() *string {
+	return u.SoldToZip
+}
+
+func (u Unit) GetPhoneNumber() *string {
+	return u.PhoneNumber
+}
+
 func (u Unit) ToUnitSpec() *types.UnitSpec {
 	return &types.UnitSpec{
 		UnitID:        u.UnitID,
@@ -149,7 +273,7 @@ func (u Unit) ToUnitSpec() *types.UnitSpec {
 		Account:       u.Account,
 		CreatedAt:     u.CreatedAt,
 		SoldAt:        u.SoldAt,
-		InvoiceNumber: u.InvoiceNumber,
+		InvoiceNumber: u.GetInvoiceNumber(),
 		SoldTo:        u.SoldAccount,
 		RevenueAmount: u.RevenueAmount,
 		Cost:          u.Cost,
