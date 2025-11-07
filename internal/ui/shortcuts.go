@@ -69,7 +69,7 @@ func (u *UI) handleShortcutEvent(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Key() {
 	case tcell.KeyTab:
 		// keep existing behavior?
-		u.SetFocus(u.Layout.OutputPanel)
+		u.SetFocus(u.Layout.OutputPanel.GetItem(0))
 		return nil
 	case tcell.KeyPgUp, tcell.KeyUp:
 		row, _ := u.Layout.LogList.GetScrollOffset()
