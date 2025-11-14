@@ -344,11 +344,25 @@ func DecodeRows[T any](rows []types.ResultRow) ([]T, error) {
 	return results, nil
 }
 
-// As400DateExpr returns the SQL expression to convert a 6-digit AS/400 numeric date column into YYYY-MM-DD.
+// As400DateExpr returns a guarded DATE expression for 6-digit AS/400 numeric dates.
 func As400DateExpr(col string) string {
-	return "DATE(" +
-		"'20'||SUBSTR(RIGHT('000000'||TRIM(CHAR(" + col + ")),6),5,2)||'-'" +
-		"||SUBSTR(RIGHT('000000'||TRIM(CHAR(" + col + ")),6),1,2)||'-'" +
-		"||SUBSTR(RIGHT('000000'||TRIM(CHAR(" + col + ")),6),3,2)" +
-		")"
+	value := "RIGHT('000000'||TRIM(CHAR(" + col + ")),6)"
+	month := "SUBSTR(" + value + ",1,2)"
+	day := "SUBSTR(" + value + ",3,2)"
+	year := "SUBSTR(" + value + ",5,2)"
+	dateLiteral := "DATE('20'||" + year + "||'-'||" + month + "||'-'||" + day + ")"
+	nonZero := value + " <> '000000'"
+	monthRange := month + " BETWEEN '01' AND '12'"
+	dayRange := day + " BETWEEN '01' AND '31'"
+	thirtyDayOverflow := "(" + month + " IN ('04','06','09','11') AND " + day + " > '30')"
+	februaryCase := "CASE " +
+		"WHEN " + day + " <= '28' THEN " + dateLiteral + " " +
+		"WHEN " + day + " = '29' THEN CASE WHEN MOD(INTEGER(" + year + "),4) = 0 THEN " + dateLiteral + " ELSE NULL END " +
+		"ELSE NULL END"
+	return "CASE " +
+		"WHEN " + value + " IS NOT NULL AND " + nonZero + " AND " + monthRange + " AND " + dayRange + " AND NOT " + thirtyDayOverflow + " THEN " +
+		"	CASE " +
+		"WHEN " + month + " <> '02' THEN " + dateLiteral + " " +
+		"ELSE " + februaryCase + " END " +
+		"ELSE NULL END"
 }
