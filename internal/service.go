@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/invoices"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/unit"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
@@ -26,7 +27,8 @@ type DISReaderService struct {
 	logLevel *slog.LevelVar
 	tempDir  string
 
-	unitService types.UnitService
+	unitService    types.UnitService
+	invoiceService types.InvoiceService
 }
 
 // NewDISReaderService creates a DISReaderService, writes embedded JAR,
@@ -65,12 +67,13 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 	}
 
 	s := &DISReaderService{
-		config:      config,
-		db:          db,
-		logger:      logger,
-		logLevel:    &logLevel,
-		tempDir:     tmp,
-		unitService: unit.NewUnitService(db),
+		config:         config,
+		db:             db,
+		logger:         logger,
+		logLevel:       &logLevel,
+		tempDir:        tmp,
+		unitService:    unit.NewUnitService(db),
+		invoiceService: invoices.NewInvoiceService(db),
 	}
 
 	// Verify the runner is responsive
@@ -161,4 +164,8 @@ func (s *DISReaderService) AttachShutdownHook() {
 
 func (s *DISReaderService) UnitService() types.UnitService {
 	return s.unitService
+}
+
+func (s *DISReaderService) InvoiceService() types.InvoiceService {
+	return s.invoiceService
 }

@@ -16,4 +16,5 @@ type DISReaderService interface {
 	TestConnection(ctx context.Context) error
 	RunDebugSearch(searchTerm string, sqliteDBFile string, progressChan chan<- ProgressStatus, eventChan chan<- TableEvent)
 	UnitService() UnitService
+	InvoiceService() InvoiceService
 }

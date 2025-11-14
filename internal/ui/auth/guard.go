@@ -61,3 +61,7 @@ func (a *AuthGuard) AttachShutdownHook() {
 func (a *AuthGuard) UnitService() types.UnitService {
 	return a.inner.UnitService()
 }
+
+func (a *AuthGuard) InvoiceService() types.InvoiceService {
+	return a.inner.InvoiceService()
+}
