@@ -29,6 +29,8 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetDefault("disConfig.logLevel", DefualtLogLevel)
 	viper.SetDefault("disConfig.jdbcConfig.javaPath", DefaultJavaPath)
 	viper.SetDefault("disConfig.jdbcConfig.jdbcPort", DefaultJDBCPort)
+	viper.SetDefault("debugSearch.defaultOutputMode", string(types.DebugSearchOutputSQLite))
+	viper.SetDefault("debugSearch.defaultOutputPath", "")
 
 	// If config file exists, use it
 	_, err := os.ReadFile(ConfigFileName)

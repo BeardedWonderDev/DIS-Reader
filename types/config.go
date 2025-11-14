@@ -3,9 +3,15 @@ package types
 import "log/slog"
 
 type DISUIConfig struct {
-	AppName    string     `mapstructure:"appName"`
-	AppVersion string     `mapstructure:"appVersion"`
-	DIS        *DISConfig `mapstructure:"disConfig"`
+	AppName     string            `mapstructure:"appName"`
+	AppVersion  string            `mapstructure:"appVersion"`
+	DIS         *DISConfig        `mapstructure:"disConfig"`
+	DebugSearch DebugSearchConfig `mapstructure:"debugSearch"`
+}
+
+type DebugSearchConfig struct {
+	DefaultOutputMode string `mapstructure:"defaultOutputMode"`
+	DefaultOutputPath string `mapstructure:"defaultOutputPath"`
 }
 
 type DISConfig struct {

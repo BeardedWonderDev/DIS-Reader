@@ -14,3 +14,15 @@ type TableEvent struct {
 	ColumnCount int
 	SampleRow   map[string]interface{}
 }
+
+type DebugSearchOutputMode string
+
+const (
+	DebugSearchOutputSQLite DebugSearchOutputMode = "sqlite"
+	DebugSearchOutputCSV    DebugSearchOutputMode = "csv"
+)
+
+type DebugSearchOptions struct {
+	OutputMode DebugSearchOutputMode
+	OutputPath string
+}

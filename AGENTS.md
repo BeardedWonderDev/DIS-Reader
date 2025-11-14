@@ -32,3 +32,4 @@
 - Runtime settings live in `disreader.yaml`; override any field via env vars prefixed with `DISREADER_` (e.g., `DISREADER_DISCONFIG_HOST`).
 - `disConfig.jdbcConfig` controls the Java bridge; update `javaPath` when pointing at a custom JDK.
 - Treat bundled `.db` files as disposable fixtures—never commit production data and refresh docs whenever new seeds are added.
+- The Debug Search modal supports SQLite (default) or CSV output—keep `debugSearch.defaultOutputMode`/`debugSearch.defaultOutputPath` in `disreader.yaml` (or env vars) accurate whenever defaults change.

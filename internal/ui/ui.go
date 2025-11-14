@@ -42,6 +42,10 @@ func (u *UI) GetLayout() *types.ComponentLayout {
 	return u.Layout
 }
 
+func (u *UI) GetConfig() *types.DISUIConfig {
+	return u.Config
+}
+
 // GetTheme implements types.UI.
 func (u *UI) GetTheme() *types.Theme {
 	return u.Theme

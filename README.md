@@ -152,6 +152,10 @@ Use this space to show useful examples of how a project can be used. Additional 
 
 _For more examples, please refer to the [Documentation](https://example.com)_
 
+### Debug Search Output Modes
+
+The in-app **Debug Search** module (or the `RunDebugSearch` API) can now emit results as either an SQLite database (`types.DebugSearchOutputSQLite`, default) or a CSV file (`types.DebugSearchOutputCSV`). Pick the format from the modal’s dropdown or by passing `types.DebugSearchOptions` when invoking the service directly. Configure sensible defaults via `debugSearch.defaultOutputMode` / `debugSearch.defaultOutputPath` in `disreader.yaml` (or matching `DISREADER_DEBUGSEARCH_*` env vars).
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 

@@ -1,6 +1,6 @@
 # Debug Search Service Reference
 
-`RunDebugSearch` is DIS Reader’s exploratory search engine. It executes a curated set of SQL templates across DIS tables, streaming progress and events while persisting results to SQLite. This page explains how to configure, call, and consume the service.
+`RunDebugSearch` is DIS Reader’s exploratory search engine. It executes a curated set of SQL templates across DIS tables, streaming progress and events while persisting results as either an SQLite database or a CSV file. This page explains how to configure, call, and consume the service.
 
 ---
 
@@ -19,7 +19,7 @@ It is **not** a replacement for structured services; use `UnitService` or `Invoi
 ```go
 func (s *DISReaderService) RunDebugSearch(
 	searchTerm string,
-	sqliteDBFile string,
+	opts types.DebugSearchOptions,
 	progressChan chan<- types.ProgressStatus,
 	eventChan chan<- types.TableEvent,
 )
@@ -30,11 +30,18 @@ func (s *DISReaderService) RunDebugSearch(
 | Name | Description |
 |------|-------------|
 | `searchTerm` | Plain string inserted into every query template (`'{{SEARCH}}'` placeholder). Escape/quote handled internally. |
-| `sqliteDBFile` | Output SQLite path (created if missing). Each run appends tables/results. |
+| `opts` | Output preferences. Provide a `types.DebugSearchOptions` (see below). |
 | `progressChan` | Caller-owned channel receiving progress updates; service closes it when done. |
 | `eventChan` | Caller-owned channel receiving table/row events; also closed on completion. |
 
 Channels are optional but recommended. Pass buffered channels to avoid blocking.
+
+### `types.DebugSearchOptions`
+
+| Field | Description |
+|-------|-------------|
+| `OutputMode` | `types.DebugSearchOutputSQLite` (default) or `types.DebugSearchOutputCSV`. Determines whether results are written to an SQLite database or a long-form CSV file. |
+| `OutputPath` | Destination file path. Optional; when empty, the service picks `debug-search-<runID>.db` or `.csv` based on the chosen mode. |
 
 ---
 
@@ -51,12 +58,15 @@ Source: `internal/debug.go`.
    - Creates/extends SQLite tables matching source names, adding columns on the fly.
    - Inserts each row, recording metadata in `batch_status` to support resumability.
 4. Sleeps 2 seconds between batches to reduce load (`delay` constant).
+5. Writes each row to the configured sink: SQLite tables (schema created on the fly) or a CSV file with JSON-encoded rows.
 
 ---
 
-## 4. SQLite Output Schema
+## 4. Output Modes
 
-The service maintains a few helper tables:
+### 4.1 SQLite (default)
+
+When `OutputMode` is `sqlite`, the service keeps the existing behavior:
 
 - `batch_status` – tracks completed queries per `run_id`.
   ```sql
@@ -66,9 +76,23 @@ The service maintains a few helper tables:
   ```sql
   run_id TEXT, query_index INTEGER, query TEXT, error_message TEXT, occurred_at DATETIME
   ```
-- For each source table (value of `SRC_TABLE`), the service creates a like-named table and dynamically `ALTER TABLE ADD COLUMN` as new fields appear. Data types default to `TEXT`; convert as needed when querying.
+- For each source table (value of `SRC_TABLE`), a like-named table is created/extended with `TEXT` columns as new fields appear.
 
-Each run uses a new `run_id` (UUID) and emits events indicating progress.
+This mode is resumable: reusing the same DB file allows the service to skip already completed queries.
+
+### 4.2 CSV (long-form)
+
+When `OutputMode` is `csv`, the service writes a single CSV document with the following columns:
+
+| Column | Meaning |
+|--------|---------|
+| `run_id` | UUID for the current run (matches `ProgressStatus.RunID`). |
+| `search_term` | The literal search term used to expand templates. |
+| `table_name` | Source table reported by `SRC_TABLE` (or `unknown`). |
+| `row_index` | Zero-based counter per table indicating row order. |
+| `row_json` | JSON object containing the raw row data/columns.
+
+CSV mode favors portability (open in spreadsheets or ship to other systems) at the cost of resumability—each run rewrites the file from scratch. Table and row events continue to stream so the UI/logs behave the same way.
 
 ---
 
@@ -103,7 +127,12 @@ Use these channels to update UI components, send metrics, or log to observabilit
 progressCh := make(chan types.ProgressStatus, 1)
 eventCh := make(chan types.TableEvent, 10)
 
-go disSvc.RunDebugSearch("CASHC", "debug_results.db", progressCh, eventCh)
+opts := types.DebugSearchOptions{
+	OutputMode: types.DebugSearchOutputSQLite,
+	OutputPath: "debug_results.db",
+}
+
+go disSvc.RunDebugSearch("CASHC", opts, progressCh, eventCh)
 
 for progressCh != nil || eventCh != nil {
 	select {
@@ -130,6 +159,8 @@ sqlite3 debug_results.db '.tables'
 sqlite3 debug_results.db 'SELECT * FROM FILEC_DMITEM LIMIT 10;'
 ```
 
+To emit CSV instead, change `OutputMode` to `types.DebugSearchOutputCSV` and point `OutputPath` at something like `debug-results.csv`.
+
 ---
 
 ## 7. Configuration Tips
@@ -137,7 +168,8 @@ sqlite3 debug_results.db 'SELECT * FROM FILEC_DMITEM LIMIT 10;'
 | Need | Approach |
 |------|----------|
 | Change batch size/parallelism | Adjust constants in `internal/debug.go` (`batchSize`, `parallelism`). |
-| Persist output elsewhere | Provide an absolute path for `sqliteDBFile`. |
+| Persist output elsewhere | Set `opts.OutputPath` (or configure `debugSearch.defaultOutputPath`) to an absolute path. |
+| Change default mode | Adjust `debugSearch.defaultOutputMode` in `disreader.yaml` (values: `sqlite`, `csv`) so the TUI preselects your preference. |
 | Resume interrupted run | The `batch_status` table prevents duplicate work; rerun with the same DB file to pick up remaining queries. |
 | Reduce throttling | Tweak the `delay` constant (2s by default). Ensure your DIS environment tolerates the load. |
 

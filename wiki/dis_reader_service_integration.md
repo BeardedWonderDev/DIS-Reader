@@ -228,7 +228,12 @@ Detailed behavior (batching, SQLite schema, events) is documented in [wiki/debug
 progressCh := make(chan types.ProgressStatus)
 eventCh := make(chan types.TableEvent)
 
-go disSvc.RunDebugSearch("C01153", "debug_results.db", progressCh, eventCh)
+opts := types.DebugSearchOptions{
+	OutputMode: types.DebugSearchOutputSQLite,
+	OutputPath: "debug_results.db",
+}
+
+go disSvc.RunDebugSearch("C01153", opts, progressCh, eventCh)
 
 for {
 	select {
@@ -253,7 +258,9 @@ for {
 
 Details:
 - `searchTerm` replaces `{{SEARCH}}` placeholders inside every query defined in `internal/queries.sql`.
-- `sqliteDBFile` is created/updated with result tables, column metadata, and error logs. Consume it with any SQLite client.
+- `opts.OutputPath` is created/updated with result tables. Use SQLite clients for the default mode or open the CSV export in spreadsheets/ETL tools when `OutputMode` is `csv`.
+- `opts.OutputPath` is created/updated with result tables. Use SQLite clients for the default mode or open the CSV export in spreadsheets/ETL tools when `OutputMode` is `csv`.
+- Default values for both fields can be set globally via `debugSearch.defaultOutputMode` / `debugSearch.defaultOutputPath` in `disreader.yaml` so the TUI modal starts with sensible choices.
 - `ProgressStatus` reports aggregate progress per run ID.
 - `TableEvent` describes new tables, inserted rows, or query failures (the latter populate a `query_errors` table with context).
 - The engine batches queries (20 at a time) and throttles them (2s delay) to avoid overwhelming DIS.

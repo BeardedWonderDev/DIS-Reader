@@ -41,13 +41,14 @@ func (a *AuthGuard) TestConnection(ctx context.Context) error {
 	return a.inner.TestConnection(ctx)
 }
 
-func (a *AuthGuard) RunDebugSearch(term, file string, pCh chan<- types.ProgressStatus, eCh chan<- types.TableEvent) {
+func (a *AuthGuard) RunDebugSearch(term string, opts types.DebugSearchOptions, pCh chan<- types.ProgressStatus, eCh chan<- types.TableEvent) {
 	if !a.ui.GetAuth().IsAuthenticated() {
-		a.ui.SetPendingAction(func() { a.inner.RunDebugSearch(term, file, pCh, eCh) })
+		optsCopy := opts
+		a.ui.SetPendingAction(func() { a.inner.RunDebugSearch(term, optsCopy, pCh, eCh) })
 		a.ui.GetAuth().ShowAuthModal()
 		return
 	}
-	a.inner.RunDebugSearch(term, file, pCh, eCh)
+	a.inner.RunDebugSearch(term, opts, pCh, eCh)
 }
 
 func (a *AuthGuard) Shutdown() error {

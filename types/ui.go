@@ -43,6 +43,7 @@ type UI interface {
 	GetApp() *tview.Application
 	GetWinMan() *winman.Manager
 	GetAuth() Auth
+	GetConfig() *DISUIConfig
 	RunPendingAction()
 	SetPendingAction(f func())
 	GetLogger() *slog.Logger
