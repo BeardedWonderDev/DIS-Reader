@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/utils"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
@@ -164,8 +165,7 @@ func (u Unit) GetInvoiceNumber() *string {
 		return nil
 	}
 
-	inv := strings.TrimSpace(*u.InvoiceNumber)
-	inv = strings.TrimSuffix(inv, " #*")
+	inv := utils.SanitizeInvoiceNumber(*u.InvoiceNumber)
 
 	return &inv
 }

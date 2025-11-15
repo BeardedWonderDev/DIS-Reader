@@ -6,10 +6,12 @@ This document details the `InvoiceService` exposed by DIS Reader, including data
 
 ## 1. Overview
 
-`InvoiceService` targets table `FILEC.IAH` (invoice items). It lets you:
+`InvoiceService` targets `FILEC.IAH` (invoice items) and `FILEC.CUSINV` (whole goods invoices). It lets you:
 
 - Fetch a specific invoice line via document + line identifiers.
 - List invoice items with filters on customer, part, posting date, etc.
+- Fetch a whole goods invoice line (division/serial sales).
+- List whole goods invoices with salesperson, price, and invoice date filters.
 
 Obtain the service through the main DIS reader instance:
 
@@ -38,6 +40,25 @@ Selected fields:
 | `UserField1`, `UserField2` | Custom/reserved fields. |
 
 Optional data is wrapped in pointers so JSON output omits missing values.
+
+## 2.1 Data Model (`types.WholeGoodsInvoiceSpec`)
+
+Whole goods invoices originate from `FILEC.CUSINV`. The exported spec exposes every column with the cleanest label we have today:
+
+| Field | Column | Notes |
+|-------|--------|-------|
+| `Division` | `DS8LA` | Division code. |
+| `LegacyDS9YA` | `DS9YA` | Currently undocumented numeric flag, exposed for parity. |
+| `LineItemNumber` | `DS1XQA` | Whole goods line number (converted to `int`). |
+| `InvoiceNumber` | `DSHUA` | Trimmed and sanitized (`" #*"` suffixes removed, same as unit service). |
+| `LegacyDSYGA` | `DSYGA` | One-character status/flag (unknown meaning). |
+| `InvoiceDate` | `DSHVA` | Native DATE column. |
+| `LineItemPrice` | `DSHWA` | 9,2 DECIMAL expressed as `float64`. |
+| `LineItemDescription` | `DSHXA` | 40-char description. |
+| `LegacyDSWVA` | `DSWVA` | Additional numeric flag (unknown). |
+| `SoldBy` | `DS22UA` | Salesperson code / initials. |
+
+Any unknown/legacy values stay nullable so callers can ignore them until business meaning is confirmed.
 
 ---
 
@@ -84,6 +105,49 @@ lp := types.ListParams{
 }
 
 items, err := invoiceSvc.ListItems(ctx, lp)
+```
+
+### 3.3 `GetWholeGoodsInvoice(ctx context.Context, invoiceNumber, lineItemNumber string) (*types.WholeGoodsInvoiceSpec, error)`
+
+Mirrors `GetItem`, but queries `FILEC.CUSINV` using invoice + line identifiers (line numbers are numeric strings).
+
+```go
+wg, err := invoiceSvc.GetWholeGoodsInvoice(ctx, "WG12345 #*", "10")
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf("%s sold %s for %.2f\n", wg.SoldBy, wg.LineItemDescription, wg.LineItemPrice)
+```
+
+### 3.4 `ListWholeGoodsInvoices(ctx context.Context, lp types.ListParams) ([]*types.WholeGoodsInvoiceSpec, error)`
+
+Uses the dedicated parser shown below to keep filters aligned with the legacy schema.
+
+```go
+wgParser := types.WholeGoodsInvoiceListParamParser{}
+
+soldByFilter, _ := types.ParseFilter(types.Filter{
+	Field:    "soldBy",
+	Operator: "=",
+	Value:    "JDAVIS",
+}, wgParser)
+
+after, _ := time.Parse("2006-01-02", "2024-07-01")
+dateFilter, _ := types.ParseFilter(types.Filter{
+	Field:    "invoiceDate",
+	Operator: ">=",
+	Value:    after,
+}, wgParser)
+
+sortBy, _ := types.ParseSortBy("invoiceDate", wgParser)
+
+lp := types.ListParams{
+	Limit:   100,
+	SortBy:  sortBy,
+	Filters: []types.Filter{soldByFilter, dateFilter},
+}
+
+rows, err := invoiceSvc.ListWholeGoodsInvoices(ctx, lp)
 ```
 
 ---
@@ -136,6 +200,41 @@ Special cases:
 
 If `ListParams.Query` is non-empty, `Repository.ListInvoiceItems` applies a wildcard search across `AHDOC`, `AHPART`, and `AHAS#`, using proper escaping for `%` and `_`.
 
+### 4.4 Whole Goods Sortable Fields
+
+Provided by `WholeGoodsInvoiceListParamParser.GetAllowedSortByColumns()`:
+
+| Field | Column | Notes |
+|-------|--------|-------|
+| `invoiceNumber` | `DSHUA` | Whole goods invoice number (raw). |
+| `lineItem` | `DS1XQA` | Numeric line item identifier. |
+| `invoiceDate` | `DSHVA` | Proper DATE column. |
+| `division` | `DS8LA` | Division/location code. |
+| `price` | `DSHWA` | DECIMAL(9,2). |
+| `soldBy` | `DS22UA` | Salesperson / closer. |
+| `ds9ya`, `dsyga`, `dswva` | `DS9YA`, `DSYGA`, `DSWVA` | Raw legacy columns for advanced filters. |
+
+### 4.5 Whole Goods Filters
+
+`WholeGoodsInvoiceListParamParser.GetAllowedFilterColumns()` covers:
+
+| Field | Column | Value Type |
+|-------|--------|------------|
+| `invoiceNumber` | `DSHUA` | string |
+| `lineItem` | `DS1XQA` | integer |
+| `invoiceDate` | `DSHVA` | `time.Time` |
+| `division` | `DS8LA` | string |
+| `price` | `DSHWA` | float |
+| `description` | `DSHXA` | string |
+| `soldBy` | `DS22UA` | string |
+| `ds9ya` | `DS9YA` | integer |
+| `dsyga` | `DSYGA` | string |
+| `dswva` | `DSWVA` | integer |
+
+Use the parser when calling `types.ParseFilter`, so numbers/dates convert before SQL rendering.
+
+Whole goods `ListParams.Query` fans out across `DSHUA`, `DSHXA`, and `DS22UA` (invoice number, description, salesperson) with the same escaping rules as the standard invoice search.
+
 ---
 
 ## 5. Usage Scenarios
@@ -146,6 +245,7 @@ If `ListParams.Query` is non-empty, `Repository.ListInvoiceItems` applies a wild
 | Customer history | Filter `customer`, optionally `postingDate >= lastYear`. |
 | Vendor analysis | Filter `vendor` + date range, sort by `postingDate DESC`. |
 | High-value line items | Filter `price >= 10000`, sort by `price DESC`. |
+| Whole goods sales leaderboard | Use `ListWholeGoodsInvoices`, filter by `invoiceDate`, group by `SoldBy` in application code. |
 
 Combine filters and sorts to feed reporting APIs or dashboards.
 

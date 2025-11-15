@@ -12,6 +12,8 @@ import (
 type InvoiceService interface {
 	GetItem(ctx context.Context, documentNumber string, lineID string) (*InvoiceItemSpec, error)
 	ListItems(ctx context.Context, lp ListParams) ([]*InvoiceItemSpec, error)
+	GetWholeGoodsInvoice(ctx context.Context, invoiceNumber string, lineItemNumber string) (*WholeGoodsInvoiceSpec, error)
+	ListWholeGoodsInvoices(ctx context.Context, lp ListParams) ([]*WholeGoodsInvoiceSpec, error)
 }
 
 // InvoiceItemSpec is the exported representation of a FILEC.IAH row.
@@ -56,6 +58,20 @@ type InvoiceItemSpec struct {
 	OriginFlag           *string    `json:"originFlag,omitempty"`
 	UserField1           *string    `json:"userField1,omitempty"`
 	UserField2           *string    `json:"userField2,omitempty"`
+}
+
+// WholeGoodsInvoiceSpec represents FILEC.CUSINV rows (whole goods invoices).
+type WholeGoodsInvoiceSpec struct {
+	Division            string    `json:"division"`
+	LegacyDS9YA         *int      `json:"ds9ya,omitempty"`
+	LineItemNumber      int       `json:"lineItemNumber"`
+	InvoiceNumber       string    `json:"invoiceNumber"`
+	LegacyDSYGA         *string   `json:"dsyga,omitempty"`
+	InvoiceDate         time.Time `json:"invoiceDate"`
+	LineItemPrice       float64   `json:"lineItemPrice"`
+	LineItemDescription string    `json:"lineItemDescription"`
+	LegacyDSWVA         *int      `json:"dswva,omitempty"`
+	SoldBy              string    `json:"soldBy"`
 }
 
 // InvoiceListParamParser implements ListParamParser for invoices.
@@ -109,6 +125,70 @@ func (InvoiceListParamParser) ParseValue(val string, field string) (interface{},
 			return nil, fmt.Errorf("invalid number for %s: %w", field, err)
 		}
 		return f, nil
+	default:
+		if val == "" {
+			return nil, fmt.Errorf("%s must not be empty", field)
+		}
+		return val, nil
+	}
+}
+
+// WholeGoodsInvoiceListParamParser validates filters/sorts for FILEC.CUSINV reads.
+type WholeGoodsInvoiceListParamParser struct{}
+
+func (WholeGoodsInvoiceListParamParser) GetDefaultSortBy() string {
+	return "DSHVA"
+}
+
+func (WholeGoodsInvoiceListParamParser) GetAllowedSortByColumns() map[string]string {
+	return map[string]string{
+		"invoiceNumber": "DSHUA",
+		"lineItem":      "DS1XQA",
+		"invoiceDate":   "DSHVA",
+		"division":      "DS8LA",
+		"price":         "DSHWA",
+		"soldBy":        "DS22UA",
+		"ds9ya":         "DS9YA",
+		"dsyga":         "DSYGA",
+		"dswva":         "DSWVA",
+	}
+}
+
+func (WholeGoodsInvoiceListParamParser) GetAllowedFilterColumns() map[string]string {
+	return map[string]string{
+		"invoiceNumber": "DSHUA",
+		"lineItem":      "DS1XQA",
+		"invoiceDate":   "DSHVA",
+		"division":      "DS8LA",
+		"price":         "DSHWA",
+		"description":   "DSHXA",
+		"soldBy":        "DS22UA",
+		"ds9ya":         "DS9YA",
+		"dsyga":         "DSYGA",
+		"dswva":         "DSWVA",
+	}
+}
+
+func (WholeGoodsInvoiceListParamParser) ParseValue(val string, field string) (interface{}, error) {
+	switch strings.ToLower(field) {
+	case "invoicedate":
+		t, err := time.Parse("2006-01-02", val)
+		if err != nil {
+			return nil, fmt.Errorf("invalid date for %s: %w", field, err)
+		}
+		return t, nil
+	case "price":
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid number for %s: %w", field, err)
+		}
+		return f, nil
+	case "lineitem", "ds9ya", "dswva":
+		i, err := strconv.Atoi(val)
+		if err != nil {
+			return nil, fmt.Errorf("invalid integer for %s: %w", field, err)
+		}
+		return i, nil
 	default:
 		if val == "" {
 			return nil, fmt.Errorf("%s must not be empty", field)

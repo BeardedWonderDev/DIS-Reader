@@ -41,3 +41,24 @@ func (s *Service) ListItems(ctx context.Context, lp types.ListParams) ([]*types.
 	}
 	return specs, nil
 }
+
+func (s *Service) GetWholeGoodsInvoice(ctx context.Context, invoiceNumber string, lineItemNumber string) (*types.WholeGoodsInvoiceSpec, error) {
+	invoice, err := s.repo.GetWholeGoodsInvoice(ctx, invoiceNumber, lineItemNumber)
+	if err != nil {
+		return nil, err
+	}
+	return invoice.ToWholeGoodsInvoiceSpec(), nil
+}
+
+func (s *Service) ListWholeGoodsInvoices(ctx context.Context, lp types.ListParams) ([]*types.WholeGoodsInvoiceSpec, error) {
+	rows, err := s.repo.ListWholeGoodsInvoices(ctx, lp)
+	if err != nil {
+		return nil, err
+	}
+
+	specs := make([]*types.WholeGoodsInvoiceSpec, len(rows))
+	for i, row := range rows {
+		specs[i] = row.ToWholeGoodsInvoiceSpec()
+	}
+	return specs, nil
+}

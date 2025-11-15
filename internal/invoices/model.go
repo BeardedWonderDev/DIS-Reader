@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/utils"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
@@ -205,4 +206,51 @@ func optionalString(val string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+// WholeGoodsInvoice models FILEC.CUSINV rows.
+type WholeGoodsInvoice struct {
+	Division        string    `mapstructure:"DS8LA"`
+	SequenceCode    float64   `mapstructure:"DS9YA"`
+	LineItemNumber  float64   `mapstructure:"DS1XQA"`
+	InvoiceNumber   string    `mapstructure:"DSHUA"`
+	StatusCode      string    `mapstructure:"DSYGA"`
+	InvoiceDate     time.Time `mapstructure:"DSHVA"`
+	LineItemPrice   float64   `mapstructure:"DSHWA"`
+	LineDescription string    `mapstructure:"DSHXA"`
+	ReferenceValue  float64   `mapstructure:"DSWVA"`
+	SoldBy          string    `mapstructure:"DS22UA"`
+}
+
+// ToWholeGoodsInvoiceSpec converts the model into the exported spec.
+func (w WholeGoodsInvoice) ToWholeGoodsInvoiceSpec() *types.WholeGoodsInvoiceSpec {
+	spec := &types.WholeGoodsInvoiceSpec{
+		Division:            strings.TrimSpace(w.Division),
+		LineItemNumber:      int(w.LineItemNumber),
+		InvoiceNumber:       utils.SanitizeInvoiceNumber(w.InvoiceNumber),
+		InvoiceDate:         w.InvoiceDate,
+		LineItemPrice:       w.LineItemPrice,
+		LineItemDescription: strings.TrimSpace(w.LineDescription),
+		SoldBy:              strings.TrimSpace(w.SoldBy),
+	}
+
+	if seq := optionalIntFromFloat(w.SequenceCode); seq != nil {
+		spec.LegacyDS9YA = seq
+	}
+	if status := optionalString(w.StatusCode); status != nil {
+		spec.LegacyDSYGA = status
+	}
+	if ref := optionalIntFromFloat(w.ReferenceValue); ref != nil {
+		spec.LegacyDSWVA = ref
+	}
+
+	return spec
+}
+
+func optionalIntFromFloat(val float64) *int {
+	if val == 0 {
+		return nil
+	}
+	i := int(val)
+	return &i
 }
