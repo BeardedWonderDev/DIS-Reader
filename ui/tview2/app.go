@@ -24,9 +24,10 @@ func Run(cfg *types.DISUIConfig, dis types.DISReaderService) error {
 }
 
 type viewerApp struct {
-	cfg *types.DISUIConfig
-	dis types.DISReaderService
-	app *tview.Application
+	cfg   *types.DISUIConfig
+	dis   types.DISReaderService
+	app   *tview.Application
+	theme *types.Theme
 
 	dbDir      string
 	files      []string
@@ -56,10 +57,12 @@ func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerAp
 		return nil, err
 	}
 	app := tview.NewApplication()
+	theme := types.ResolveTheme(cfg.Theme)
 	viewer := &viewerApp{
 		cfg:       cfg,
 		dis:       dis,
 		app:       app,
+		theme:     theme,
 		dbDir:     dir,
 		perPage:   tablePageSize,
 		logFollow: true,
@@ -91,9 +94,17 @@ func (v *viewerApp) initWidgets() {
 		SetSelectable(true, true)
 	v.tableView.SetBorder(true).SetTitle(" Rows ")
 	v.tableView.SetBorders(true)
+	v.tableView.SetBorderColor(v.theme.Colors.BorderColor)
+	v.tableView.SetTitleColor(v.theme.Colors.PrimaryText)
+	v.tableView.SetBackgroundColor(v.theme.Colors.WindowColor)
+	v.tableView.SetSelectedStyle(v.theme.Style.TableSelectedStyle)
 
 	v.logView = tview.NewTextView().SetDynamicColors(false)
 	v.logView.SetBorder(true).SetTitle(" Activity ")
+	v.logView.SetBorderColor(v.theme.Colors.BorderColor)
+	v.logView.SetTitleColor(v.theme.Colors.PrimaryText)
+	v.logView.SetBackgroundColor(v.theme.Colors.WindowColor)
+	v.logView.SetTextColor(v.theme.Colors.PrimaryText)
 	v.logView.SetScrollable(true)
 	v.logView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, col := v.logView.GetScrollOffset()
@@ -136,12 +147,18 @@ func (v *viewerApp) initWidgets() {
 
 	v.status = tview.NewTextView().SetDynamicColors(true)
 	v.status.SetBorder(true)
+	v.status.SetBorderColor(v.theme.Colors.BorderColor)
+	v.status.SetBackgroundColor(v.theme.Colors.StatusBarBg)
+	v.status.SetTextStyle(v.theme.Style.StatusBarStyle)
 	v.updateStatus()
 }
 
 func (v *viewerApp) buildRoot() tview.Primitive {
 	title := tview.NewTextView().SetDynamicColors(true)
 	title.SetBorder(true).SetTitle(" DIS Reader ")
+	title.SetBorderColor(v.theme.Colors.BorderColor)
+	title.SetBackgroundColor(v.theme.Colors.CommandBarColor)
+	title.SetTextColor(v.theme.Colors.PrimaryText)
 	fmt.Fprintf(title, "%s v%s — tview2 viewer", v.cfg.AppName, v.cfg.AppVersion)
 
 	leftColumn := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -255,7 +272,7 @@ func (v *viewerApp) populateTable(columns []string, rows [][]string) {
 		return
 	}
 
-	headerStyle := tcell.StyleDefault.Bold(true)
+	headerStyle := v.theme.Style.TableHeaderStyle
 	for colIdx, name := range columns {
 		cell := tview.NewTableCell(name).
 			SetSelectable(false).
@@ -265,14 +282,16 @@ func (v *viewerApp) populateTable(columns []string, rows [][]string) {
 
 	if len(rows) == 0 {
 		msg := tview.NewTableCell("No rows on this page").
-			SetSelectable(false)
+			SetSelectable(false).
+			SetStyle(v.theme.Style.TableCellStyle)
 		v.tableView.SetCell(1, 0, msg)
 		return
 	}
 
 	for rowIdx, row := range rows {
 		for colIdx, value := range row {
-			cell := tview.NewTableCell(value)
+			cell := tview.NewTableCell(value).
+				SetStyle(v.theme.Style.TableCellStyle)
 			v.tableView.SetCell(rowIdx+1, colIdx, cell)
 		}
 	}
@@ -282,7 +301,8 @@ func (v *viewerApp) renderTableMessage(message string) {
 	v.tableView.Clear()
 	v.tableView.SetFixed(0, 0)
 	cell := tview.NewTableCell(message).
-		SetSelectable(false)
+		SetSelectable(false).
+		SetStyle(v.theme.Style.TableCellStyle)
 	v.tableView.SetCell(0, 0, cell)
 }
 
@@ -298,8 +318,12 @@ func (v *viewerApp) newPickerTable(title string) *tview.Table {
 	tbl := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(0, 0)
-	tbl.SetBorder(true).SetTitle(title)
-	tbl.SetSelectedStyle(tcell.StyleDefault.Background(tcell.GetColor("#5555FF")).Foreground(tcell.ColorWhite))
+	tbl.SetBorder(true).
+		SetTitle(title).
+		SetBorderColor(v.theme.Colors.BorderColor).
+		SetBackgroundColor(v.theme.Colors.WindowColor).
+		SetTitleColor(v.theme.Colors.PrimaryText)
+	tbl.SetSelectedStyle(v.theme.Style.PickerSelectedStyle)
 	return tbl
 }
 
@@ -307,13 +331,13 @@ func (v *viewerApp) renderDBPicker() {
 	v.dbTable.Clear()
 	if len(v.files) == 0 {
 		v.dbTable.SetSelectable(false, false)
-		v.dbTable.SetCell(0, 0, pickerMessageCell("No SQLite outputs found"))
+		v.dbTable.SetCell(0, 0, v.pickerMessageCell("No SQLite outputs found"))
 		return
 	}
 	v.dbTable.SetSelectable(true, false)
 	for row, path := range v.files {
 		name := filepath.Base(path)
-		v.dbTable.SetCell(row, 0, pickerDataCell(name))
+		v.dbTable.SetCell(row, 0, v.pickerDataCell(name))
 	}
 	v.dbTable.Select(0, 0)
 }
@@ -322,25 +346,27 @@ func (v *viewerApp) renderTablePicker() {
 	v.tableTable.Clear()
 	if len(v.tableNames) == 0 {
 		v.tableTable.SetSelectable(false, false)
-		v.tableTable.SetCell(0, 0, pickerMessageCell("(no tables)"))
+		v.tableTable.SetCell(0, 0, v.pickerMessageCell("(no tables)"))
 		return
 	}
 	v.tableTable.SetSelectable(true, false)
 	for row, name := range v.tableNames {
-		v.tableTable.SetCell(row, 0, pickerDataCell(name))
+		v.tableTable.SetCell(row, 0, v.pickerDataCell(name))
 	}
 	v.tableTable.Select(0, 0)
 }
 
-func pickerDataCell(text string) *tview.TableCell {
+func (v *viewerApp) pickerDataCell(text string) *tview.TableCell {
 	return tview.NewTableCell(text).
-		SetAlign(tview.AlignCenter)
+		SetAlign(tview.AlignCenter).
+		SetStyle(v.theme.Style.PickerCellStyle)
 }
 
-func pickerMessageCell(text string) *tview.TableCell {
+func (v *viewerApp) pickerMessageCell(text string) *tview.TableCell {
 	return tview.NewTableCell(text).
 		SetSelectable(false).
-		SetAlign(tview.AlignCenter)
+		SetAlign(tview.AlignCenter).
+		SetStyle(v.theme.Style.PickerCellStyle)
 }
 
 func (v *viewerApp) changePage(delta int) {

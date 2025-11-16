@@ -26,6 +26,7 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetConfigFile(ConfigFileName)
 	viper.SetDefault("appName", DefaultAppName)
 	viper.SetDefault("appVersion", DefaultAppVersion)
+	viper.SetDefault("theme", types.DefaultThemeName)
 	viper.SetDefault("disConfig.logLevel", DefualtLogLevel)
 	viper.SetDefault("disConfig.jdbcConfig.javaPath", DefaultJavaPath)
 	viper.SetDefault("disConfig.jdbcConfig.jdbcPort", DefaultJDBCPort)

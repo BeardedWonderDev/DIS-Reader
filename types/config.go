@@ -5,6 +5,7 @@ import "log/slog"
 type DISUIConfig struct {
 	AppName     string            `mapstructure:"appName"`
 	AppVersion  string            `mapstructure:"appVersion"`
+	Theme       string            `mapstructure:"theme"`
 	DIS         *DISConfig        `mapstructure:"disConfig"`
 	DebugSearch DebugSearchConfig `mapstructure:"debugSearch"`
 }

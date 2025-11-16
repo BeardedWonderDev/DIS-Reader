@@ -17,11 +17,13 @@ func NewUI(cfg *types.DISUIConfig, dis types.DISReaderService, screen *tcell.Scr
 	}
 	wm := winman.NewWindowManager()
 
+	theme := types.ResolveTheme(cfg.Theme)
+
 	u := ui.UI{
 		Config: cfg,
 		App:    app,
 		WinMan: wm,
-		Theme:  &types.DefualtTerminalTheme,
+		Theme:  theme,
 		Auth:   authUI.NewAuthService(),
 	}
 
