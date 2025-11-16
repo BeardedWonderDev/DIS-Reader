@@ -22,16 +22,24 @@ type rootModel struct {
 	height int
 	ready  bool
 
-	activeTab int
-	logs      logBuffer
+	activeTab     int
+	logs          logBuffer
+	search        searchModel
+	auth          authModel
+	showAuthModal bool
 }
 
 func NewRootModel(cfg *types.DISUIConfig, dis types.DISReaderService) rootModel {
+	search := newSearchModel(cfg, dis)
+	auth := newAuthModel(cfg, dis)
 	return rootModel{
-		cfg:       cfg,
-		dis:       dis,
-		logs:      newLogBuffer(200).append("Bubble UI experimental mode enabled. Press q to quit."),
-		activeTab: 0,
+		cfg:           cfg,
+		dis:           dis,
+		logs:          newLogBuffer(200).append("Bubble UI experimental mode enabled. Press q to quit."),
+		activeTab:     0,
+		search:        search,
+		auth:          auth,
+		showAuthModal: false,
 	}
 }
 
@@ -47,56 +55,121 @@ func (m rootModel) Init() tea.Cmd {
 		}
 	}
 
-	return tea.Batch(
+	var searchCmd tea.Cmd
+	m.search, searchCmd = m.search.Init()
+	var authCmd tea.Cmd
+	m.auth, authCmd = m.auth.Init()
+
+	cmds := []tea.Cmd{
 		newLogCmd("DIS host: %s", host),
 		newLogCmd("Debug search default output: %s", outputMode),
 		newLogCmd("Tab/arrow keys switch panes • ctrl+l clears logs"),
-	)
+	}
+	if searchCmd != nil {
+		cmds = append(cmds, searchCmd)
+	}
+	if authCmd != nil {
+		cmds = append(cmds, authCmd)
+	}
+
+	return tea.Batch(cmds...)
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	var searchCmd tea.Cmd
+	var searchHandled bool
+	searchFocused := (m.activeTab == 0) && !m.showAuthModal
+	m.search, searchCmd, searchHandled = m.search.Update(msg, searchFocused)
+	if searchCmd != nil {
+		cmds = append(cmds, searchCmd)
+	}
+
+	var authCmd tea.Cmd
+	var authHandled bool
+	m.auth, authCmd, authHandled = m.auth.Update(msg, m.showAuthModal)
+	if authCmd != nil {
+		cmds = append(cmds, authCmd)
+	}
+	if searchHandled || authHandled {
+		return m, tea.Batch(cmds...)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
-		return m, nil
+		m.search = m.search.SetWidth(msg.Width)
 	case tea.KeyMsg:
+		if m.showAuthModal {
+			if msg.String() == "ctrl+c" || msg.String() == "q" {
+				cmds = append(cmds, tea.Quit)
+			}
+			return m, tea.Batch(cmds...)
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
-			return m, tea.Quit
+			cmds = append(cmds, tea.Quit)
+		case "c":
+			m.showAuthModal = true
+			m.auth.focused = focusAuthHost
+			var focusCmd tea.Cmd
+			m.auth, focusCmd = m.auth.applyFocus()
+			if focusCmd != nil {
+				cmds = append(cmds, focusCmd)
+			}
 		case "tab":
 			m.activeTab = (m.activeTab + 1) % len(tabs)
-			return m, nil
 		case "shift+tab":
 			m.activeTab = (m.activeTab - 1 + len(tabs)) % len(tabs)
-			return m, nil
 		case "left":
 			if m.activeTab > 0 {
 				m.activeTab--
 			}
-			return m, nil
 		case "right":
 			if m.activeTab < len(tabs)-1 {
 				m.activeTab++
 			}
-			return m, nil
 		case "ctrl+l":
 			m.logs = newLogBuffer(200)
-			return m, newLogCmd("Logs cleared")
+			cmds = append(cmds, newLogCmd("Logs cleared"))
 		case "1", "2":
 			idx := int(msg.Runes[0] - '1')
 			if idx >= 0 && idx < len(tabs) {
 				m.activeTab = idx
 			}
-			return m, nil
 		}
 	case logMsg:
 		m.logs = m.logs.append(string(msg))
-		return m, nil
+	case authStateChangedMsg:
+		m.search = m.search.WithAuthState(msg.authenticated)
+		if msg.authenticated {
+			m.showAuthModal = false
+			cmds = append(cmds, newLogCmd("DIS authentication successful"))
+		} else {
+			cmds = append(cmds, newLogCmd("DIS authentication failed"))
+		}
+	case authDismissedMsg:
+		m.showAuthModal = false
+	case requireAuthMsg:
+		m.showAuthModal = true
+		m.auth.focused = focusAuthHost
+		var focusCmd tea.Cmd
+		m.auth, focusCmd = m.auth.applyFocus()
+		if focusCmd != nil {
+			cmds = append(cmds, focusCmd)
+		}
+		cmds = append(cmds, newLogCmd("Authentication required before running search"))
+	default:
+		// ignore
 	}
 
-	return m, nil
+	if len(cmds) == 0 {
+		return m, nil
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m rootModel) View() string {
@@ -111,7 +184,25 @@ func (m rootModel) View() string {
 	logs := m.renderLogs()
 
 	sections := []string{title, nav, main, status, logs}
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	base := lipgloss.JoinVertical(lipgloss.Left, sections...)
+
+	if m.showAuthModal {
+		overlay := modalWindowStyle.Render(m.auth.View())
+		width := m.width
+		if width < lipgloss.Width(overlay)+4 {
+			width = lipgloss.Width(overlay) + 4
+		}
+		height := m.height
+		if height < lipgloss.Height(overlay)+4 {
+			height = lipgloss.Height(overlay) + 4
+		}
+		screen := lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, overlay,
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.Color("#111111")))
+		return base + "\n" + screen
+	}
+
+	return base
 }
 
 func (m rootModel) renderTabs() string {
@@ -130,15 +221,7 @@ func (m rootModel) renderTabs() string {
 func (m rootModel) renderActivePane() string {
 	switch m.activeTab {
 	case 0:
-		return panelStyle.Render(
-			placeholderStyle.Render(
-				"Batch Debug Search workspace will live here.\n" +
-					"Upcoming tasks:\n" +
-					"  • Auth-aware search form built with Bubble text inputs.\n" +
-					"  • Progress + event stream wired to RunDebugSearch.\n" +
-					"  • Inline log/status lines for long-running scans.",
-			),
-		)
+		return panelStyle.Render(m.search.View())
 	case 1:
 		return panelStyle.Render(
 			placeholderStyle.Render(
@@ -166,7 +249,7 @@ func (m rootModel) renderStatusBar() string {
 		}
 	}
 
-	info := fmt.Sprintf("Host: %s | Output: %s | Pane: %s | q to quit", host, output, tabs[m.activeTab])
+	info := fmt.Sprintf("Host: %s | Output: %s | Pane: %s | %s | %s | q to quit", host, output, tabs[m.activeTab], m.search.StatusLine(), m.auth.StatusLine())
 	return statusBarStyle.Render(info)
 }
 
