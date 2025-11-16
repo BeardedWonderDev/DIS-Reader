@@ -43,6 +43,8 @@ type viewerApp struct {
 
 	focusables []tview.Primitive
 	focusIndex int
+	logFollow  bool
+	logUnread  bool
 }
 
 func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerApp, error) {
@@ -52,11 +54,12 @@ func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerAp
 	}
 	app := tview.NewApplication()
 	viewer := &viewerApp{
-		cfg:     cfg,
-		dis:     dis,
-		app:     app,
-		dbDir:   dir,
-		perPage: tablePageSize,
+		cfg:       cfg,
+		dis:       dis,
+		app:       app,
+		dbDir:     dir,
+		perPage:   tablePageSize,
+		logFollow: true,
 	}
 	viewer.initWidgets()
 	viewer.mountLayout()
@@ -95,9 +98,11 @@ func (v *viewerApp) initWidgets() {
 			if row > 0 {
 				v.logView.ScrollTo(row-1, col)
 			}
+			v.pauseLogFollow()
 			return nil
 		case tcell.KeyDown:
 			v.logView.ScrollTo(row+1, col)
+			v.pauseLogFollow()
 			return nil
 		case tcell.KeyPgUp:
 			step := 10
@@ -105,15 +110,19 @@ func (v *viewerApp) initWidgets() {
 				step = row
 			}
 			v.logView.ScrollTo(row-step, col)
+			v.pauseLogFollow()
 			return nil
 		case tcell.KeyPgDn:
 			v.logView.ScrollTo(row+10, col)
+			v.pauseLogFollow()
 			return nil
 		case tcell.KeyHome:
 			v.logView.ScrollToBeginning()
+			v.pauseLogFollow()
 			return nil
 		case tcell.KeyEnd:
 			v.logView.ScrollToEnd()
+			v.resumeLogFollow()
 			return nil
 		}
 		return event
@@ -288,6 +297,14 @@ func (v *viewerApp) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 
 func (v *viewerApp) logf(format string, args ...interface{}) {
 	fmt.Fprintf(v.logView, "%s\n", fmt.Sprintf(format, args...))
+	if v.logFollow {
+		v.logView.ScrollToEnd()
+		v.logUnread = false
+		v.updateLogTitle()
+	} else {
+		v.logUnread = true
+		v.updateLogTitle()
+	}
 }
 
 func (v *viewerApp) updateStatus() {
@@ -312,4 +329,29 @@ func (v *viewerApp) cycleFocus(delta int) {
 	}
 	v.focusIndex = (v.focusIndex + delta + len(v.focusables)) % len(v.focusables)
 	v.app.SetFocus(v.focusables[v.focusIndex])
+}
+
+func (v *viewerApp) pauseLogFollow() {
+	if v.logFollow {
+		v.logFollow = false
+		v.updateLogTitle()
+	}
+}
+
+func (v *viewerApp) resumeLogFollow() {
+	if v.logFollow {
+		return
+	}
+	v.logFollow = true
+	v.logUnread = false
+	v.updateLogTitle()
+	v.logView.ScrollToEnd()
+}
+
+func (v *viewerApp) updateLogTitle() {
+	title := " Activity "
+	if v.logUnread {
+		title = " Activity (new) "
+	}
+	v.logView.SetTitle(title)
 }
