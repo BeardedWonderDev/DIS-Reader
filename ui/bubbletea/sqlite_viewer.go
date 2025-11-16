@@ -244,7 +244,9 @@ func (s sqliteViewerModel) View(logPanel string, width, height int) string {
 }
 
 func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel string) string {
-	cardWidth := maxInt(40, width-2)
+	usableWidth := shrinkDimension(width)
+	usableHeight := shrinkDimension(height)
+	cardWidth := maxInt(40, usableWidth)
 	bodyWidth := cardWidth - viewerCardStyle.GetHorizontalFrameSize()
 	if bodyWidth < 1 {
 		bodyWidth = 1
@@ -262,7 +264,7 @@ func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel strin
 		lines[i] = style.
 			Width(bodyWidth).
 			MaxWidth(bodyWidth).
-			Render(prefix + name)
+			Render(fmt.Sprintf("%s%-*s", prefix, nameWidth, name))
 	}
 	body := lipgloss.NewStyle().
 		Width(bodyWidth).
@@ -278,7 +280,7 @@ func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel strin
 	if logInnerWidth < 1 {
 		logInnerWidth = 1
 	}
-	logHeight := maxInt(4, height/3)
+	logHeight := maxInt(4, usableHeight/3)
 	logCard := renderFramedBox(
 		viewerCardStyle,
 		cardWidth,
@@ -288,16 +290,25 @@ func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel strin
 			MaxHeight(logHeight).
 			Render(logPanel),
 	)
-	return lipgloss.JoinVertical(lipgloss.Left, content, logCard)
+	child := lipgloss.JoinVertical(lipgloss.Left, content, logCard)
+	child = lipgloss.NewStyle().
+		Width(cardWidth).
+		MaxWidth(cardWidth).
+		MaxHeight(usableHeight).
+		Render(child)
+	return placeWithin(width, height, child)
 }
 
 func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string) string {
+	usableWidth := shrinkDimension(width)
+	usableHeight := shrinkDimension(height)
+
 	const minContentWidth = 40
 	const minTablesWidth = 24
 	spacerWidth := 1
 
-	leftWidth := maxInt(minTablesWidth, width/4)
-	maxLeft := width - (minContentWidth + spacerWidth)
+	leftWidth := maxInt(minTablesWidth, usableWidth/4)
+	maxLeft := usableWidth - (minContentWidth + spacerWidth)
 	if leftWidth > maxLeft {
 		leftWidth = maxLeft
 	}
@@ -310,7 +321,7 @@ func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string)
 	rightWidth := width - leftWidth - spacerWidth
 	if rightWidth < minContentWidth {
 		rightWidth = minContentWidth
-		leftWidth = maxInt(10, width-rightWidth-spacerWidth)
+		leftWidth = maxInt(10, usableWidth-rightWidth-spacerWidth)
 	}
 
 	tablesInnerWidth := leftWidth - viewerColumnStyle.GetHorizontalFrameSize()
@@ -328,11 +339,11 @@ func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string)
 				Render(tablesList),
 		)
 
-	logArea := maxInt(4, height/4)
-	tableArea := height - logArea
+	logArea := maxInt(4, usableHeight/4)
+	tableArea := usableHeight - logArea
 	if tableArea < 6 {
 		tableArea = 6
-		logArea = maxInt(3, height-tableArea)
+		logArea = maxInt(3, usableHeight-tableArea)
 	}
 
 	content := lipgloss.NewStyle().
@@ -357,7 +368,13 @@ func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string)
 
 	spacer := lipgloss.NewStyle().Width(spacerWidth).MaxWidth(spacerWidth).Render("")
 	rightColumn := lipgloss.JoinVertical(lipgloss.Left, content, logCard)
-	return lipgloss.JoinHorizontal(lipgloss.Top, tablesCard, spacer, rightColumn)
+	inner := lipgloss.JoinHorizontal(lipgloss.Top, tablesCard, spacer, rightColumn)
+	inner = lipgloss.NewStyle().
+		Width(usableWidth).
+		MaxWidth(usableWidth).
+		MaxHeight(usableHeight).
+		Render(inner)
+	return placeWithin(width, height, inner)
 }
 
 func (s sqliteViewerModel) renderTableCard(width int) string {
@@ -627,6 +644,29 @@ func renderFramedBox(style lipgloss.Style, width int, content string) string {
 		MaxWidth(innerWidth).
 		Render(content)
 	return style.Copy().Width(width).Render(body)
+}
+
+func shrinkDimension(value int) int {
+	if value <= 1 {
+		return value
+	}
+	reduction := value / 20
+	if reduction < 1 {
+		reduction = 1
+	}
+	return value - reduction
+}
+
+func placeWithin(parentWidth, parentHeight int, child string) string {
+	return lipgloss.Place(
+		parentWidth,
+		parentHeight,
+		lipgloss.Left,
+		lipgloss.Top,
+		child,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("#0A0A0A")),
+	)
 }
 
 func loadTablesCmd(path string) tea.Cmd {

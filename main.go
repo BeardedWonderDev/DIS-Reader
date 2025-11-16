@@ -9,6 +9,7 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/BeardedWonderDev/DIS-Reader/ui"
 	bubbleui "github.com/BeardedWonderDev/DIS-Reader/ui/bubbletea"
+	tview2 "github.com/BeardedWonderDev/DIS-Reader/ui/tview2"
 )
 
 func main() {
@@ -20,8 +21,14 @@ func main() {
 	}
 	defer disReader.Shutdown()
 
-	if shouldUseBubbleUI() {
+	switch selectedUIMode() {
+	case "bubble":
 		if err := bubbleui.Run(cfg, disReader); err != nil {
+			panic(err)
+		}
+		return
+	case "tview2":
+		if err := tview2.Run(cfg, disReader); err != nil {
 			panic(err)
 		}
 		return
@@ -40,12 +47,14 @@ func main() {
 	}
 }
 
-func shouldUseBubbleUI() bool {
+func selectedUIMode() string {
 	mode := strings.TrimSpace(os.Getenv("DISREADER_UI"))
 	switch strings.ToLower(mode) {
 	case "bubble", "bubbletea", "charm", "bubble-ui":
-		return true
+		return "bubble"
+	case "tview2", "tview-lite":
+		return "tview2"
 	default:
-		return false
+		return ""
 	}
 }
