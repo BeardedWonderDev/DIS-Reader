@@ -144,7 +144,18 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
-		viewerActive := m.activeTab == 1
+		if msg.String() == "1" {
+			m.activeTab = 0
+			return m, tea.Batch(cmds...)
+		}
+		if msg.String() == "2" {
+			m.activeTab = 1
+			m.viewer.mode = viewerModeFileSelect
+			if len(m.viewer.files) > 0 {
+				m.viewer.status = "Select a database file to inspect"
+			}
+			return m, tea.Batch(cmds...)
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			cmds = append(cmds, tea.Quit)
@@ -156,32 +167,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if focusCmd != nil {
 				cmds = append(cmds, focusCmd)
 			}
-		case "tab":
-			m.activeTab = (m.activeTab + 1) % len(tabs)
-		case "shift+tab":
-			m.activeTab = (m.activeTab - 1 + len(tabs)) % len(tabs)
-		case "left":
-			if viewerActive {
-				break
-			}
-			if m.activeTab > 0 {
-				m.activeTab--
-			}
-		case "right":
-			if viewerActive {
-				break
-			}
-			if m.activeTab < len(tabs)-1 {
-				m.activeTab++
-			}
 		case "ctrl+l":
 			m.logs = newLogBuffer(200)
 			cmds = append(cmds, newLogCmd("Logs cleared"))
-		case "1", "2":
-			idx := int(msg.Runes[0] - '1')
-			if idx >= 0 && idx < len(tabs) {
-				m.activeTab = idx
-			}
 		}
 	case logMsg:
 		m.logs = m.logs.append(string(msg))
