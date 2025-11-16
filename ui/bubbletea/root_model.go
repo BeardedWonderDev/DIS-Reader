@@ -136,6 +136,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 		m.search = m.search.SetWidth(msg.Width)
+		m.viewer.width = msg.Width
 	case tea.KeyMsg:
 		if m.showAuthModal {
 			if msg.String() == "ctrl+c" || msg.String() == "q" {
@@ -143,6 +144,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
+		viewerActive := m.activeTab == 1
 		switch msg.String() {
 		case "ctrl+c", "q":
 			cmds = append(cmds, tea.Quit)
@@ -159,10 +161,16 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "shift+tab":
 			m.activeTab = (m.activeTab - 1 + len(tabs)) % len(tabs)
 		case "left":
+			if viewerActive {
+				break
+			}
 			if m.activeTab > 0 {
 				m.activeTab--
 			}
 		case "right":
+			if viewerActive {
+				break
+			}
 			if m.activeTab < len(tabs)-1 {
 				m.activeTab++
 			}

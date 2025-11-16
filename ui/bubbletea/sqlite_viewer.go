@@ -211,10 +211,10 @@ func (s sqliteViewerModel) View() string {
 		rowsView = s.renderTable()
 	}
 
-	shortcutLines := []string{
-		"←/→ files", "↑/↓ tables", "PgUp/PgDn pages", "r reload tables", "Ctrl+C quit",
+	shortcuts := []string{
+		"←/→ files", "↑/↓ tables", "PgUp/PgDn pages", "r reload tables",
 	}
-	pager := helpStyle.Render(strings.Join(shortcutLines, "  "))
+	pager := helpStyle.Render(strings.Join(shortcuts, "  "))
 
 	status := s.status
 	if s.errMsg != "" {
@@ -223,8 +223,13 @@ func (s sqliteViewerModel) View() string {
 		status = noticeStyle.Render(status)
 	}
 
-	sections := []string{sectionTitleStyle.Render("SQLite Viewer"), fileLine, tableLine, rowsView, status, pager}
-	return strings.Join(sections, "\n\n")
+	content := strings.Join([]string{fileLine, tableLine, rowsView, status, pager}, "\n\n")
+	width := s.width
+	if width <= 0 {
+		width = 80
+	}
+	body := lipgloss.NewStyle().Width(width).Render(content)
+	return lipgloss.JoinVertical(lipgloss.Left, sectionTitleStyle.Render("SQLite Viewer"), body)
 }
 
 func (s sqliteViewerModel) StatusLine() string {
@@ -362,10 +367,11 @@ func (s sqliteViewerModel) renderTable() string {
 	}
 	padding := 3 * (len(colWidths) - 1)
 	total := padding
-	for _, w := range colWidths {
+	for i, w := range colWidths {
 		if w > 40 {
 			w = 40
 		}
+		colWidths[i] = w
 		total += w
 	}
 	if total > maxWidth {
