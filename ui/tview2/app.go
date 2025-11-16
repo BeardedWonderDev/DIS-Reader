@@ -45,6 +45,7 @@ type viewerApp struct {
 	focusIndex int
 	logFollow  bool
 	logUnread  bool
+	logLines   int
 }
 
 func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerApp, error) {
@@ -98,11 +99,11 @@ func (v *viewerApp) initWidgets() {
 			if row > 0 {
 				v.logView.ScrollTo(row-1, col)
 			}
-			v.pauseLogFollow()
+			v.updateLogFollowAfterScroll()
 			return nil
 		case tcell.KeyDown:
 			v.logView.ScrollTo(row+1, col)
-			v.pauseLogFollow()
+			v.updateLogFollowAfterScroll()
 			return nil
 		case tcell.KeyPgUp:
 			step := 10
@@ -110,15 +111,15 @@ func (v *viewerApp) initWidgets() {
 				step = row
 			}
 			v.logView.ScrollTo(row-step, col)
-			v.pauseLogFollow()
+			v.updateLogFollowAfterScroll()
 			return nil
 		case tcell.KeyPgDn:
 			v.logView.ScrollTo(row+10, col)
-			v.pauseLogFollow()
+			v.updateLogFollowAfterScroll()
 			return nil
 		case tcell.KeyHome:
 			v.logView.ScrollToBeginning()
-			v.pauseLogFollow()
+			v.updateLogFollowAfterScroll()
 			return nil
 		case tcell.KeyEnd:
 			v.logView.ScrollToEnd()
@@ -276,6 +277,9 @@ func (v *viewerApp) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case tcell.KeyCtrlL:
 		v.logView.SetText("")
+		v.logLines = 0
+		v.logUnread = false
+		v.resumeLogFollow()
 		return nil
 	case tcell.KeyCtrlC:
 		v.app.Stop()
@@ -297,6 +301,7 @@ func (v *viewerApp) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 
 func (v *viewerApp) logf(format string, args ...interface{}) {
 	fmt.Fprintf(v.logView, "%s\n", fmt.Sprintf(format, args...))
+	v.logLines++
 	if v.logFollow {
 		v.logView.ScrollToEnd()
 		v.logUnread = false
@@ -340,6 +345,10 @@ func (v *viewerApp) pauseLogFollow() {
 
 func (v *viewerApp) resumeLogFollow() {
 	if v.logFollow {
+		if v.logUnread {
+			v.logUnread = false
+			v.updateLogTitle()
+		}
 		return
 	}
 	v.logFollow = true
@@ -354,4 +363,24 @@ func (v *viewerApp) updateLogTitle() {
 		title = " Activity (new) "
 	}
 	v.logView.SetTitle(title)
+}
+
+func (v *viewerApp) updateLogFollowAfterScroll() {
+	if v.isLogAtBottom() {
+		v.resumeLogFollow()
+	} else {
+		v.pauseLogFollow()
+	}
+}
+
+func (v *viewerApp) isLogAtBottom() bool {
+	_, _, _, height := v.logView.GetInnerRect()
+	if height <= 0 {
+		return true
+	}
+	if v.logLines <= height {
+		return true
+	}
+	row, _ := v.logView.GetScrollOffset()
+	return row+height >= v.logLines
 }
