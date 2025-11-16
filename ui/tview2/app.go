@@ -3,6 +3,7 @@ package tview2
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/gdamore/tcell/v2"
@@ -27,19 +28,20 @@ type viewerApp struct {
 	dis types.DISReaderService
 	app *tview.Application
 
-	dbDir   string
-	files   []string
-	page    int
-	perPage int
+	dbDir      string
+	files      []string
+	tableNames []string
+	page       int
+	perPage    int
 
 	currentFile  string
 	currentTable string
 
-	dbList    *tview.List
-	tableList *tview.List
-	tableView *tview.TextView
-	logView   *tview.TextView
-	status    *tview.TextView
+	dbTable    *tview.Table
+	tableTable *tview.Table
+	tableView  *tview.Table
+	logView    *tview.TextView
+	status     *tview.TextView
 
 	focusables []tview.Primitive
 	focusIndex int
@@ -67,27 +69,28 @@ func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerAp
 	viewer.loadFiles()
 	app.SetRoot(viewer.buildRoot(), true)
 	app.SetInputCapture(viewer.handleGlobalKeys)
-	viewer.focusables = []tview.Primitive{viewer.dbList, viewer.tableList, viewer.tableView, viewer.logView}
+	viewer.focusables = []tview.Primitive{viewer.dbTable, viewer.tableTable, viewer.tableView, viewer.logView}
 	viewer.focusIndex = 0
-	app.SetFocus(viewer.dbList)
+	app.SetFocus(viewer.dbTable)
 	return viewer, nil
 }
 
 func (v *viewerApp) initWidgets() {
-	v.dbList = tview.NewList().ShowSecondaryText(false)
-	v.dbList.SetBorder(true).SetTitle(" SQLite Files ")
-	v.dbList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		v.selectFile(index)
+	v.dbTable = v.newPickerTable(" SQLite Files ")
+	v.dbTable.SetSelectionChangedFunc(func(row, column int) {
+		v.selectFile(row)
 	})
 
-	v.tableList = tview.NewList().ShowSecondaryText(false)
-	v.tableList.SetBorder(true).SetTitle(" Tables ")
-	v.tableList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		v.selectTable(index)
+	v.tableTable = v.newPickerTable(" Tables ")
+	v.tableTable.SetSelectionChangedFunc(func(row, column int) {
+		v.selectTable(row)
 	})
 
-	v.tableView = tview.NewTextView().SetDynamicColors(false)
+	v.tableView = tview.NewTable().
+		SetFixed(1, 0).
+		SetSelectable(true, true)
 	v.tableView.SetBorder(true).SetTitle(" Rows ")
+	v.tableView.SetBorders(true)
 
 	v.logView = tview.NewTextView().SetDynamicColors(false)
 	v.logView.SetBorder(true).SetTitle(" Activity ")
@@ -142,8 +145,8 @@ func (v *viewerApp) buildRoot() tview.Primitive {
 	fmt.Fprintf(title, "%s v%s — tview2 viewer", v.cfg.AppName, v.cfg.AppVersion)
 
 	leftColumn := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(v.dbList, 0, 2, true).
-		AddItem(v.tableList, 0, 1, false)
+		AddItem(v.dbTable, 0, 2, true).
+		AddItem(v.tableTable, 0, 1, false)
 
 	rightColumn := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(v.tableView, 0, 3, false).
@@ -165,18 +168,14 @@ func (v *viewerApp) mountLayout() {}
 
 func (v *viewerApp) loadFiles() {
 	v.files = scanSQLiteOutputs(v.dbDir)
-	v.dbList.Clear()
+	v.renderDBPicker()
 	if len(v.files) == 0 {
-		v.dbList.AddItem("No SQLite outputs found", "", 0, nil)
 		v.currentFile = ""
-		v.tableList.Clear()
-		v.tableView.SetText("Run a batch debug search to generate an SQLite file.")
+		v.tableNames = nil
+		v.renderTablePicker()
+		v.renderTableMessage("Run a batch debug search to generate an SQLite file.")
 		return
 	}
-	for _, path := range v.files {
-		v.dbList.AddItem(filepath.Base(path), "", 0, nil)
-	}
-	v.dbList.SetCurrentItem(0)
 	v.selectFile(0)
 }
 
@@ -193,34 +192,31 @@ func (v *viewerApp) selectFile(index int) {
 	tables, err := readSQLiteTables(path)
 	if err != nil {
 		v.logf("Failed to read tables: %v", err)
-		v.tableList.Clear()
-		v.tableView.SetText(err.Error())
+		v.tableNames = nil
+		v.renderTablePicker()
+		v.renderTableMessage(err.Error())
 		return
 	}
-	v.tableList.Clear()
+	v.tableNames = tables
+	v.renderTablePicker()
 	if len(tables) == 0 {
-		v.tableList.AddItem("(empty)", "", 0, nil)
-		v.tableView.SetText("No tables found")
+		v.renderTableMessage("No tables found")
 		return
 	}
-	for _, tbl := range tables {
-		v.tableList.AddItem(tbl, "", 0, nil)
-	}
-	v.tableList.SetCurrentItem(0)
 	v.selectTable(0)
 	v.logf("Opened %s", filepath.Base(path))
 	v.updateStatus()
 }
 
 func (v *viewerApp) selectTable(index int) {
-	tableCount := v.tableList.GetItemCount()
+	tableCount := len(v.tableNames)
 	if tableCount == 0 {
 		return
 	}
 	if index < 0 || index >= tableCount {
 		return
 	}
-	tableName, _ := v.tableList.GetItemText(index)
+	tableName := v.tableNames[index]
 	if tableName == "(empty)" {
 		return
 	}
@@ -236,18 +232,115 @@ func (v *viewerApp) selectTable(index int) {
 
 func (v *viewerApp) loadRows() {
 	if v.currentFile == "" || v.currentTable == "" {
-		v.tableView.SetText("Select a file and table to view rows")
+		v.renderTableMessage("Select a file and table to view rows")
+		v.updateTableTitle("")
 		return
 	}
 	columns, rows, err := readSQLiteRows(v.currentFile, v.currentTable, v.page, v.perPage)
 	if err != nil {
-		v.tableView.SetText(err.Error())
+		v.renderTableMessage(err.Error())
+		v.updateTableTitle(v.currentTable)
 		v.logf("Failed to read rows: %v", err)
 		return
 	}
-	tableText := formatTable(columns, rows, 120)
-	header := fmt.Sprintf("%s — page %d", v.currentTable, v.page+1)
-	v.tableView.SetText(fmt.Sprintf("%s\n\n%s", header, tableText))
+	v.populateTable(columns, rows)
+	v.updateTableTitle(v.currentTable)
+}
+
+func (v *viewerApp) populateTable(columns []string, rows [][]string) {
+	v.tableView.Clear()
+	v.tableView.SetFixed(1, 0)
+	if len(columns) == 0 {
+		v.renderTableMessage("No columns available")
+		return
+	}
+
+	headerStyle := tcell.StyleDefault.Bold(true)
+	for colIdx, name := range columns {
+		cell := tview.NewTableCell(name).
+			SetSelectable(false).
+			SetStyle(headerStyle)
+		v.tableView.SetCell(0, colIdx, cell)
+	}
+
+	if len(rows) == 0 {
+		msg := tview.NewTableCell("No rows on this page").
+			SetSelectable(false)
+		v.tableView.SetCell(1, 0, msg)
+		return
+	}
+
+	for rowIdx, row := range rows {
+		for colIdx, value := range row {
+			cell := tview.NewTableCell(value)
+			v.tableView.SetCell(rowIdx+1, colIdx, cell)
+		}
+	}
+}
+
+func (v *viewerApp) renderTableMessage(message string) {
+	v.tableView.Clear()
+	v.tableView.SetFixed(0, 0)
+	cell := tview.NewTableCell(message).
+		SetSelectable(false)
+	v.tableView.SetCell(0, 0, cell)
+}
+
+func (v *viewerApp) updateTableTitle(tableName string) {
+	title := " Rows "
+	if strings.TrimSpace(tableName) != "" {
+		title = fmt.Sprintf(" %s ", tableName)
+	}
+	v.tableView.SetTitle(title)
+}
+
+func (v *viewerApp) newPickerTable(title string) *tview.Table {
+	tbl := tview.NewTable().
+		SetSelectable(true, false).
+		SetFixed(0, 0)
+	tbl.SetBorder(true).SetTitle(title)
+	tbl.SetSelectedStyle(tcell.StyleDefault.Background(tcell.GetColor("#5555FF")).Foreground(tcell.ColorWhite))
+	return tbl
+}
+
+func (v *viewerApp) renderDBPicker() {
+	v.dbTable.Clear()
+	if len(v.files) == 0 {
+		v.dbTable.SetSelectable(false, false)
+		v.dbTable.SetCell(0, 0, pickerMessageCell("No SQLite outputs found"))
+		return
+	}
+	v.dbTable.SetSelectable(true, false)
+	for row, path := range v.files {
+		name := filepath.Base(path)
+		v.dbTable.SetCell(row, 0, pickerDataCell(name))
+	}
+	v.dbTable.Select(0, 0)
+}
+
+func (v *viewerApp) renderTablePicker() {
+	v.tableTable.Clear()
+	if len(v.tableNames) == 0 {
+		v.tableTable.SetSelectable(false, false)
+		v.tableTable.SetCell(0, 0, pickerMessageCell("(no tables)"))
+		return
+	}
+	v.tableTable.SetSelectable(true, false)
+	for row, name := range v.tableNames {
+		v.tableTable.SetCell(row, 0, pickerDataCell(name))
+	}
+	v.tableTable.Select(0, 0)
+}
+
+func pickerDataCell(text string) *tview.TableCell {
+	return tview.NewTableCell(text).
+		SetAlign(tview.AlignCenter)
+}
+
+func pickerMessageCell(text string) *tview.TableCell {
+	return tview.NewTableCell(text).
+		SetSelectable(false).
+		SetAlign(tview.AlignCenter)
 }
 
 func (v *viewerApp) changePage(delta int) {
@@ -325,7 +418,9 @@ func (v *viewerApp) updateStatus() {
 	if v.currentTable != "" {
 		table = v.currentTable
 	}
-	fmt.Fprintf(v.status, "Host: %s | File: %s | Table: %s | Page: %d", host, file, table, v.page+1)
+	status := fmt.Sprintf("Host %s  File %s  Table %s  Page %d", host, file, table, v.page+1)
+	hotkeys := "PgUp/PgDn=Page • Tab=Focus • Ctrl+L=Clear Log • Q=Quit"
+	v.status.SetText(fmt.Sprintf("%s   %s", status, hotkeys))
 }
 
 func (v *viewerApp) cycleFocus(delta int) {
