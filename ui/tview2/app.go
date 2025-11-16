@@ -40,6 +40,9 @@ type viewerApp struct {
 	tableView *tview.TextView
 	logView   *tview.TextView
 	status    *tview.TextView
+
+	focusables []tview.Primitive
+	focusIndex int
 }
 
 func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerApp, error) {
@@ -60,6 +63,9 @@ func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerAp
 	viewer.loadFiles()
 	app.SetRoot(viewer.buildRoot(), true)
 	app.SetInputCapture(viewer.handleGlobalKeys)
+	viewer.focusables = []tview.Primitive{viewer.dbList, viewer.tableList, viewer.tableView, viewer.logView}
+	viewer.focusIndex = 0
+	app.SetFocus(viewer.dbList)
 	return viewer, nil
 }
 
@@ -81,6 +87,37 @@ func (v *viewerApp) initWidgets() {
 
 	v.logView = tview.NewTextView().SetDynamicColors(false)
 	v.logView.SetBorder(true).SetTitle(" Activity ")
+	v.logView.SetScrollable(true)
+	v.logView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		row, col := v.logView.GetScrollOffset()
+		switch event.Key() {
+		case tcell.KeyUp:
+			if row > 0 {
+				v.logView.ScrollTo(row-1, col)
+			}
+			return nil
+		case tcell.KeyDown:
+			v.logView.ScrollTo(row+1, col)
+			return nil
+		case tcell.KeyPgUp:
+			step := 10
+			if row-step < 0 {
+				step = row
+			}
+			v.logView.ScrollTo(row-step, col)
+			return nil
+		case tcell.KeyPgDn:
+			v.logView.ScrollTo(row+10, col)
+			return nil
+		case tcell.KeyHome:
+			v.logView.ScrollToBeginning()
+			return nil
+		case tcell.KeyEnd:
+			v.logView.ScrollToEnd()
+			return nil
+		}
+		return event
+	})
 	v.logf("Bubble UI experimental mode enabled. Press q to quit.")
 	v.logf("Tab arrows select panes • PgUp/PgDn change pages • Enter loads tables")
 
@@ -126,8 +163,8 @@ func (v *viewerApp) loadFiles() {
 		v.tableView.SetText("Run a batch debug search to generate an SQLite file.")
 		return
 	}
-	for i, path := range v.files {
-		v.dbList.AddItem(filepath.Base(path), "", rune('a'+i), nil)
+	for _, path := range v.files {
+		v.dbList.AddItem(filepath.Base(path), "", 0, nil)
 	}
 	v.dbList.SetCurrentItem(0)
 	v.selectFile(0)
@@ -156,8 +193,8 @@ func (v *viewerApp) selectFile(index int) {
 		v.tableView.SetText("No tables found")
 		return
 	}
-	for i, tbl := range tables {
-		v.tableList.AddItem(tbl, "", rune('1'+i%9), nil)
+	for _, tbl := range tables {
+		v.tableList.AddItem(tbl, "", 0, nil)
 	}
 	v.tableList.SetCurrentItem(0)
 	v.selectTable(0)
@@ -234,6 +271,12 @@ func (v *viewerApp) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyCtrlC:
 		v.app.Stop()
 		return nil
+	case tcell.KeyTAB:
+		v.cycleFocus(1)
+		return nil
+	case tcell.KeyBacktab:
+		v.cycleFocus(-1)
+		return nil
 	}
 	switch event.Rune() {
 	case 'q', 'Q':
@@ -261,4 +304,12 @@ func (v *viewerApp) updateStatus() {
 		table = v.currentTable
 	}
 	fmt.Fprintf(v.status, "Host: %s | File: %s | Table: %s | Page: %d", host, file, table, v.page+1)
+}
+
+func (v *viewerApp) cycleFocus(delta int) {
+	if len(v.focusables) == 0 {
+		return
+	}
+	v.focusIndex = (v.focusIndex + delta + len(v.focusables)) % len(v.focusables)
+	v.app.SetFocus(v.focusables[v.focusIndex])
 }
