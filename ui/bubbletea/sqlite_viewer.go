@@ -12,6 +12,13 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+type viewerMode int
+
+const (
+	viewerModeFileSelect viewerMode = iota
+	viewerModeTableView
+)
+
 type sqliteViewerModel struct {
 	files        []string
 	selectedFile int
@@ -30,12 +37,16 @@ type sqliteViewerModel struct {
 	loading    bool
 	defaultDir string
 	width      int
+	height     int
+
+	mode viewerMode
 }
 
 func newSQLiteViewerModel() sqliteViewerModel {
 	return sqliteViewerModel{
 		pageSize: 100,
 		status:   "No debug-search output loaded yet",
+		mode:     viewerModeFileSelect,
 	}
 }
 
@@ -45,6 +56,8 @@ func (s sqliteViewerModel) withDefaultDir(dir string) sqliteViewerModel {
 		if files := scanSQLiteOutputs(dir); len(files) > 0 {
 			s.files = files
 			s.selectedFile = 0
+			s.mode = viewerModeFileSelect
+			s.status = fmt.Sprintf("Found %d SQLite exports in %s", len(files), filepath.Base(dir))
 		}
 	}
 	return s
@@ -57,71 +70,82 @@ func (s sqliteViewerModel) Update(msg tea.Msg, active bool) (sqliteViewerModel, 
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		s.width = m.Width
+		s.height = m.Height
 	case tea.KeyMsg:
 		if !active {
 			break
 		}
-		switch m.String() {
-		case "left", "h":
-			if s.moveFile(-1) {
+		switch s.mode {
+		case viewerModeFileSelect:
+			switch m.String() {
+			case "up", "k":
+				if s.moveFile(-1) {
+					handled = true
+				}
+			case "down", "j":
+				if s.moveFile(1) {
+					handled = true
+				}
+			case "enter":
+				if s.currentFile() != "" {
+					handled = true
+					s.mode = viewerModeTableView
+					var cmd tea.Cmd
+					s, cmd = s.requestTablesLoad()
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+			}
+		case viewerModeTableView:
+			switch m.String() {
+			case "f":
+				handled = true
+				s.mode = viewerModeFileSelect
+				s.status = "Select a database file to inspect"
+			case "up", "k":
+				if s.moveTable(-1) {
+					handled = true
+					var cmd tea.Cmd
+					s, cmd = s.requestRowsLoad()
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+			case "down", "j":
+				if s.moveTable(1) {
+					handled = true
+					var cmd tea.Cmd
+					s, cmd = s.requestRowsLoad()
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+			case "pgdn", ".":
+				if s.advancePage(1) {
+					handled = true
+					var cmd tea.Cmd
+					s, cmd = s.requestRowsLoad()
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+			case "pgup", ",":
+				if s.advancePage(-1) {
+					handled = true
+					var cmd tea.Cmd
+					s, cmd = s.requestRowsLoad()
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+			case "r":
 				handled = true
 				var cmd tea.Cmd
 				s, cmd = s.requestTablesLoad()
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
-			}
-		case "right", "l":
-			if s.moveFile(1) {
-				handled = true
-				var cmd tea.Cmd
-				s, cmd = s.requestTablesLoad()
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-			}
-		case "up", "k":
-			if s.moveTable(-1) {
-				handled = true
-				var cmd tea.Cmd
-				s, cmd = s.requestRowsLoad()
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-			}
-		case "down", "j":
-			if s.moveTable(1) {
-				handled = true
-				var cmd tea.Cmd
-				s, cmd = s.requestRowsLoad()
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-			}
-		case "pgdn", ".", "f":
-			if s.advancePage(1) {
-				handled = true
-				var cmd tea.Cmd
-				s, cmd = s.requestRowsLoad()
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-			}
-		case "pgup", ",", "b":
-			if s.advancePage(-1) {
-				handled = true
-				var cmd tea.Cmd
-				s, cmd = s.requestRowsLoad()
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-			}
-		case "r":
-			handled = true
-			var cmd tea.Cmd
-			s, cmd = s.requestTablesLoad()
-			if cmd != nil {
-				cmds = append(cmds, cmd)
 			}
 		}
 	case sqliteTablesLoadedMsg:
@@ -183,53 +207,73 @@ func (s sqliteViewerModel) View() string {
 		return placeholderStyle.Render("Run a batch debug search to generate an SQLite file, then inspect it here.")
 	}
 
-	fileLine := fieldLabelStyle.Render("File:") + " " + infoStyle.Render(filepath.Base(s.currentFile()))
-	if len(s.files) > 1 {
-		fileLine += helpStyle.Render("  ←/→ switch")
-	}
-
-	tableLine := fieldLabelStyle.Render("Table:")
-	if len(s.tables) == 0 {
-		tableLine += " (no tables)"
-	} else {
-		tableLine += " " + infoStyle.Render(s.currentTable())
-		if len(s.tables) > 1 {
-			tableLine += helpStyle.Render("  ↑/↓ switch tables")
-		}
-	}
-
-	var rowsView string
-	if len(s.rows) == 0 {
-		if s.loading {
-			rowsView = noticeStyle.Render("Loading rows…")
-		} else if s.errMsg != "" {
-			rowsView = errorStyle.Render(s.errMsg)
-		} else {
-			rowsView = noticeStyle.Render("No rows on this page")
-		}
-	} else {
-		rowsView = s.renderTable()
-	}
-
-	shortcuts := []string{
-		"←/→ files", "↑/↓ tables", "PgUp/PgDn pages", "r reload tables",
-	}
-	pager := helpStyle.Render(strings.Join(shortcuts, "  "))
-
-	status := s.status
-	if s.errMsg != "" {
-		status = errorStyle.Render(s.errMsg)
-	} else if status != "" {
-		status = noticeStyle.Render(status)
-	}
-
-	content := strings.Join([]string{fileLine, tableLine, rowsView, status, pager}, "\n\n")
 	width := s.width
 	if width <= 0 {
 		width = 80
 	}
-	body := lipgloss.NewStyle().Width(width).Render(content)
-	return lipgloss.JoinVertical(lipgloss.Left, sectionTitleStyle.Render("SQLite Viewer"), body)
+
+	switch s.mode {
+	case viewerModeFileSelect:
+		lines := make([]string, len(s.files))
+		for i, file := range s.files {
+			prefix := "  "
+			if i == s.selectedFile {
+				prefix = "> "
+				lines[i] = selectedFormatStyle.Render(prefix + filepath.Base(file))
+			} else {
+				lines[i] = fieldLabelStyle.Render(prefix + filepath.Base(file))
+			}
+		}
+		help := helpStyle.Render("↑/↓ select • Enter load file")
+		body := lipgloss.NewStyle().Width(width).Render(strings.Join(lines, "\n"))
+		return lipgloss.JoinVertical(lipgloss.Left,
+			sectionTitleStyle.Render("SQLite Viewer — Pick a file"),
+			body,
+			help,
+		)
+	case viewerModeTableView:
+		leftWidth := width / 4
+		if leftWidth < 20 {
+			leftWidth = 20
+		}
+		rightWidth := width - leftWidth - 3
+		if rightWidth < 40 {
+			rightWidth = 40
+		}
+		tableList := s.renderTableList(leftWidth)
+
+		var rowsView string
+		if len(s.rows) == 0 {
+			if s.loading {
+				rowsView = noticeStyle.Render("Loading rows…")
+			} else if s.errMsg != "" {
+				rowsView = errorStyle.Render(s.errMsg)
+			} else {
+				rowsView = noticeStyle.Render("No rows on this page")
+			}
+		} else {
+			rowsView = s.renderTable(rightWidth)
+		}
+
+		status := s.status
+		if s.errMsg != "" {
+			status = errorStyle.Render(s.errMsg)
+		} else if status != "" {
+			status = noticeStyle.Render(status)
+		}
+
+		shortcuts := helpStyle.Render("↑/↓ tables • PgUp/PgDn pages • r reload • f choose file")
+
+		body := lipgloss.JoinHorizontal(lipgloss.Top, tableList, lipgloss.NewStyle().Width(rightWidth).Render(rowsView))
+		return lipgloss.JoinVertical(lipgloss.Left,
+			sectionTitleStyle.Render("SQLite Viewer — ")+infoStyle.Render(filepath.Base(s.currentFile())),
+			body,
+			status,
+			shortcuts,
+		)
+	default:
+		return placeholderStyle.Render("No viewer mode selected")
+	}
 }
 
 func (s sqliteViewerModel) StatusLine() string {
@@ -346,12 +390,28 @@ func (s sqliteViewerModel) requestRowsLoad() (sqliteViewerModel, tea.Cmd) {
 	return s, loadRowsCmd(file, table, s.page, s.pageSize)
 }
 
-func (s sqliteViewerModel) renderTable() string {
+func (s sqliteViewerModel) renderTableList(width int) string {
+	if len(s.tables) == 0 {
+		return lipgloss.NewStyle().Width(width).Render(noticeStyle.Render("No tables"))
+	}
+	lines := make([]string, len(s.tables))
+	for i, tbl := range s.tables {
+		label := fmt.Sprintf(" %s", tbl)
+		if i == s.selectedTable {
+			lines[i] = selectedFormatStyle.Width(width).Render(label)
+		} else {
+			lines[i] = fieldLabelStyle.Width(width).Render(label)
+		}
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func (s sqliteViewerModel) renderTable(width int) string {
 	if len(s.columns) == 0 {
 		return noticeStyle.Render("No columns to display")
 	}
 	colWidths := make([]int, len(s.columns))
-	maxWidth := s.width
+	maxWidth := width
 	if maxWidth <= 0 {
 		maxWidth = 80
 	}
