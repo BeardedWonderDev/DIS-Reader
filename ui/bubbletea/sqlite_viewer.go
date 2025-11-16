@@ -247,25 +247,43 @@ func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel strin
 	lines := make([]string, len(s.files))
 	for i, file := range s.files {
 		prefix := "  "
+		style := fieldLabelStyle
 		if i == s.selectedFile {
 			prefix = "> "
-			lines[i] = selectedFormatStyle.Render(prefix + filepath.Base(file))
-		} else {
-			lines[i] = fieldLabelStyle.Render(prefix + filepath.Base(file))
+			style = selectedFormatStyle
 		}
+		lines[i] = style.
+			Width(width).
+			MaxWidth(width).
+			Render(prefix + filepath.Base(file))
 	}
 	cardWidth := maxInt(40, width-2)
-	body := lipgloss.NewStyle().Width(cardWidth - 4).Render(strings.Join(lines, "\n"))
+	bodyWidth := cardWidth - viewerCardStyle.GetHorizontalFrameSize()
+	if bodyWidth < 1 {
+		bodyWidth = 1
+	}
+	body := lipgloss.NewStyle().
+		Width(bodyWidth).
+		MaxWidth(bodyWidth).
+		Render(strings.Join(lines, "\n"))
 	help := helpStyle.Render("↑/↓ select • Enter load file")
-	content := viewerCardStyle.Width(cardWidth).Render(
-		sectionTitleStyle.Render("SQLite Viewer — Pick a file") +
-			"\n" + body +
-			"\n" + help,
+	content := renderFramedBox(viewerCardStyle, cardWidth,
+		sectionTitleStyle.Render("SQLite Viewer — Pick a file")+
+			"\n"+body+
+			"\n"+help,
 	)
-	logCard := viewerCardStyle.Width(cardWidth).Render(
+	logInnerWidth := cardWidth - viewerCardStyle.GetHorizontalFrameSize()
+	if logInnerWidth < 1 {
+		logInnerWidth = 1
+	}
+	logHeight := maxInt(4, height/3)
+	logCard := renderFramedBox(
+		viewerCardStyle,
+		cardWidth,
 		lipgloss.NewStyle().
-			MaxWidth(cardWidth - 2).
-			MaxHeight(maxInt(4, height/3)).
+			Width(logInnerWidth).
+			MaxWidth(logInnerWidth).
+			MaxHeight(logHeight).
 			Render(logPanel),
 	)
 	return lipgloss.JoinVertical(lipgloss.Left, content, logCard)
@@ -279,13 +297,30 @@ func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string)
 	if leftWidth > width-42 {
 		leftWidth = width - 42
 	}
-	spacer := lipgloss.NewStyle().Width(2).Render(" ")
-	rightWidth := width - leftWidth - lipgloss.Width(spacer)
+	spacerWidth := 2
+	if width-leftWidth < spacerWidth+40 {
+		spacerWidth = maxInt(1, width-leftWidth-40)
+	}
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+	rightWidth := width - leftWidth - spacerWidth
 	if rightWidth < 40 {
 		rightWidth = 40
 	}
-	tablesList := sectionTitleStyle.Render("Tables") + "\n" + s.renderTableList(leftWidth-4)
-	tablesCard := viewerColumnStyle.Width(leftWidth).Render(tablesList)
+	tablesInnerWidth := leftWidth - viewerColumnStyle.GetHorizontalFrameSize()
+	if tablesInnerWidth < 1 {
+		tablesInnerWidth = 1
+	}
+	tablesList := sectionTitleStyle.Render("Tables") + "\n" + s.renderTableList(tablesInnerWidth)
+	tablesCard := viewerColumnStyle.Copy().
+		Width(leftWidth).
+		Render(
+			lipgloss.NewStyle().
+				Width(tablesInnerWidth).
+				MaxWidth(tablesInnerWidth).
+				Render(tablesList),
+		)
 	logArea := maxInt(4, height/4)
 	tableArea := height - logArea
 	if tableArea < 6 {
@@ -295,13 +330,21 @@ func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string)
 	content := lipgloss.NewStyle().
 		MaxHeight(tableArea).
 		Render(s.renderTableCard(rightWidth))
-	logCard := viewerCardStyle.Width(rightWidth).Render(
+	logInnerWidth := rightWidth - viewerCardStyle.GetHorizontalFrameSize()
+	if logInnerWidth < 1 {
+		logInnerWidth = 1
+	}
+	logCard := renderFramedBox(
+		viewerCardStyle,
+		rightWidth,
 		lipgloss.NewStyle().
-			MaxWidth(rightWidth - 2).
+			Width(logInnerWidth).
+			MaxWidth(logInnerWidth).
 			MaxHeight(logArea).
 			Render(logPanel),
 	)
 	rightColumn := lipgloss.JoinVertical(lipgloss.Left, content, logCard)
+	spacer := lipgloss.NewStyle().Width(spacerWidth).Render("")
 	return lipgloss.JoinHorizontal(lipgloss.Top, tablesCard, spacer, rightColumn)
 }
 
@@ -314,6 +357,10 @@ func (s sqliteViewerModel) renderTableCard(width int) string {
 	if tbl := s.currentTable(); tbl != "" {
 		title = fmt.Sprintf("%s — %s", title, tbl)
 	}
+	bodyWidth := width - viewerCardStyle.GetHorizontalFrameSize()
+	if bodyWidth < 1 {
+		bodyWidth = 1
+	}
 	var body string
 	if len(s.rows) == 0 {
 		if s.loading {
@@ -324,7 +371,10 @@ func (s sqliteViewerModel) renderTableCard(width int) string {
 			body = noticeStyle.Render("No rows on this page")
 		}
 	} else {
-		body = lipgloss.NewStyle().Width(width - 4).Render(s.renderTable(width - 4))
+		body = lipgloss.NewStyle().
+			Width(bodyWidth).
+			MaxWidth(bodyWidth).
+			Render(s.renderTable(bodyWidth))
 	}
 	var statusLine string
 	if s.errMsg != "" {
@@ -333,12 +383,15 @@ func (s sqliteViewerModel) renderTableCard(width int) string {
 		statusLine = noticeStyle.Render(s.status)
 	}
 	help := helpStyle.Render("↑/↓ tables • PgUp/PgDn pages • r reload • f choose file")
-	lines := []string{sectionTitleStyle.Render(title), body}
-	if statusLine != "" {
-		lines = append(lines, statusLine)
+	lines := []string{
+		lipgloss.NewStyle().Width(bodyWidth).MaxWidth(bodyWidth).Render(sectionTitleStyle.Render(title)),
+		body,
 	}
-	lines = append(lines, help)
-	return viewerCardStyle.Width(width).Render(strings.Join(lines, "\n"))
+	if statusLine != "" {
+		lines = append(lines, lipgloss.NewStyle().Width(bodyWidth).MaxWidth(bodyWidth).Render(statusLine))
+	}
+	lines = append(lines, lipgloss.NewStyle().Width(bodyWidth).MaxWidth(bodyWidth).Render(help))
+	return renderFramedBox(viewerCardStyle, width, strings.Join(lines, "\n"))
 }
 
 func (s sqliteViewerModel) StatusLine() string {
@@ -460,16 +513,16 @@ func (s sqliteViewerModel) renderTableList(width int) string {
 		width = 10
 	}
 	if len(s.tables) == 0 {
-		return lipgloss.NewStyle().Width(width).Render(noticeStyle.Render("No tables"))
+		return lipgloss.NewStyle().Width(width).MaxWidth(width).Render(noticeStyle.Render("No tables"))
 	}
 	lines := make([]string, len(s.tables))
 	for i, tbl := range s.tables {
 		label := fmt.Sprintf(" %s", tbl)
+		style := fieldLabelStyle
 		if i == s.selectedTable {
-			lines[i] = selectedFormatStyle.Width(width).Render(label)
-		} else {
-			lines[i] = fieldLabelStyle.Width(width).Render(label)
+			style = selectedFormatStyle
 		}
+		lines[i] = style.Width(width).MaxWidth(width).Render(label)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
@@ -539,6 +592,20 @@ func truncate(text string, max int) string {
 	return text[:max-1] + "…"
 }
 
+func renderFramedBox(style lipgloss.Style, width int, content string) string {
+	if width < 1 {
+		width = 1
+	}
+	innerWidth := width - style.GetHorizontalFrameSize()
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	body := lipgloss.NewStyle().
+		Width(innerWidth).
+		MaxWidth(innerWidth).
+		Render(content)
+	return style.Copy().Width(width).Render(body)
+}
 
 func loadTablesCmd(path string) tea.Cmd {
 	return func() tea.Msg {
