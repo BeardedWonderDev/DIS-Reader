@@ -290,24 +290,27 @@ func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel strin
 }
 
 func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string) string {
-	leftWidth := width / 4
-	if leftWidth < 24 {
-		leftWidth = 24
+	const minContentWidth = 40
+	const minTablesWidth = 24
+	spacerWidth := 1
+
+	leftWidth := maxInt(minTablesWidth, width/4)
+	maxLeft := width - (minContentWidth + spacerWidth)
+	if leftWidth > maxLeft {
+		leftWidth = maxLeft
 	}
-	if leftWidth > width-42 {
-		leftWidth = width - 42
+	if leftWidth < minTablesWidth {
+		leftWidth = minTablesWidth
 	}
-	spacerWidth := 2
-	if width-leftWidth < spacerWidth+40 {
-		spacerWidth = maxInt(1, width-leftWidth-40)
-	}
-	if spacerWidth < 1 {
-		spacerWidth = 1
+	if leftWidth < 10 {
+		leftWidth = 10
 	}
 	rightWidth := width - leftWidth - spacerWidth
-	if rightWidth < 40 {
-		rightWidth = 40
+	if rightWidth < minContentWidth {
+		rightWidth = minContentWidth
+		leftWidth = maxInt(10, width-rightWidth-spacerWidth)
 	}
+
 	tablesInnerWidth := leftWidth - viewerColumnStyle.GetHorizontalFrameSize()
 	if tablesInnerWidth < 1 {
 		tablesInnerWidth = 1
@@ -315,21 +318,27 @@ func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string)
 	tablesList := sectionTitleStyle.Render("Tables") + "\n" + s.renderTableList(tablesInnerWidth)
 	tablesCard := viewerColumnStyle.Copy().
 		Width(leftWidth).
+		MaxWidth(leftWidth).
 		Render(
 			lipgloss.NewStyle().
 				Width(tablesInnerWidth).
 				MaxWidth(tablesInnerWidth).
 				Render(tablesList),
 		)
+
 	logArea := maxInt(4, height/4)
 	tableArea := height - logArea
 	if tableArea < 6 {
 		tableArea = 6
 		logArea = maxInt(3, height-tableArea)
 	}
+
 	content := lipgloss.NewStyle().
+		Width(rightWidth).
+		MaxWidth(rightWidth).
 		MaxHeight(tableArea).
 		Render(s.renderTableCard(rightWidth))
+
 	logInnerWidth := rightWidth - viewerCardStyle.GetHorizontalFrameSize()
 	if logInnerWidth < 1 {
 		logInnerWidth = 1
@@ -343,8 +352,9 @@ func (s sqliteViewerModel) renderTableLayout(width, height int, logPanel string)
 			MaxHeight(logArea).
 			Render(logPanel),
 	)
+
+	spacer := lipgloss.NewStyle().Width(spacerWidth).MaxWidth(spacerWidth).Render("")
 	rightColumn := lipgloss.JoinVertical(lipgloss.Left, content, logCard)
-	spacer := lipgloss.NewStyle().Width(spacerWidth).Render("")
 	return lipgloss.JoinHorizontal(lipgloss.Top, tablesCard, spacer, rightColumn)
 }
 
@@ -522,7 +532,10 @@ func (s sqliteViewerModel) renderTableList(width int) string {
 		if i == s.selectedTable {
 			style = selectedFormatStyle
 		}
-		lines[i] = style.Width(width).MaxWidth(width).Render(label)
+		lines[i] = style.
+			Width(width).
+			MaxWidth(width).
+			Render(truncate(label, maxInt(1, width-1)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
