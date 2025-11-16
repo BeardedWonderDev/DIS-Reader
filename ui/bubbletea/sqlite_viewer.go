@@ -244,6 +244,11 @@ func (s sqliteViewerModel) View(logPanel string, width, height int) string {
 }
 
 func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel string) string {
+	cardWidth := maxInt(40, width-2)
+	bodyWidth := cardWidth - viewerCardStyle.GetHorizontalFrameSize()
+	if bodyWidth < 1 {
+		bodyWidth = 1
+	}
 	lines := make([]string, len(s.files))
 	for i, file := range s.files {
 		prefix := "  "
@@ -252,15 +257,12 @@ func (s sqliteViewerModel) renderFileSelection(width, height int, logPanel strin
 			prefix = "> "
 			style = selectedFormatStyle
 		}
+		nameWidth := maxInt(1, bodyWidth-len(prefix))
+		name := truncate(filepath.Base(file), nameWidth)
 		lines[i] = style.
-			Width(width).
-			MaxWidth(width).
-			Render(prefix + filepath.Base(file))
-	}
-	cardWidth := maxInt(40, width-2)
-	bodyWidth := cardWidth - viewerCardStyle.GetHorizontalFrameSize()
-	if bodyWidth < 1 {
-		bodyWidth = 1
+			Width(bodyWidth).
+			MaxWidth(bodyWidth).
+			Render(prefix + name)
 	}
 	body := lipgloss.NewStyle().
 		Width(bodyWidth).
@@ -580,7 +582,14 @@ func (s sqliteViewerModel) renderTable(width int) string {
 	formatRow := func(cells []string, style lipgloss.Style) string {
 		parts := make([]string, len(cells))
 		for i, cell := range cells {
-			parts[i] = style.Width(colWidths[i]).Render(truncate(cell, colWidths[i]))
+			width := colWidths[i]
+			if width < 1 {
+				width = 1
+			}
+			parts[i] = style.
+				Width(width).
+				MaxWidth(width).
+				Render(truncate(cell, width))
 		}
 		return strings.Join(parts, " │ ")
 	}
