@@ -32,6 +32,10 @@ type rootModel struct {
 func NewRootModel(cfg *types.DISUIConfig, dis types.DISReaderService) rootModel {
 	search := newSearchModel(cfg, dis)
 	auth := newAuthModel(cfg, dis)
+	needsAuth := true
+	if cfg != nil && cfg.DIS != nil && cfg.DIS.User != "" && cfg.DIS.Password != "" {
+		needsAuth = false
+	}
 	return rootModel{
 		cfg:           cfg,
 		dis:           dis,
@@ -39,7 +43,7 @@ func NewRootModel(cfg *types.DISUIConfig, dis types.DISReaderService) rootModel 
 		activeTab:     0,
 		search:        search,
 		auth:          auth,
-		showAuthModal: false,
+		showAuthModal: needsAuth,
 	}
 }
 
@@ -70,6 +74,15 @@ func (m rootModel) Init() tea.Cmd {
 	}
 	if authCmd != nil {
 		cmds = append(cmds, authCmd)
+	}
+	if m.showAuthModal {
+		m.auth.focused = focusAuthHost
+		var focusCmd tea.Cmd
+		m.auth, focusCmd = m.auth.applyFocus()
+		if focusCmd != nil {
+			cmds = append(cmds, focusCmd)
+		}
+		cmds = append(cmds, newLogCmd("DIS credentials missing; prompting for connection details"))
 	}
 
 	return tea.Batch(cmds...)
