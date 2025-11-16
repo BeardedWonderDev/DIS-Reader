@@ -49,9 +49,16 @@ type searchModel struct {
 
 	lastOutputPath string
 	authenticated  bool
+	defaultDir     string
 }
 
 func newSearchModel(cfg *types.DISUIConfig, dis types.DISReaderService) searchModel {
+	defaultDir := ""
+	if cfg != nil {
+		if dir, err := ensureDebugOutputDir(cfg); err == nil {
+			defaultDir = dir
+		}
+	}
 	term := textinput.New()
 	term.Placeholder = "Search term (Part #, Invoice #, Unit #, etc.)"
 	term.CharLimit = 256
@@ -89,6 +96,7 @@ func newSearchModel(cfg *types.DISUIConfig, dis types.DISReaderService) searchMo
 		progressWidth: 50,
 		statusMsg:     "Ready for batch debug search",
 		authenticated: false,
+		defaultDir:    defaultDir,
 	}
 }
 
@@ -415,17 +423,19 @@ func (s searchModel) startSearch() (searchModel, tea.Cmd) {
 
 func defaultOutputPath(cfg *types.DISUIConfig, mode types.DebugSearchOutputMode) string {
 	if cfg == nil {
+		base := "debug-output/debug-search"
 		if mode == types.DebugSearchOutputCSV {
-			return "debug-search.csv"
+			return base + ".csv"
 		}
-		return "debug-search.db"
+		return base + ".db"
 	}
 	base := strings.TrimSpace(cfg.DebugSearch.DefaultOutputPath)
 	if base == "" {
+		base = filepath.Join("debug-output", "debug-search")
 		if mode == types.DebugSearchOutputCSV {
-			return "debug-search.csv"
+			return base + ".csv"
 		}
-		return "debug-search.db"
+		return base + ".db"
 	}
 	return ensureExtension(base, mode)
 }

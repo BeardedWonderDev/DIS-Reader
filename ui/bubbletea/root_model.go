@@ -2,6 +2,7 @@ package bubbletea
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,12 +27,17 @@ type rootModel struct {
 	logs          logBuffer
 	search        searchModel
 	auth          authModel
+	viewer        sqliteViewerModel
 	showAuthModal bool
 }
 
 func NewRootModel(cfg *types.DISUIConfig, dis types.DISReaderService) rootModel {
 	search := newSearchModel(cfg, dis)
 	auth := newAuthModel(cfg, dis)
+	viewer := newSQLiteViewerModel().withDefaultDir(search.defaultDir)
+	if search.defaultDir != "" {
+		viewer.defaultDir = search.defaultDir
+	}
 	needsAuth := true
 	if cfg != nil && cfg.DIS != nil && cfg.DIS.User != "" && cfg.DIS.Password != "" {
 		needsAuth = false
@@ -43,6 +49,7 @@ func NewRootModel(cfg *types.DISUIConfig, dis types.DISReaderService) rootModel 
 		activeTab:     0,
 		search:        search,
 		auth:          auth,
+		viewer:        viewer,
 		showAuthModal: needsAuth,
 	}
 }
@@ -84,6 +91,13 @@ func (m rootModel) Init() tea.Cmd {
 		}
 		cmds = append(cmds, newLogCmd("DIS credentials missing; prompting for connection details"))
 	}
+	if len(m.viewer.files) > 0 {
+		var loadCmd tea.Cmd
+		m.viewer, loadCmd = m.viewer.requestTablesLoad()
+		if loadCmd != nil {
+			cmds = append(cmds, loadCmd)
+		}
+	}
 
 	return tea.Batch(cmds...)
 }
@@ -105,7 +119,14 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if authCmd != nil {
 		cmds = append(cmds, authCmd)
 	}
-	if searchHandled || authHandled {
+	var viewerCmd tea.Cmd
+	var viewerHandled bool
+	viewerFocused := (m.activeTab == 1) && !m.showAuthModal
+	m.viewer, viewerCmd, viewerHandled = m.viewer.Update(msg, viewerFocused)
+	if viewerCmd != nil {
+		cmds = append(cmds, viewerCmd)
+	}
+	if searchHandled || authHandled || viewerHandled {
 		return m, tea.Batch(cmds...)
 	}
 
@@ -175,6 +196,13 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, focusCmd)
 		}
 		cmds = append(cmds, newLogCmd("Authentication required before running search"))
+	case searchFinishedMsg:
+		var viewerCmd tea.Cmd
+		m.viewer, viewerCmd = m.viewer.AddOutputFile(msg.OutputPath)
+		if viewerCmd != nil {
+			cmds = append(cmds, viewerCmd)
+		}
+		cmds = append(cmds, newLogCmd("SQLite output ready: %s", filepath.Base(msg.OutputPath)))
 	default:
 		// ignore
 	}
@@ -236,15 +264,7 @@ func (m rootModel) renderActivePane() string {
 	case 0:
 		return panelStyle.Render(m.search.View())
 	case 1:
-		return panelStyle.Render(
-			placeholderStyle.Render(
-				"SQLite data browser coming soon.\n" +
-					"Plan:\n" +
-					"  • Detect newly generated debug-search SQLite files.\n" +
-					"  • Browse schemas/tables with Bubble lists.\n" +
-					"  • Inspect rows with paginated table view.",
-			),
-		)
+		return panelStyle.Render(m.viewer.View())
 	default:
 		return panelStyle.Render("Unknown pane")
 	}
@@ -262,7 +282,7 @@ func (m rootModel) renderStatusBar() string {
 		}
 	}
 
-	info := fmt.Sprintf("Host: %s | Output: %s | Pane: %s | %s | %s | q to quit", host, output, tabs[m.activeTab], m.search.StatusLine(), m.auth.StatusLine())
+	info := fmt.Sprintf("Host: %s | Output: %s | Pane: %s | %s | %s | %s | q to quit", host, output, tabs[m.activeTab], m.search.StatusLine(), m.viewer.StatusLine(), m.auth.StatusLine())
 	return statusBarStyle.Render(info)
 }
 
