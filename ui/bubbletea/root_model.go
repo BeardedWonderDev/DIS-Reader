@@ -13,6 +13,11 @@ import (
 
 var tabs = []string{"Batch Search", "SQLite Viewer"}
 
+const (
+	panelHorizontalFrame = 4 // rounded border (2) + padding (2)
+	panelVerticalFrame   = 4
+)
+
 // rootModel drives the experimental Bubble Tea UI skeleton. It will be expanded
 // with Bubble components as features come online.
 type rootModel struct {
@@ -135,8 +140,10 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
-		m.search = m.search.SetWidth(msg.Width)
-		m.viewer.width = msg.Width
+		innerWidth := maxInt(10, msg.Width-panelHorizontalFrame)
+		m.search = m.search.SetWidth(innerWidth)
+		m.viewer.width = innerWidth
+		m.viewer.height = maxInt(10, msg.Height-panelVerticalFrame)
 	case tea.KeyMsg:
 		if m.showAuthModal {
 			if msg.String() == "ctrl+c" || msg.String() == "q" {
@@ -216,11 +223,36 @@ func (m rootModel) View() string {
 
 	title := titleStyle.Render(fmt.Sprintf("%s v%s — Bubble UI Preview", m.cfg.AppName, m.cfg.AppVersion))
 	nav := m.renderTabs()
-	main := m.renderActivePane()
+	logLines := m.recentLogs()
+	logPlain := m.renderLogsPlain(logLines)
+	logPanel := m.renderLogsPanel(logLines)
 	status := m.renderStatusBar()
-	logs := m.renderLogs()
 
-	sections := []string{title, nav, main, status, logs}
+	headerHeight := lipgloss.Height(title) + lipgloss.Height(nav) + lipgloss.Height(status)
+	logHeight := lipgloss.Height(logPanel)
+	if m.activeTab == 1 {
+		logHeight = 0
+	}
+
+	frameWidth := panelStyle.GetHorizontalFrameSize()
+	frameHeight := panelStyle.GetVerticalFrameSize()
+	remainingHeight := m.height - headerHeight - logHeight
+	if remainingHeight < frameHeight+3 {
+		remainingHeight = frameHeight + 3
+	}
+	mainInnerHeight := maxInt(3, remainingHeight-frameHeight)
+	mainInnerWidth := maxInt(20, m.width-frameWidth)
+
+	mainContent := m.renderActivePane(logPlain, mainInnerWidth, mainInnerHeight)
+	main := panelStyle.Copy().
+		Width(mainInnerWidth).
+		Height(mainInnerHeight).
+		Render(mainContent)
+
+	sections := []string{title, nav, main, status}
+	if m.activeTab != 1 {
+		sections = append(sections, logPanel)
+	}
 	base := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
 	if m.showAuthModal {
@@ -255,14 +287,25 @@ func (m rootModel) renderTabs() string {
 	return tabBarStyle.Render(strings.Join(items, "  "))
 }
 
-func (m rootModel) renderActivePane() string {
+func (m rootModel) renderActivePane(logPanel string, width, height int) string {
 	switch m.activeTab {
 	case 0:
-		return panelStyle.Render(m.search.View())
+		return lipgloss.Place(
+			width,
+			height,
+			lipgloss.Left,
+			lipgloss.Top,
+			lipgloss.NewStyle().MaxWidth(width).MaxHeight(height).Render(m.search.View()),
+		)
 	case 1:
-		return panelStyle.Render(m.viewer.View())
+		view := m.viewer.View(logPanel, width, height)
+		return lipgloss.NewStyle().
+			MaxWidth(width).
+			MaxHeight(height).
+			Width(width).
+			Render(view)
 	default:
-		return panelStyle.Render("Unknown pane")
+		return lipgloss.Place(width, height, lipgloss.Left, lipgloss.Top, "Unknown pane")
 	}
 }
 
@@ -282,11 +325,26 @@ func (m rootModel) renderStatusBar() string {
 	return statusBarStyle.Render(info)
 }
 
-func (m rootModel) renderLogs() string {
+func (m rootModel) recentLogs() []string {
 	lines := m.logs.tail(8)
 	if len(lines) == 0 {
-		lines = []string{"No log entries yet."}
+		return []string{"No log entries yet."}
 	}
+	return lines
+}
+
+func (m rootModel) renderLogsPanel(lines []string) string {
 	body := logBodyStyle.Render(strings.Join(lines, "\n"))
 	return logPanelTitleStyle.Render("Activity") + "\n" + body
+}
+
+func (m rootModel) renderLogsPlain(lines []string) string {
+	return logPanelTitleStyle.Render("Activity") + "\n" + strings.Join(lines, "\n")
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
