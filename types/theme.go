@@ -46,7 +46,7 @@ type Theme struct {
 	Style  ComponentStyle
 }
 
-const DefaultThemeName = "high-contrast-dark"
+const DefaultThemeName = "aurora-dark"
 
 var (
 	DefualtTerminalTheme = Theme{
@@ -112,72 +112,73 @@ var (
 	}
 )
 
-var HighContrastDarkTheme = Theme{
-	Name: "High Contrast Dark",
+var AuroraDarkTheme = Theme{
+	Name: "Aurora Dark",
 	Colors: ColorValue{
-		Error:           tcell.GetColor("#ff6b6b"),
-		Warning:         tcell.GetColor("#ffa94d"),
-		Notice:          tcell.GetColor("#9be7ff"),
-		WindowColor:     tcell.GetColor("#10131a"),
-		ModalColor:      tcell.GetColor("#161b26"),
-		CommandBarColor: tcell.GetColor("#0c111a"),
-		PrimaryText:     tcell.GetColor("#f4f7ff"),
-		SecondaryText:   tcell.GetColor("#9aa8c3"),
-		AccentColor:     tcell.GetColor("#3d9df6"),
-		AccentTextColor: tcell.GetColor("#050608"),
-		BorderColor:     tcell.GetColor("#2d3445"),
-		TableHeader:     tcell.GetColor("#1e2433"),
-		TableRow:        tcell.GetColor("#0f131c"),
-		StatusBarBg:     tcell.GetColor("#0b1220"),
-		StatusBarText:   tcell.GetColor("#e7f1ff"),
+		Error:           tcell.GetColor("#ff7f87"),
+		Warning:         tcell.GetColor("#ffd479"),
+		Notice:          tcell.GetColor("#8fd5ff"),
+		WindowColor:     tcell.GetColor("#23283b"),
+		ModalColor:      tcell.GetColor("#2c3147"),
+		CommandBarColor: tcell.GetColor("#1b1f2d"),
+		PrimaryText:     tcell.GetColor("#f8fbff"),
+		SecondaryText:   tcell.GetColor("#bac4dd"),
+		AccentColor:     tcell.GetColor("#5be7c4"),
+		AccentTextColor: tcell.GetColor("#071510"),
+		BorderColor:     tcell.GetColor("#6f7ab8"),
+		TableHeader:     tcell.GetColor("#2f3650"),
+		TableRow:        tcell.GetColor("#262c3f"),
+		StatusBarBg:     tcell.GetColor("#1f2435"),
+		StatusBarText:   tcell.GetColor("#fefefe"),
 	},
 	Style: ComponentStyle{
 		ButtonStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#3d9df6")).
-			Foreground(tcell.GetColor("#050608")).Bold(true),
+			Background(tcell.GetColor("#ff956b")).
+			Foreground(tcell.GetColor("#1b0c05")).Bold(true),
 		PlaceholderStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#1b2332")).
-			Foreground(tcell.GetColor("#9aa8c3")).Italic(true),
+			Background(tcell.GetColor("#343b52")).
+			Foreground(tcell.GetColor("#9aa7c8")).Italic(true),
 		FieldStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#1b2332")).
-			Foreground(tcell.GetColor("#f4f7ff")),
+			Background(tcell.GetColor("#2e3449")).
+			Foreground(tcell.GetColor("#f8fbff")),
 		ListMainTextStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#10131a")).
-			Foreground(tcell.GetColor("#f4f7ff")),
+			Background(tcell.GetColor("#23283b")).
+			Foreground(tcell.GetColor("#f8fbff")),
 		ListSelectedStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#3d9df6")).
-			Foreground(tcell.GetColor("#050608")).Bold(true),
+			Background(tcell.GetColor("#ffd479")).
+			Foreground(tcell.GetColor("#3a2a08")).Bold(true),
 		ListBorderStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#10131a")).
-			Foreground(tcell.GetColor("#2d3445")),
+			Background(tcell.GetColor("#23283b")).
+			Foreground(tcell.GetColor("#6f7ab8")),
 		TextAreaStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#10131a")).
-			Foreground(tcell.GetColor("#f4f7ff")),
+			Background(tcell.GetColor("#23283b")).
+			Foreground(tcell.GetColor("#f8fbff")),
 		TableHeaderStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#1e2433")).
-			Foreground(tcell.GetColor("#f4f7ff")).Bold(true),
+			Background(tcell.GetColor("#2f3650")).
+			Foreground(tcell.GetColor("#fefefe")).Bold(true),
 		TableCellStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#0f131c")).
-			Foreground(tcell.GetColor("#e1e6f6")),
+			Background(tcell.GetColor("#262c3f")).
+			Foreground(tcell.GetColor("#e4e9fb")),
 		TableSelectedStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#3d9df6")).
-			Foreground(tcell.GetColor("#050608")).Bold(true),
+			Background(tcell.GetColor("#5be7c4")).
+			Foreground(tcell.GetColor("#071510")).Bold(true),
 		StatusBarStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#0b1220")).
-			Foreground(tcell.GetColor("#e7f1ff")).Bold(true),
+			Background(tcell.GetColor("#1f2435")).
+			Foreground(tcell.GetColor("#fefefe")).Bold(true),
 		PickerCellStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#10131a")).
-			Foreground(tcell.GetColor("#f4f7ff")),
+			Background(tcell.GetColor("#23283b")).
+			Foreground(tcell.GetColor("#f8fbff")),
 		PickerSelectedStyle: tcell.StyleDefault.
-			Background(tcell.GetColor("#3d9df6")).
-			Foreground(tcell.GetColor("#050608")).Bold(true),
+			Background(tcell.GetColor("#5be7c4")).
+			Foreground(tcell.GetColor("#071510")).Bold(true),
 	},
 }
 
 var themeCatalog = map[string]*Theme{
 	"terminal":           &DefualtTerminalTheme,
 	"terminal-dark":      &DefualtTerminalTheme,
-	"high-contrast-dark": &HighContrastDarkTheme,
+	"high-contrast-dark": &AuroraDarkTheme,
+	"aurora-dark":        &AuroraDarkTheme,
 }
 
 // ResolveTheme returns a clone of a known theme by name, falling back to the default terminal theme.
