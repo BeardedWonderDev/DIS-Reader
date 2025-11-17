@@ -436,9 +436,9 @@ func (v *viewerApp) updateStatus() {
 	if v.cfg != nil && v.cfg.DIS != nil && v.cfg.DIS.Host != "" {
 		host = v.cfg.DIS.Host
 	}
-	statusLine := fmt.Sprintf("Host: %s    Page: %d", host, v.page+1)
-	legendLine := "PgUp/PgDn Page  •  Tab Focus  •  Ctrl+L Clear Log  •  Q Quit"
-	v.status.SetText(fmt.Sprintf("%s\n%s", statusLine, legendLine))
+	legend := "PgUp/PgDn Page • Tab Focus • Ctrl+L Clear Log • Q Quit"
+	statusText := fmt.Sprintf("Host: %s  •  Page: %d  •  %s", host, v.page+1, legend)
+	v.status.SetText(statusText)
 }
 
 func (v *viewerApp) cycleFocus(delta int) {
