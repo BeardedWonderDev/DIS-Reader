@@ -17,4 +17,5 @@ type DISReaderService interface {
 	RunDebugSearch(searchTerm string, opts DebugSearchOptions, progressChan chan<- ProgressStatus, eventChan chan<- TableEvent)
 	UnitService() UnitService
 	InvoiceService() InvoiceService
+	PartService() PartService
 }

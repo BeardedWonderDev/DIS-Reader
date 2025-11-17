@@ -66,3 +66,7 @@ func (a *AuthGuard) UnitService() types.UnitService {
 func (a *AuthGuard) InvoiceService() types.InvoiceService {
 	return a.inner.InvoiceService()
 }
+
+func (a *AuthGuard) PartService() types.PartService {
+	return a.inner.PartService()
+}
