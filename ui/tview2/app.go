@@ -73,8 +73,7 @@ func newViewerApp(cfg *types.DISUIConfig, dis types.DISReaderService) (*viewerAp
 	app.SetRoot(viewer.buildRoot(), true)
 	app.SetInputCapture(viewer.handleGlobalKeys)
 	viewer.focusables = []tview.Primitive{viewer.dbTable, viewer.tableTable, viewer.tableView, viewer.logView}
-	viewer.focusIndex = 0
-	app.SetFocus(viewer.dbTable)
+	viewer.focusPane(0)
 	return viewer, nil
 }
 
@@ -453,8 +452,7 @@ func (v *viewerApp) cycleFocus(delta int) {
 	if len(v.focusables) == 0 {
 		return
 	}
-	v.focusIndex = (v.focusIndex + delta + len(v.focusables)) % len(v.focusables)
-	v.app.SetFocus(v.focusables[v.focusIndex])
+	v.focusPane(v.focusIndex + delta)
 }
 
 func (v *viewerApp) pauseLogFollow() {
@@ -476,6 +474,39 @@ func (v *viewerApp) resumeLogFollow() {
 	v.logUnread = false
 	v.updateLogTitle()
 	v.logView.ScrollToEnd()
+}
+
+func (v *viewerApp) focusPane(index int) {
+	if len(v.focusables) == 0 {
+		return
+	}
+	v.focusIndex = (index + len(v.focusables)) % len(v.focusables)
+	for i, p := range v.focusables {
+		v.applyPaneFocus(p, i == v.focusIndex)
+	}
+	v.app.SetFocus(v.focusables[v.focusIndex])
+}
+
+func (v *viewerApp) applyPaneFocus(p tview.Primitive, focused bool) {
+	borderColor := v.theme.Colors.BorderColor
+	titleColor := v.theme.Colors.PrimaryText
+	attr := tcell.AttrNone
+	if focused {
+		borderColor = v.theme.Colors.AccentColor
+		titleColor = v.theme.Colors.AccentColor
+		attr = tcell.AttrBold
+	}
+
+	switch pane := p.(type) {
+	case *tview.Table:
+		pane.SetBorderColor(borderColor)
+		pane.SetTitleColor(titleColor)
+		pane.SetBorderAttributes(attr)
+	case *tview.TextView:
+		pane.SetBorderColor(borderColor)
+		pane.SetTitleColor(titleColor)
+		pane.SetBorderAttributes(attr)
+	}
 }
 
 func (v *viewerApp) updateLogTitle() {
