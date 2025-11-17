@@ -359,6 +359,7 @@ func (v *viewerApp) renderTablePicker() {
 func (v *viewerApp) pickerDataCell(text string) *tview.TableCell {
 	return tview.NewTableCell(text).
 		SetAlign(tview.AlignCenter).
+		SetExpansion(1).
 		SetStyle(v.theme.Style.PickerCellStyle)
 }
 
@@ -366,6 +367,7 @@ func (v *viewerApp) pickerMessageCell(text string) *tview.TableCell {
 	return tview.NewTableCell(text).
 		SetSelectable(false).
 		SetAlign(tview.AlignCenter).
+		SetExpansion(1).
 		SetStyle(v.theme.Style.PickerCellStyle)
 }
 
