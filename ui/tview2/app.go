@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	tablePageSize = 100
+	tablePageSize     = 4
+	tableVisibleRows  = 4
+	approxColumnWidth = 18
 )
 
 // Run starts the simplified tview-based SQLite viewer layout.
@@ -89,8 +91,8 @@ func (v *viewerApp) initWidgets() {
 	})
 
 	v.tableView = tview.NewTable().
-		SetFixed(1, 0).
-		SetSelectable(true, true)
+		SetFixed(0, 0).
+		SetSelectable(true, false)
 	v.tableView.SetBorder(true).SetTitle(" Rows ")
 	v.tableView.SetBorders(true)
 	v.tableView.SetBorderColor(v.theme.Colors.BorderColor)
@@ -272,27 +274,65 @@ func (v *viewerApp) populateTable(columns []string, rows [][]string) {
 		return
 	}
 
-	headerStyle := v.theme.Style.TableHeaderStyle
-	for colIdx, name := range columns {
-		cell := tview.NewTableCell(name).
-			SetSelectable(false).
-			SetStyle(headerStyle)
-		v.tableView.SetCell(0, colIdx, cell)
-	}
-
 	if len(rows) == 0 {
-		msg := tview.NewTableCell("No rows on this page").
-			SetSelectable(false).
-			SetStyle(v.theme.Style.TableCellStyle)
-		v.tableView.SetCell(1, 0, msg)
+		v.renderTableMessage("No rows on this page")
 		return
 	}
 
-	for rowIdx, row := range rows {
-		for colIdx, value := range row {
-			cell := tview.NewTableCell(value).
-				SetStyle(v.theme.Style.TableCellStyle)
-			v.tableView.SetCell(rowIdx+1, colIdx, cell)
+	groupSize := v.determineColumnGroupSize(len(columns))
+	if groupSize <= 0 {
+		groupSize = len(columns)
+	}
+	groupRanges := buildColumnRanges(len(columns), groupSize)
+
+	rowCursor := 0
+	visibleRows := tableVisibleRows
+	if len(rows) < visibleRows {
+		visibleRows = len(rows)
+	}
+
+	for idx, cr := range groupRanges {
+		// header row for this group
+		for colIdx, name := range columns[cr.start:cr.end] {
+			v.tableView.SetCell(rowCursor, colIdx,
+				tview.NewTableCell(name).
+					SetSelectable(false).
+					SetStyle(v.theme.Style.TableHeaderStyle))
+		}
+		rowCursor++
+
+		// data rows
+		for r := 0; r < visibleRows; r++ {
+			data := rows[r]
+			for colIdx := range columns[cr.start:cr.end] {
+				val := ""
+				sourceIdx := cr.start + colIdx
+				if sourceIdx < len(data) {
+					val = fmt.Sprint(data[sourceIdx])
+				}
+				v.tableView.SetCell(rowCursor, colIdx,
+					tview.NewTableCell(val).
+						SetStyle(v.theme.Style.TableCellStyle))
+			}
+			rowCursor++
+		}
+
+		// overflow hint
+		if len(rows) > visibleRows {
+			v.tableView.SetCell(rowCursor, 0,
+				tview.NewTableCell("…").
+					SetSelectable(false).
+					SetAlign(tview.AlignCenter).
+					SetStyle(v.theme.Style.TableCellStyle))
+			rowCursor++
+		}
+
+		// spacer row
+		if idx < len(groupRanges)-1 {
+			v.tableView.SetCell(rowCursor, 0,
+				tview.NewTableCell("").
+					SetSelectable(false))
+			rowCursor++
 		}
 	}
 }
@@ -371,6 +411,44 @@ func (v *viewerApp) pickerMessageCell(text string) *tview.TableCell {
 		SetStyle(v.theme.Style.PickerCellStyle)
 }
 
+func (v *viewerApp) determineColumnGroupSize(totalColumns int) int {
+	if totalColumns == 0 {
+		return 0
+	}
+	_, _, width, _ := v.tableView.GetInnerRect()
+	if width <= 0 {
+		width = totalColumns * approxColumnWidth
+	}
+	target := approxColumnWidth + 2
+	group := width / target
+	if group < 1 {
+		group = 1
+	}
+	if group > totalColumns {
+		group = totalColumns
+	}
+	return group
+}
+
+type columnRange struct {
+	start int
+	end   int
+}
+
+func buildColumnRanges(total, size int) []columnRange {
+	if size <= 0 {
+		size = total
+	}
+	var ranges []columnRange
+	for start := 0; start < total; start += size {
+		end := start + size
+		if end > total {
+			end = total
+		}
+		ranges = append(ranges, columnRange{start: start, end: end})
+	}
+	return ranges
+}
 func (v *viewerApp) changePage(delta int) {
 	if v.currentFile == "" || v.currentTable == "" {
 		return
