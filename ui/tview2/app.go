@@ -149,6 +149,7 @@ func (v *viewerApp) initWidgets() {
 	v.status.SetBorderColor(v.theme.Colors.BorderColor)
 	v.status.SetBackgroundColor(v.theme.Colors.StatusBarBg)
 	v.status.SetTextStyle(v.theme.Style.StatusBarStyle)
+	v.status.SetTextAlign(tview.AlignCenter)
 	v.updateStatus()
 }
 
@@ -435,9 +436,9 @@ func (v *viewerApp) updateStatus() {
 	if v.cfg != nil && v.cfg.DIS != nil && v.cfg.DIS.Host != "" {
 		host = v.cfg.DIS.Host
 	}
-	status := fmt.Sprintf("Host %s  Page %d", host, v.page+1)
-	hotkeys := "PgUp/PgDn=Page • Tab=Focus • Ctrl+L=Clear Log • Q=Quit"
-	v.status.SetText(fmt.Sprintf("%s   %s", status, hotkeys))
+	statusLine := fmt.Sprintf("Host: %s    Page: %d", host, v.page+1)
+	legendLine := "PgUp/PgDn Page  •  Tab Focus  •  Ctrl+L Clear Log  •  Q Quit"
+	v.status.SetText(fmt.Sprintf("%s\n%s", statusLine, legendLine))
 }
 
 func (v *viewerApp) cycleFocus(delta int) {
