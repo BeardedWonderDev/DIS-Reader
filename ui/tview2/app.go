@@ -435,15 +435,7 @@ func (v *viewerApp) updateStatus() {
 	if v.cfg != nil && v.cfg.DIS != nil && v.cfg.DIS.Host != "" {
 		host = v.cfg.DIS.Host
 	}
-	file := "<none>"
-	if v.currentFile != "" {
-		file = filepath.Base(v.currentFile)
-	}
-	table := "<none>"
-	if v.currentTable != "" {
-		table = v.currentTable
-	}
-	status := fmt.Sprintf("Host %s  File %s  Table %s  Page %d", host, file, table, v.page+1)
+	status := fmt.Sprintf("Host %s  Page %d", host, v.page+1)
 	hotkeys := "PgUp/PgDn=Page • Tab=Focus • Ctrl+L=Clear Log • Q=Quit"
 	v.status.SetText(fmt.Sprintf("%s   %s", status, hotkeys))
 }
