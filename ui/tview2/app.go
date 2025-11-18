@@ -19,6 +19,9 @@ const (
 	partsSearchLimit  = 200
 	pageDebug         = "debug"
 	pageParts         = "parts"
+	partsViewBlank    = "blank"
+	partsViewResults  = "results"
+	partsViewDetail   = "detail"
 )
 
 // Run starts the simplified tview-based SQLite viewer layout.
@@ -744,14 +747,19 @@ type partsPanel struct {
 	classInput    *tview.InputField
 	fetchButton   *tview.Button
 	searchButton  *tview.Button
+	resetButton   *tview.Button
 	resultsTable  *tview.Table
-	detailView    *tview.TextView
+	detailTable   *tview.Table
 	status        *tview.TextView
+	messageView   *tview.TextView
+	contentPages  *tview.Pages
+	viewMode      string
 	current       []*types.PartInventorySpec
+	selectedIndex int
 }
 
 func newPartsPanel(v *viewerApp) *partsPanel {
-	p := &partsPanel{viewer: v}
+	p := &partsPanel{viewer: v, selectedIndex: -1}
 	p.build()
 	return p
 }
@@ -804,65 +812,117 @@ func (p *partsPanel) build() {
 	p.searchButton = tview.NewButton("Search Parts")
 	p.searchButton.SetSelectedFunc(p.runSearch)
 	p.searchButton.SetStyle(theme.Style.ButtonStyle)
+	p.resetButton = tview.NewButton("Clear Results")
+	p.resetButton.SetSelectedFunc(p.clearResults)
+	p.resetButton.SetStyle(theme.Style.ButtonStyle)
+	p.resetButton.SetDisabled(true)
+	lookupRow := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(p.divisionInput, 0, 1, true).
+		AddItem(p.partInput, 0, 2, false).
+		AddItem(p.fetchButton, 20, 0, false)
+	lookupHint := tview.NewTextView().SetDynamicColors(true)
+	lookupHint.SetText("Lookup a single part by division and part number.")
+	lookupHint.SetBorder(false)
+	lookupHint.SetTextColor(theme.Colors.PrimaryText)
+	lookupHint.SetBackgroundColor(theme.Colors.WindowColor)
+	lookupCard := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(lookupRow, 0, 1, true).
+		AddItem(lookupHint, 1, 0, false)
+	lookupCard.SetBorder(true).
+		SetTitle("Direct Lookup").
+		SetBorderColor(theme.Colors.BorderColor).
+		SetTitleColor(theme.Colors.PrimaryText).
+		SetBackgroundColor(theme.Colors.WindowColor)
+	searchInputs := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(p.queryInput, 0, 3, false).
+		AddItem(p.vendorInput, 0, 1, false).
+		AddItem(p.classInput, 0, 1, false)
+	searchButtons := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(p.searchButton, 20, 0, false).
+		AddItem(p.resetButton, 20, 0, false)
+	searchHint := tview.NewTextView().SetDynamicColors(true)
+	searchHint.SetText("Search description fields and optionally filter by vendor/class. Esc or Clear returns here.")
+	searchHint.SetBorder(false)
+	searchHint.SetTextColor(theme.Colors.PrimaryText)
+	searchHint.SetBackgroundColor(theme.Colors.WindowColor)
+	searchCard := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(searchInputs, 0, 3, true).
+		AddItem(searchButtons, 18, 0, false)
+	searchWrapper := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(searchCard, 0, 1, true).
+		AddItem(searchHint, 2, 0, false)
+	searchWrapper.SetBorder(true).
+		SetTitle("Filtered Search").
+		SetBorderColor(theme.Colors.BorderColor).
+		SetTitleColor(theme.Colors.PrimaryText).
+		SetBackgroundColor(theme.Colors.WindowColor)
+	controls := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(lookupCard, 0, 1, true).
+		AddItem(searchWrapper, 0, 1, false)
+
 	p.resultsTable = tview.NewTable()
 	p.resultsTable.SetFixed(1, 0)
 	p.resultsTable.SetSelectable(true, false)
 	p.resultsTable.SetBorder(true)
-	p.resultsTable.SetTitle(" Results ")
+	p.resultsTable.SetTitle(" Search Results ")
 	p.resultsTable.SetBorderColor(theme.Colors.BorderColor)
 	p.resultsTable.SetTitleColor(theme.Colors.PrimaryText)
 	p.resultsTable.SetSelectedStyle(theme.Style.TableSelectedStyle)
-	p.resultsTable.SetSelectionChangedFunc(func(row, column int) {
+	p.resultsTable.SetSelectedFunc(func(row, column int) {
+		if row <= 0 {
+			return
+		}
 		p.showResult(row - 1)
 	})
-	p.detailView = tview.NewTextView()
-	p.detailView.SetDynamicColors(true)
-	p.detailView.SetWrap(true)
-	p.detailView.SetScrollable(true)
-	p.detailView.SetBorder(true)
-	p.detailView.SetTitle(" Part Details ")
-	p.detailView.SetBorderColor(theme.Colors.BorderColor)
-	p.detailView.SetTitleColor(theme.Colors.PrimaryText)
-	p.detailView.SetBackgroundColor(theme.Colors.WindowColor)
+	p.resultsTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape:
+			p.showSearchPrompt()
+			return nil
+		}
+		return event
+	})
+	p.detailTable = tview.NewTable()
+	p.detailTable.SetFixed(1, 1)
+	p.detailTable.SetBorder(true)
+	p.detailTable.SetTitle(" Part Details ")
+	p.detailTable.SetBorderColor(theme.Colors.BorderColor)
+	p.detailTable.SetTitleColor(theme.Colors.PrimaryText)
+	p.detailTable.SetBackgroundColor(theme.Colors.WindowColor)
+	p.detailTable.SetSelectable(false, false)
+	p.detailTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape, tcell.KeyBackspace:
+			p.showResults()
+			return nil
+		}
+		return event
+	})
+	p.messageView = tview.NewTextView().SetDynamicColors(true)
+	p.messageView.SetBorder(true)
+	p.messageView.SetBorderColor(theme.Colors.BorderColor)
+	p.messageView.SetBackgroundColor(theme.Colors.WindowColor)
+	p.messageView.SetText("Use the lookup or search inputs to load part details.")
 	p.status = tview.NewTextView()
 	p.status.SetDynamicColors(true)
 	p.status.SetBorder(true)
 	p.status.SetBorderColor(theme.Colors.BorderColor)
 	p.status.SetBackgroundColor(theme.Colors.StatusBarBg)
 	p.status.SetTextStyle(theme.Style.StatusBarStyle)
-	title := tview.NewTextView()
-	title.SetDynamicColors(true)
-	title.SetBorder(true)
-	title.SetTitle(" Parts Lookup ")
-	title.SetBorderColor(theme.Colors.BorderColor)
-	title.SetBackgroundColor(theme.Colors.CommandBarColor)
-	title.SetTextColor(theme.Colors.PrimaryText)
-	flexLookup := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(p.divisionInput, 0, 1, true).
-		AddItem(p.partInput, 0, 2, false).
-		AddItem(p.fetchButton, 20, 0, false)
-	flexSearch := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(p.queryInput, 0, 2, false).
-		AddItem(p.vendorInput, 0, 1, false).
-		AddItem(p.classInput, 0, 1, false).
-		AddItem(p.searchButton, 20, 0, false)
-	controls := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(flexLookup, 3, 0, true).
-		AddItem(flexSearch, 3, 0, false)
-	body := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(p.resultsTable, 0, 2, true).
-		AddItem(p.detailView, 0, 3, false)
+	p.contentPages = tview.NewPages()
+	p.contentPages.AddPage(partsViewBlank, p.messageView, true, true)
+	p.contentPages.AddPage(partsViewResults, p.resultsTable, true, false)
+	p.contentPages.AddPage(partsViewDetail, p.detailTable, true, false)
 	p.root = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(title, 3, 0, false).
-		AddItem(controls, 6, 0, true).
-		AddItem(body, 0, 1, true).
-		AddItem(p.status, 3, 0, false)
-	p.detailView.SetText("Use the lookup or search inputs to load part details.")
+		AddItem(controls, 10, 0, true).
+		AddItem(p.contentPages, 0, 1, false).
+		AddItem(p.status, 2, 0, false)
 	p.setStatus("Enter a part number per division or run a search with filters. F1=Files, F2=Parts.")
+	p.viewMode = partsViewBlank
 }
 
 func (p *partsPanel) focusables() []tview.Primitive {
-	return []tview.Primitive{
+	list := []tview.Primitive{
 		p.divisionInput,
 		p.partInput,
 		p.fetchButton,
@@ -870,9 +930,15 @@ func (p *partsPanel) focusables() []tview.Primitive {
 		p.vendorInput,
 		p.classInput,
 		p.searchButton,
-		p.resultsTable,
-		p.detailView,
+		p.resetButton,
 	}
+	switch p.viewMode {
+	case partsViewResults:
+		list = append(list, p.resultsTable)
+	case partsViewDetail:
+		list = append(list, p.detailTable)
+	}
+	return list
 }
 
 func (p *partsPanel) setStatus(msg string) {
@@ -882,6 +948,47 @@ func (p *partsPanel) setStatus(msg string) {
 	p.status.SetText(msg)
 }
 
+func (p *partsPanel) setViewMode(mode string) {
+	p.viewMode = mode
+	switch mode {
+	case partsViewResults:
+		p.contentPages.SwitchToPage(partsViewResults)
+	case partsViewDetail:
+		p.contentPages.SwitchToPage(partsViewDetail)
+	default:
+		p.contentPages.SwitchToPage(partsViewBlank)
+	}
+	if p.resetButton != nil {
+		p.resetButton.SetDisabled(len(p.current) == 0)
+	}
+	p.refreshFocusables()
+}
+
+func (p *partsPanel) showSearchPrompt() {
+	p.messageView.SetText("Use the lookup or search inputs to load part details.")
+	p.setViewMode(partsViewBlank)
+	p.setStatus("Search cleared. Enter new filters.")
+	if p.viewer != nil {
+		p.viewer.app.SetFocus(p.queryInput)
+	}
+}
+
+func (p *partsPanel) showResults() {
+	if len(p.current) == 0 {
+		p.showSearchPrompt()
+		return
+	}
+	p.setViewMode(partsViewResults)
+	p.viewer.app.SetFocus(p.resultsTable)
+	p.setStatus("Select a part and press Enter. Esc clears results.")
+}
+
+func (p *partsPanel) clearResults() {
+	p.current = nil
+	p.selectedIndex = -1
+	p.showSearchPrompt()
+}
+
 func (p *partsPanel) setBusy(busy bool, msg string) {
 	p.fetchButton.SetDisabled(busy)
 	p.searchButton.SetDisabled(busy)
@@ -889,6 +996,22 @@ func (p *partsPanel) setBusy(busy bool, msg string) {
 		p.setStatus(fmt.Sprintf("[yellow]%s", msg))
 	} else if msg != "" {
 		p.setStatus(msg)
+	}
+}
+
+func (p *partsPanel) refreshFocusables() {
+	if p.viewer.activePage != pageParts {
+		return
+	}
+	p.viewer.focusables = p.focusables()
+	if len(p.viewer.focusables) == 0 {
+		return
+	}
+	if p.viewer.focusIndex >= len(p.viewer.focusables) {
+		p.viewer.focusIndex = len(p.viewer.focusables) - 1
+		if p.viewer.focusIndex < 0 {
+			p.viewer.focusIndex = 0
+		}
 	}
 }
 
@@ -915,7 +1038,11 @@ func (p *partsPanel) runLookup() {
 				p.setStatus(fmt.Sprintf("[red]Lookup failed: %v", err))
 				return
 			}
-			p.applyResults([]*types.PartInventorySpec{spec})
+			p.current = []*types.PartInventorySpec{spec}
+			p.renderDetail(spec)
+			p.setViewMode(partsViewDetail)
+			p.setStatus(fmt.Sprintf("Showing %s/%s", division, part))
+			p.viewer.app.SetFocus(p.detailTable)
 		})
 	}()
 }
@@ -978,12 +1105,9 @@ func (p *partsPanel) applyResults(items []*types.PartInventorySpec) {
 		p.resultsTable.SetCell(0, col, cell)
 	}
 	if len(items) == 0 {
-		msg := tview.NewTableCell("No parts found").
-			SetSelectable(false).
-			SetStyle(p.viewer.theme.Style.TableCellStyle)
-		p.resultsTable.SetCell(1, 0, msg)
-		p.setStatus("No matching parts")
-		p.detailView.SetText("Use the filters above to search for parts.")
+		p.messageView.SetText("No matching parts. Adjust filters and search again.")
+		p.setViewMode(partsViewBlank)
+		p.setStatus("No matching parts. Enter new filters")
 		return
 	}
 	for i, item := range items {
@@ -1000,49 +1124,106 @@ func (p *partsPanel) applyResults(items []*types.PartInventorySpec) {
 		p.resultsTable.SetCell(row, 5, tview.NewTableCell(fmt.Sprintf("%d", item.OnHandQty)).SetStyle(p.viewer.theme.Style.TableCellStyle))
 	}
 	p.resultsTable.Select(1, 0)
-	p.showResult(0)
-	p.setStatus(fmt.Sprintf("Loaded %d part(s).", len(items)))
+	p.setViewMode(partsViewResults)
+	p.setStatus(fmt.Sprintf("Loaded %d part(s). Press Enter to view details, Esc to clear.", len(items)))
+	p.viewer.app.SetFocus(p.resultsTable)
 }
 
 func (p *partsPanel) showResult(index int) {
 	if index < 0 || index >= len(p.current) {
-		p.detailView.SetText("Select a part to view its details.")
+		p.setStatus("Select a part to view its details.")
 		return
 	}
-	p.detailView.SetText(p.formatPartDetail(p.current[index]))
+	part := p.current[index]
+	p.renderDetail(part)
+	p.selectedIndex = index
+	p.setViewMode(partsViewDetail)
+	p.setStatus("Viewing part detail • Esc to return to results")
+	p.viewer.app.SetFocus(p.detailTable)
 }
 
-func (p *partsPanel) formatPartDetail(spec *types.PartInventorySpec) string {
-	var builder strings.Builder
-	fmt.Fprintf(&builder, "[::b]%s[-::-] — %s\n", strings.TrimSpace(spec.PartNumber), strings.TrimSpace(spec.Description))
-	fmt.Fprintf(&builder, "Division: %s   Vendor: %s   Class: %s   Quick: %s\n",
-		strings.TrimSpace(spec.Division), strings.TrimSpace(spec.VendorCode), strings.TrimSpace(spec.ItemClass), strings.TrimSpace(spec.QuickCode))
-	fmt.Fprintf(&builder, "Bin: %s   Tax: %s   Active: %s   Stock: %s\n",
-		strings.TrimSpace(spec.BinLocation), strings.TrimSpace(spec.TaxCode), strings.TrimSpace(spec.ActiveFlag), strings.TrimSpace(spec.StockFlag))
-	fmt.Fprintf(&builder, "On Hand: %d   Available: %d   Reserved SA/WO: %d/%d   Returnable: %s\n",
-		spec.OnHandQty, spec.AvailableQty, spec.ReservedSA, spec.ReservedWO, strings.TrimSpace(spec.ReturnableFlag))
-	fmt.Fprintf(&builder, "Avg Cost: %.2f   Price1(%s): %.2f   Price2(%s): %.2f\n",
-		spec.AvgCost, strings.TrimSpace(spec.Price1Basis), spec.Price1Value, strings.TrimSpace(spec.Price2Basis), spec.Price2Value)
-	fmt.Fprintf(&builder, "Price3(%s): %.2f   Price4(%s): %.2f\n",
-		strings.TrimSpace(spec.Price3Basis), spec.Price3Value, strings.TrimSpace(spec.Price4Basis), spec.Price4Value)
-	fmt.Fprintf(&builder, "Order Min/Max: %d/%d   Mult: %d   Std Order: %d\n",
-		spec.MinQty, spec.MaxQty, spec.OrderMultiplier, spec.OrderQty)
-	fmt.Fprintf(&builder, "Last Receipt: %d (%d qty)   Last Price Update: %d\n",
-		spec.LastReceiptDate, spec.LastReceiptQty, spec.DateLastPriceUpdate)
-	fmt.Fprintf(&builder, "Core: %s (qty %d price %.2f)   Supersession: %s/%s/%s\n",
-		strings.TrimSpace(spec.CorePartNumber), spec.CoreQty, spec.CorePrice,
-		strings.TrimSpace(spec.Sup1Part), strings.TrimSpace(spec.Sup2Part), strings.TrimSpace(spec.Sup3Part))
-	usage := formatRecentInts(spec.MonthlyUsage, 6)
-	purchases := formatRecentInts(spec.MonthlyPurchases, 6)
-	fmt.Fprintf(&builder, "Monthly usage (latest 6): %s\n", usage)
-	fmt.Fprintf(&builder, "Monthly purchases (latest 6): %s\n", purchases)
-	fmt.Fprintf(&builder, "Year usage qty (Y0-Y2): %s\n", formatLeadingInts(spec.YearUsageQty, 3))
-	fmt.Fprintf(&builder, "Year usage values (Y0-Y2): %s\n", formatLeadingInt64(spec.YearUsageValue, 3))
+func (p *partsPanel) renderDetail(spec *types.PartInventorySpec) {
+	p.detailTable.Clear()
+	row := 0
+	row = p.addDetailSection(row, "Identity", [][2]string{
+		{"Division", strings.TrimSpace(spec.Division)},
+		{"Part #", strings.TrimSpace(spec.PartNumber)},
+		{"Description", strings.TrimSpace(spec.Description)},
+		{"Vendor", strings.TrimSpace(spec.VendorCode)},
+		{"Quick Code", strings.TrimSpace(spec.QuickCode)},
+		{"Bin Location", strings.TrimSpace(spec.BinLocation)},
+	})
+	row = p.addDetailSection(row, "Status & Inventory", [][2]string{
+		{"Item Class", strings.TrimSpace(spec.ItemClass)},
+		{"Active", strings.TrimSpace(spec.ActiveFlag)},
+		{"Stock Flag", strings.TrimSpace(spec.StockFlag)},
+		{"Returnable", strings.TrimSpace(spec.ReturnableFlag)},
+		{"On Hand", fmt.Sprintf("%d", spec.OnHandQty)},
+		{"Available", fmt.Sprintf("%d", spec.AvailableQty)},
+		{"Reserved SA / WO", fmt.Sprintf("%d / %d", spec.ReservedSA, spec.ReservedWO)},
+		{"Tax Code", strings.TrimSpace(spec.TaxCode)},
+	})
+	row = p.addDetailSection(row, "Pricing", [][2]string{
+		{"Avg Cost", fmt.Sprintf("%.2f", spec.AvgCost)},
+		{"Price 1", fmt.Sprintf("%s %.2f", strings.TrimSpace(spec.Price1Basis), spec.Price1Value)},
+		{"Price 2", fmt.Sprintf("%s %.2f", strings.TrimSpace(spec.Price2Basis), spec.Price2Value)},
+		{"Price 3", fmt.Sprintf("%s %.2f", strings.TrimSpace(spec.Price3Basis), spec.Price3Value)},
+		{"Price 4", fmt.Sprintf("%s %.2f", strings.TrimSpace(spec.Price4Basis), spec.Price4Value)},
+	})
+	row = p.addDetailSection(row, "Ordering & Logistics", [][2]string{
+		{"Min / Max", fmt.Sprintf("%d / %d", spec.MinQty, spec.MaxQty)},
+		{"Order Multiplier", fmt.Sprintf("%d", spec.OrderMultiplier)},
+		{"Standard Order Qty", fmt.Sprintf("%d", spec.OrderQty)},
+		{"Backorder", strings.TrimSpace(spec.BackorderFlag)},
+		{"Deliver Code", strings.TrimSpace(spec.DeliverCode)},
+		{"Order Code", strings.TrimSpace(spec.OrderCode)},
+		{"Last Receipt", fmt.Sprintf("%d (%d qty)", spec.LastReceiptDate, spec.LastReceiptQty)},
+		{"Last Price Update", fmt.Sprintf("%d", spec.DateLastPriceUpdate)},
+	})
+	row = p.addDetailSection(row, "Relationships", [][2]string{
+		{"Core Part", fmt.Sprintf("%s (qty %d price %.2f)", strings.TrimSpace(spec.CorePartNumber), spec.CoreQty, spec.CorePrice)},
+		{"Supersession", fmt.Sprintf("%s / %s / %s", strings.TrimSpace(spec.Sup1Part), strings.TrimSpace(spec.Sup2Part), strings.TrimSpace(spec.Sup3Part))},
+		{"Rebuild", fmt.Sprintf("%s %s %s", strings.TrimSpace(spec.RebuildIndicator), strings.TrimSpace(spec.RebuildVendor), strings.TrimSpace(spec.RebuildPart))},
+	})
+	row = p.addDetailSection(row, "History", [][2]string{
+		{"Date Added", fmt.Sprintf("%d", spec.DateAddedYYYYMM)},
+		{"Last Sale", fmt.Sprintf("%d", spec.DateLastSaleYYYYMM)},
+		{"Peak 12 Mo Usage", fmt.Sprintf("%d", spec.Peak12MoUsage)},
+		{"Monthly Usage (6)", formatRecentInts(spec.MonthlyUsage, 6)},
+		{"Monthly Purchases (6)", formatRecentInts(spec.MonthlyPurchases, 6)},
+		{"Year Usage Qty (Y0-Y2)", formatLeadingInts(spec.YearUsageQty, 3)},
+		{"Year Usage Value (Y0-Y2)", formatLeadingInt64(spec.YearUsageValue, 3)},
+	})
 	comment := strings.TrimSpace(spec.Comment)
 	if comment != "" {
-		fmt.Fprintf(&builder, "Comment: %s\n", comment)
+		row = p.addDetailSection(row, "Comment", [][2]string{{"Notes", comment}})
 	}
-	return builder.String()
+	p.detailTable.SetCell(row, 0, tview.NewTableCell("Press Esc to return to results").
+		SetSelectable(false).
+		SetStyle(p.viewer.theme.Style.TableCellStyle))
+}
+
+func (p *partsPanel) addDetailSection(row int, title string, pairs [][2]string) int {
+	header := tview.NewTableCell(fmt.Sprintf(" %s ", title)).
+		SetSelectable(false).
+		SetStyle(p.viewer.theme.Style.TableHeaderStyle).
+		SetAlign(tview.AlignLeft)
+	p.detailTable.SetCell(row, 0, header)
+	p.detailTable.SetCell(row, 1, tview.NewTableCell("").SetSelectable(false))
+	row++
+	for _, pair := range pairs {
+		key := tview.NewTableCell(pair[0]).
+			SetSelectable(false).
+			SetStyle(p.viewer.theme.Style.TableCellStyle)
+		val := tview.NewTableCell(pair[1]).
+			SetSelectable(false).
+			SetStyle(p.viewer.theme.Style.TableCellStyle)
+		p.detailTable.SetCell(row, 0, key)
+		p.detailTable.SetCell(row, 1, val)
+		row++
+	}
+	row++
+	return row
 }
 
 func formatRecentInts(vals []int32, count int) string {
