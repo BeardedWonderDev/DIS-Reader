@@ -201,7 +201,7 @@ func (v *viewerApp) buildRoot() tview.Primitive {
 	}
 	v.navBar = v.buildNavBar()
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(v.navBar, 1, 0, false).
+		AddItem(v.navBar, 3, 0, false).
 		AddItem(v.pages, 0, 1, true)
 
 	return root
@@ -212,32 +212,34 @@ func (v *viewerApp) buildNavBar() *tview.TextView {
 	text.SetBackgroundColor(v.theme.Colors.CommandBarColor)
 	text.SetTextColor(v.theme.Colors.PrimaryText)
 	text.SetBorder(true)
-	text.SetTitle(" Navigation ")
+	text.SetTitle(" Views ")
 	text.SetText(v.navBarText())
 	return text
 }
 
 func (v *viewerApp) navBarText() string {
-	var builder strings.Builder
-	segments := []struct {
-		page  string
+	tabs := []struct {
 		label string
+		page  string
+		key   string
 	}{
-		{pageDebug, "F1 Files Viewer"},
-		{pageParts, "F2 Parts Lookup"},
+		{label: "Files Viewer", page: pageDebug, key: "F1"},
+		{label: "Parts Lookup", page: pageParts, key: "F2"},
 	}
-	for i, seg := range segments {
-		if v.activePage == seg.page {
-			builder.WriteString(fmt.Sprintf("[::b][green]%s[-::]", seg.label))
+	var segments []string
+	accentHex := colorToHex(v.theme.Colors.AccentColor)
+	commandHex := colorToHex(v.theme.Colors.CommandBarColor)
+	textHex := colorToHex(v.theme.Colors.PrimaryText)
+	for _, tab := range tabs {
+		label := fmt.Sprintf("%s %s", tab.key, tab.label)
+		if v.activePage == tab.page {
+			segments = append(segments, fmt.Sprintf("[::b][black:%s] %s [-:-:-]", accentHex, label))
 		} else {
-			builder.WriteString(seg.label)
-		}
-		if i < len(segments)-1 {
-			builder.WriteString("   •   ")
+			segments = append(segments, fmt.Sprintf("[%s:%s] %s [-:-:-]", textHex, commandHex, label))
 		}
 	}
-	builder.WriteString("   |   Tab = Focus  •  PgUp/PgDn = Page  •  Q = Quit")
-	return builder.String()
+	extra := "   |   Tab Focus  •  PgUp/PgDn Page  •  Ctrl+L Clear Log  •  Q Quit"
+	return strings.Join(segments, "  ") + extra
 }
 
 func (v *viewerApp) updateNavBar() {
@@ -665,6 +667,10 @@ func (v *viewerApp) focusInTextEntry() bool {
 		return true
 	}
 	return false
+}
+
+func colorToHex(col tcell.Color) string {
+	return fmt.Sprintf("#%06x", col.Hex())
 }
 
 func (v *viewerApp) focusPane(index int) {
