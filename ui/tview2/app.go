@@ -587,6 +587,9 @@ func (v *viewerApp) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		v.cycleFocus(-1)
 		return nil
 	}
+	if v.focusInTextEntry() {
+		return event
+	}
 	switch event.Rune() {
 	case 'q', 'Q':
 		v.app.Stop()
@@ -650,6 +653,18 @@ func (v *viewerApp) resumeLogFollow() {
 	v.logUnread = false
 	v.updateLogTitle()
 	v.logView.ScrollToEnd()
+}
+
+func (v *viewerApp) focusInTextEntry() bool {
+	if v.app == nil {
+		return false
+	}
+	focus := v.app.GetFocus()
+	switch focus.(type) {
+	case *tview.InputField, *tview.TextArea:
+		return true
+	}
+	return false
 }
 
 func (v *viewerApp) focusPane(index int) {
