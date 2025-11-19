@@ -14,7 +14,7 @@ import (
 
 const (
 	DefaultAppName    = "DIS Reader"
-	DefaultAppVersion = "0.0.5"
+	DefaultAppVersion = "0.1.0"
 	DefaultJavaPath   = "java"
 	DefaultJDBCPort   = "8888"
 	DefualtLogLevel   = slog.LevelInfo
