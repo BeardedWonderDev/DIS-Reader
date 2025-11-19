@@ -2,8 +2,10 @@ package database
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAs400DateExprGuardsInvalidDates(t *testing.T) {
@@ -18,5 +20,47 @@ func TestAs400DateExprGuardsInvalidDates(t *testing.T) {
 		if !strings.Contains(expr, substr) {
 			t.Fatalf("guarded expression missing %q: %s", substr, expr)
 		}
+	}
+}
+
+func TestAs400DateHookEpochMillis(t *testing.T) {
+	hook := as400DateHook().(func(reflect.Type, reflect.Type, interface{}) (interface{}, error))
+	from := reflect.TypeOf(float64(0))
+	to := reflect.TypeOf(time.Time{})
+	const ms = 1704355200000 // 2024-01-04T08:00:00Z
+	want := time.UnixMilli(ms).UTC()
+	got, err := hook(from, to, float64(ms))
+	if err != nil {
+		t.Fatalf("hook returned error: %v", err)
+	}
+	parsed := got.(time.Time)
+	if !parsed.Equal(want) {
+		t.Fatalf("expected %s, got %s", want, parsed)
+	}
+	ptrType := reflect.TypeOf(&time.Time{})
+	gotPtr, err := hook(from, ptrType, float64(ms))
+	if err != nil {
+		t.Fatalf("hook pointer conversion error: %v", err)
+	}
+	timePtr, ok := gotPtr.(*time.Time)
+	if !ok || timePtr == nil {
+		t.Fatalf("expected *time.Time, got %#v", gotPtr)
+	}
+	if !timePtr.Equal(want) {
+		t.Fatalf("expected pointer %s, got %s", want, timePtr)
+	}
+}
+
+func TestAs400DateHookEpochSeconds(t *testing.T) {
+	hook := as400DateHook().(func(reflect.Type, reflect.Type, interface{}) (interface{}, error))
+	from := reflect.TypeOf(float64(0))
+	const secs = 1700000000 // 2023-11-14T22:13:20Z
+	want := time.Unix(secs, 0).UTC()
+	got, err := hook(from, reflect.TypeOf(time.Time{}), float64(secs))
+	if err != nil {
+		t.Fatalf("hook returned error: %v", err)
+	}
+	if parsed := got.(time.Time); !parsed.Equal(want) {
+		t.Fatalf("expected %s, got %s", want, parsed)
 	}
 }

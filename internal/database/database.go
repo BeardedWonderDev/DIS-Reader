@@ -164,7 +164,7 @@ func (ds *IBMi400) QueryWithSource(ctx context.Context, query string, args ...in
 func as400DateHook() mapstructure.DecodeHookFunc {
 	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
 		if from.Kind() == reflect.Float64 && (to == reflect.TypeOf(time.Time{}) || to == reflect.TypeOf(&time.Time{})) {
-			num := int(data.(float64))
+			num := int64(data.(float64))
 			if num <= 0 {
 				if to == reflect.TypeOf(&time.Time{}) {
 					return nil, nil
@@ -173,6 +173,23 @@ func as400DateHook() mapstructure.DecodeHookFunc {
 			}
 
 			str := fmt.Sprintf("%d", num)
+			// Unix epoch values (seconds or milliseconds) arrive as long integers from
+			// the JDBC runner. Handle them before falling back to legacy MMDDYY/YYMMDD
+			// numeric date encodings.
+			if len(str) > 10 {
+				parsed := time.UnixMilli(num).UTC()
+				if to == reflect.TypeOf(&time.Time{}) {
+					return &parsed, nil
+				}
+				return parsed, nil
+			}
+			if len(str) == 10 {
+				parsed := time.Unix(num, 0).UTC()
+				if to == reflect.TypeOf(&time.Time{}) {
+					return &parsed, nil
+				}
+				return parsed, nil
+			}
 			var dateStr string
 
 			switch len(str) {
