@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -59,7 +60,28 @@ func (s DISReaderService) ensureBatchStatusTable(db *sql.DB) {
 	}
 }
 
+func emitRunFailed(eventChan chan<- types.TableEvent, err error) {
+	if eventChan == nil {
+		return
+	}
+	eventChan <- types.TableEvent{
+		TableName: "debug_search",
+		EventType: "run_failed",
+		SampleRow: map[string]interface{}{"error": err.Error()},
+	}
+}
+
 func (s DISReaderService) RunDebugSearch(searchTerm string, opts types.DebugSearchOptions, progressChan chan<- types.ProgressStatus, eventChan chan<- types.TableEvent) {
+	// Ensure channels are closed exactly once on exit.
+	defer func() {
+		if progressChan != nil {
+			close(progressChan)
+		}
+		if eventChan != nil {
+			close(eventChan)
+		}
+	}()
+
 	runID := uuid.New().String()
 	if opts.OutputMode == "" {
 		opts.OutputMode = types.DebugSearchOutputSQLite
@@ -87,18 +109,32 @@ func (s DISReaderService) RunDebugSearch(searchTerm string, opts types.DebugSear
 	case types.DebugSearchOutputCSV:
 		s.runDebugSearchCSV(runID, searchTerm, opts.OutputPath, queryTemplates, progressChan, eventChan)
 	default:
-		s.runDebugSearchSQLite(runID, searchTerm, opts.OutputPath, queryTemplates, progressChan, eventChan)
+		if err := s.runDebugSearchSQLite(runID, searchTerm, opts.OutputPath, queryTemplates, progressChan, eventChan); err != nil {
+			types.LogError(s.logger, "Debug search failed", err)
+		}
 	}
 }
 
-func (s DISReaderService) runDebugSearchSQLite(runID string, searchTerm string, sqliteDBFile string, queryTemplates []string, progressChan chan<- types.ProgressStatus, eventChan chan<- types.TableEvent) {
+func (s DISReaderService) runDebugSearchSQLite(runID string, searchTerm string, sqliteDBFile string, queryTemplates []string, progressChan chan<- types.ProgressStatus, eventChan chan<- types.TableEvent) error {
+	// Ensure destination directory exists before opening the DB.
+	if err := os.MkdirAll(filepath.Dir(sqliteDBFile), 0o755); err != nil {
+		emitRunFailed(eventChan, err)
+		return fmt.Errorf("ensure output dir: %w", err)
+	}
+
 	// Open or create the SQLite database
 	db, err := sql.Open("sqlite3", sqliteDBFile)
 	if err != nil {
-		types.LogError(s.logger, "Failed to open SQLite DB", err)
-		return
+		emitRunFailed(eventChan, err)
+		return fmt.Errorf("open sqlite: %w", err)
 	}
 	defer db.Close()
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if _, err := db.Exec(`PRAGMA busy_timeout=5000`); err != nil {
+		emitRunFailed(eventChan, err)
+		return fmt.Errorf("set busy_timeout: %w", err)
+	}
 
 	s.ensureBatchStatusTable(db)
 
@@ -120,7 +156,10 @@ func (s DISReaderService) runDebugSearchSQLite(runID string, searchTerm string, 
 		query := strings.ReplaceAll(tmpl, "'{{SEARCH}}'", fmt.Sprintf("'%s'", searchTerm))
 		batch = append(batch, queryItem{Index: i, Query: query})
 		if len(batch) >= batchSize {
-			s.runBatchToSQLite(runID, searchTerm, batch, db, tableCols, eventChan)
+			if err := s.runBatchToSQLite(runID, searchTerm, batch, db, tableCols, eventChan); err != nil {
+				emitRunFailed(eventChan, err)
+				return err
+			}
 			batch = []queryItem{}
 			time.Sleep(delay)
 			// Re-load completed from DB after each batch
@@ -135,7 +174,10 @@ func (s DISReaderService) runDebugSearchSQLite(runID string, searchTerm string, 
 	}
 
 	if len(batch) > 0 {
-		s.runBatchToSQLite(runID, searchTerm, batch, db, tableCols, eventChan)
+		if err := s.runBatchToSQLite(runID, searchTerm, batch, db, tableCols, eventChan); err != nil {
+			emitRunFailed(eventChan, err)
+			return err
+		}
 		completed = s.loadCompletedFromDB(runID, db)
 		s.emitProgress(progressChan, types.ProgressStatus{
 			RunID:            runID,
@@ -152,6 +194,7 @@ func (s DISReaderService) runDebugSearchSQLite(runID string, searchTerm string, 
 		remaining := len(queryTemplates) - len(completed)
 		s.logger.Info("Batch processing incomplete", slog.Int("remaining_queries", remaining))
 	}
+	return nil
 }
 
 func (s DISReaderService) runDebugSearchCSV(runID string, searchTerm string, csvFile string, queryTemplates []string, progressChan chan<- types.ProgressStatus, eventChan chan<- types.TableEvent) {
@@ -252,12 +295,13 @@ func (s DISReaderService) runDebugSearchCSV(runID string, searchTerm string, csv
 	}
 }
 
-func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batch []queryItem, db *sql.DB, tableCols map[string]map[string]struct{}, eventChan chan<- types.TableEvent) {
+func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batch []queryItem, db *sql.DB, tableCols map[string]map[string]struct{}, eventChan chan<- types.TableEvent) error {
 	s.logger.Info("Running batch", slog.Int("query_count", len(batch)))
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallelism)
 	var mu sync.Mutex
+	errCh := make(chan error, len(batch))
 
 	for _, item := range batch {
 		wg.Add(1)
@@ -303,7 +347,9 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 			if len(rows) == 0 {
 				// No rows returned, mark completed and skip
 				mu.Lock()
-				s.markCompletedInDB(runID, searchTerm, item.Index, db)
+				if err := s.markCompletedInDB(runID, searchTerm, item.Index, db); err != nil {
+					errCh <- err
+				}
 				mu.Unlock()
 				return
 			}
@@ -318,32 +364,55 @@ func (s DISReaderService) runBatchToSQLite(runID string, searchTerm string, batc
 				}
 
 				mu.Lock()
-				// Track columns for this table
-				if _, exists := tableCols[tableName]; !exists {
-					tableCols[tableName] = make(map[string]struct{})
-				}
-
-				// Check for new columns and alter table if needed
-				for col := range data {
-					if _, seen := tableCols[tableName][col]; !seen {
-						addColumnIfNotExists(db, tableName, col)
-						tableCols[tableName][col] = struct{}{}
+				cols, exists := tableCols[tableName]
+				if !exists {
+					if err := createTableIfNotExists(db, tableName, row, eventChan); err != nil {
+						errCh <- err
+						mu.Unlock()
+						return
+					}
+					cols = make(map[string]struct{})
+					for col := range data {
+						cols[col] = struct{}{}
+					}
+					tableCols[tableName] = cols
+				} else {
+					for col := range data {
+						if _, seen := cols[col]; !seen {
+							if err := addColumnIfNotExists(db, tableName, col); err != nil {
+								errCh <- err
+								mu.Unlock()
+								return
+							}
+							cols[col] = struct{}{}
+						}
 					}
 				}
 
-				// Ensure table exists
-				createTableIfNotExists(db, tableName, row, eventChan)
 				// Insert row
-				insertRow(db, tableName, row, eventChan)
+				if err := insertRow(db, tableName, row, eventChan); err != nil {
+					errCh <- err
+					mu.Unlock()
+					return
+				}
 				mu.Unlock()
 			}
-			s.markCompletedInDB(runID, searchTerm, item.Index, db)
+			if err := s.markCompletedInDB(runID, searchTerm, item.Index, db); err != nil {
+				errCh <- err
+			}
 		}(item)
 	}
 	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func createTableIfNotExists(db *sql.DB, table string, row types.ResultRow, eventChan chan<- types.TableEvent) {
+func createTableIfNotExists(db *sql.DB, table string, row types.ResultRow, eventChan chan<- types.TableEvent) error {
 	cols := []string{}
 	for col := range row {
 		cols = append(cols, fmt.Sprintf("%q TEXT", col))
@@ -366,7 +435,9 @@ func createTableIfNotExists(db *sql.DB, table string, row types.ResultRow, event
 		}
 	} else {
 		_ = res
+		return err
 	}
+	return nil
 }
 
 func (s DISReaderService) emitProgress(ch chan<- types.ProgressStatus, status types.ProgressStatus) {
@@ -390,11 +461,12 @@ func getTableName(row types.ResultRow) string {
 	return "unknown"
 }
 
-func addColumnIfNotExists(db *sql.DB, table, col string) {
-	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE "%s" ADD COLUMN "%s" TEXT`, table, col))
+func addColumnIfNotExists(db *sql.DB, table, col string) error {
+	_, err := db.Exec(fmt.Sprintf(`ALTER TABLE "%s" ADD COLUMN "%s" TEXT`, table, col))
+	return err
 }
 
-func insertRow(db *sql.DB, table string, row types.ResultRow, eventChan chan<- types.TableEvent) {
+func insertRow(db *sql.DB, table string, row types.ResultRow, eventChan chan<- types.TableEvent) error {
 	cols := []string{}
 	vals := []interface{}{}
 	holders := []string{}
@@ -414,6 +486,7 @@ func insertRow(db *sql.DB, table string, row types.ResultRow, eventChan chan<- t
 			SampleRow:   row,
 		}
 	}
+	return err
 }
 
 func (s DISReaderService) loadCompletedFromDB(runID string, db *sql.DB) map[int]struct{} {
@@ -434,9 +507,10 @@ func (s DISReaderService) loadCompletedFromDB(runID string, db *sql.DB) map[int]
 	return completed
 }
 
-func (s DISReaderService) markCompletedInDB(runID string, searchTerm string, idx int, db *sql.DB) {
+func (s DISReaderService) markCompletedInDB(runID string, searchTerm string, idx int, db *sql.DB) error {
 	_, err := db.Exec(`INSERT OR IGNORE INTO batch_status (run_id, search_term, query_index) VALUES (?, ?, ?)`, runID, searchTerm, idx)
 	if err != nil {
 		s.logger.Warn("Failed to mark query as completed", "index", idx, "error", err)
 	}
+	return err
 }

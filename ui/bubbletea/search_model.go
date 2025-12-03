@@ -476,8 +476,6 @@ func formatName(mode types.DebugSearchOutputMode) string {
 func runDebugSearchCmd(dis types.DISReaderService, term string, opts types.DebugSearchOptions, progressCh chan types.ProgressStatus, eventCh chan types.TableEvent) tea.Cmd {
 	return func() tea.Msg {
 		dis.RunDebugSearch(term, opts, progressCh, eventCh)
-		close(progressCh)
-		close(eventCh)
 		return searchFinishedMsg{OutputPath: opts.OutputPath}
 	}
 }
