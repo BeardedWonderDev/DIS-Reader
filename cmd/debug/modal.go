@@ -1,6 +1,7 @@
 package debugUI
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -193,6 +194,10 @@ func (d *Debug) runBatchSearch(wnd *winman.WindowBase) {
 				slog.Int("cols", event.ColumnCount),
 				slog.Any("sample", event.SampleRow),
 			)
+			if strings.EqualFold(event.EventType, "run_failed") {
+				msg := fmt.Sprintf("Debug search failed: %v", event.SampleRow["error"])
+				d.showRunFailedModal(msg)
+			}
 		}
 	}()
 
@@ -209,6 +214,28 @@ func defaultOutputPath() string {
 		return "debug-search.db"
 	}
 	return ensureExtension(base, selectedFormat)
+}
+
+func (d *Debug) showRunFailedModal(msg string) {
+	modal := tview.NewModal().
+		SetText(msg).
+		AddButtons([]string{"OK"})
+
+	var wnd *winman.WindowBase
+	modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+		if wnd != nil {
+			d.UI.CloseModalDialog(wnd, d.UI.GetLayout().SplitSidebar)
+		}
+	})
+
+	wnd = d.UI.CreateModalDialog(types.CreateModalDialogParam{
+		Title:         " Debug Search Failed ",
+		RootView:      modal,
+		Draggable:     true,
+		Resizeable:    false,
+		Size:          types.WinSize{Width: 60, Height: 7},
+		FallbackFocus: d.UI.GetLayout().SplitSidebar,
+	})
 }
 
 func syncOutputPathWithFormat() {
