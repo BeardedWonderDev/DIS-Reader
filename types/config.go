@@ -43,6 +43,8 @@ type BridgeConfig struct {
 	CredentialFile string                  `mapstructure:"credentialFile"`
 	TLS            BridgeTLSConfig         `mapstructure:"tls"`
 	Allowed        []BridgeAgentCredential `mapstructure:"allowedAgents"`
+	PprofEnabled   bool                    `mapstructure:"pprofEnabled"`
+	PprofPath      string                  `mapstructure:"pprofPath"`
 }
 
 type BridgeTLSConfig struct {

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -168,6 +169,13 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog
 
 func executeJob(ctx context.Context, db database.DB, req *proto.JobRequest, logger *slog.Logger) *proto.JobResult {
 	res := &proto.JobResult{JobId: req.JobId}
+	const defaultMaxRows = 1000
+	maxRows := defaultMaxRows
+	if v := os.Getenv("DISAGENT_MAX_ROWS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxRows = n
+		}
+	}
 
 	switch req.Kind {
 	case proto.JobKind_JOB_KIND_QUERY:
@@ -182,6 +190,10 @@ func executeJob(ctx context.Context, db database.DB, req *proto.JobRequest, logg
 			res.Status = proto.Status_STATUS_ERROR
 			res.Message = err.Error()
 			return res
+		}
+		if len(rows) > maxRows {
+			rows = rows[:maxRows]
+			res.Message = "truncated rows to max limit"
 		}
 		res.Rows = resultRowsToProto(rows)
 		res.Status = proto.Status_STATUS_OK

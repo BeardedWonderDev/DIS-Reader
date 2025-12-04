@@ -46,14 +46,15 @@ func MetricsHandler(registry AgentRegistry) http.Handler {
 		for key, count := range stats.QueryCounts {
 			fmt.Fprintf(w, "bridge_queries_total{tenant=\"%s\",agent=\"%s\"} %d\n", key.Tenant, key.Agent, count)
 		}
-		fmt.Fprintf(w, "# HELP bridge_query_latency_seconds Latency histogram (seconds)\n")
+		fmt.Fprintf(w, "# HELP bridge_query_latency_seconds Latency summary (seconds)\n")
 		fmt.Fprintf(w, "# TYPE bridge_query_latency_seconds summary\n")
 		for key, agg := range stats.Latency {
 			if agg.Count == 0 {
 				continue
 			}
 			mean := agg.Sum / float64(agg.Count)
-			fmt.Fprintf(w, "bridge_query_latency_seconds{tenant=\"%s\",agent=\"%s\",quantile=\"0.5\"} %.6f\n", key.Tenant, key.Agent, mean) // coarse; real percentile not tracked
+			fmt.Fprintf(w, "bridge_query_latency_seconds{tenant=\"%s\",agent=\"%s\",quantile=\"0.5\"} %.6f\n", key.Tenant, key.Agent, mean)     // coarse mean
+			fmt.Fprintf(w, "bridge_query_latency_seconds{tenant=\"%s\",agent=\"%s\",quantile=\"0.95\"} %.6f\n", key.Tenant, key.Agent, agg.Max) // use max as upper bound
 			fmt.Fprintf(w, "bridge_query_latency_seconds_sum{tenant=\"%s\",agent=\"%s\"} %.6f\n", key.Tenant, key.Agent, agg.Sum)
 			fmt.Fprintf(w, "bridge_query_latency_seconds_count{tenant=\"%s\",agent=\"%s\"} %d\n", key.Tenant, key.Agent, agg.Count)
 		}

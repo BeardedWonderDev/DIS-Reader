@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -19,7 +21,6 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
 	"google.golang.org/grpc"
-	"net/http"
 )
 
 //go:embed dis-runner-0.1.1.jar
@@ -225,6 +226,20 @@ func (s *DISReaderService) RegisterHealth(mux *http.ServeMux) {
 	}
 	mux.Handle("/healthz", bridge.HealthHandler(s.bridgeRegistry))
 	mux.Handle("/metrics", bridge.MetricsHandler(s.bridgeRegistry))
+	if s.config != nil && s.config.Bridge != nil && s.config.Bridge.PprofEnabled {
+		registerPprof(mux, s.config.Bridge.PprofPath)
+	}
+}
+
+func registerPprof(mux *http.ServeMux, base string) {
+	if base == "" {
+		base = "/debug/pprof/"
+	}
+	mux.Handle(base, http.HandlerFunc(pprof.Index))
+	mux.Handle(base+"cmdline", http.HandlerFunc(pprof.Cmdline))
+	mux.Handle(base+"profile", http.HandlerFunc(pprof.Profile))
+	mux.Handle(base+"symbol", http.HandlerFunc(pprof.Symbol))
+	mux.Handle(base+"trace", http.HandlerFunc(pprof.Trace))
 }
 
 // RegisterBridge registers the bridge gRPC handler on the provided server.

@@ -42,6 +42,7 @@ type RegistryKey struct {
 type LatencyAgg struct {
 	Count int64
 	Sum   float64
+	Max   float64
 }
 
 // InMemoryRegistry is a simple in-process registry suitable for single-instance deployments.
@@ -120,5 +121,8 @@ func (r *InMemoryRegistry) ObserveQuery(tenantID, agentID string, latency time.D
 	agg := r.lat[key]
 	agg.Count++
 	agg.Sum += latency.Seconds()
+	if latency.Seconds() > agg.Max {
+		agg.Max = latency.Seconds()
+	}
 	r.lat[key] = agg
 }
