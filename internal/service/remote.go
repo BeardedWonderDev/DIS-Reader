@@ -73,6 +73,14 @@ func (s *RemoteService) RegisterHealth(mux *http.ServeMux) {
 }
 
 // DISReaderRemote implementations
+func (s *RemoteService) StartJDBCRunner(ctx context.Context, tenant string) error {
+	return s.multiDB.StartJDBCRunner(tenant)
+}
+
+func (s *RemoteService) StopJDBCRunner(ctx context.Context, tenant string) error {
+	return s.multiDB.StopJDBCRunner(tenant)
+}
+
 func (s *RemoteService) Connect(ctx context.Context, tenant string) error {
 	return s.multiDB.Connect(ctx, tenant)
 }

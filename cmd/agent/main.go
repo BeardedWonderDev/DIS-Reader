@@ -205,6 +205,10 @@ func executeJob(ctx context.Context, db database.DB, req *proto.JobRequest, logg
 		res.Status, res.Message = statusFromError(db.Connect(ctx))
 	case proto.JobKind_JOB_KIND_DISCONNECT:
 		res.Status, res.Message = statusFromError(db.Disconnect(ctx))
+	case proto.JobKind_JOB_KIND_START_JDBC:
+		res.Status, res.Message = statusFromError(db.StartJDBCRunner())
+	case proto.JobKind_JOB_KIND_STOP_JDBC:
+		res.Status, res.Message = statusFromError(db.StopJDBCRunner())
 	default:
 		res.Status = proto.Status_STATUS_ERROR
 		res.Message = "unknown job kind"

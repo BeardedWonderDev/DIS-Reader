@@ -26,6 +26,8 @@ enum JobKind {
   JOB_KIND_PING_DATABASE = 3;
   JOB_KIND_CONNECT = 4;
   JOB_KIND_DISCONNECT = 5;
+  JOB_KIND_START_JDBC = 6;
+  JOB_KIND_STOP_JDBC = 7;
 }
 
 message AgentHello {

@@ -18,8 +18,8 @@ func BindTenant(mt MultiTenantDB, tenant string) DB {
 	return &tenantBinding{tenant: tenant, mt: mt}
 }
 
-func (t *tenantBinding) StartJDBCRunner() error { return t.mt.StartJDBCRunner() }
-func (t *tenantBinding) StopJDBCRunner() error  { return t.mt.StopJDBCRunner() }
+func (t *tenantBinding) StartJDBCRunner() error { return t.mt.StartJDBCRunner(t.tenant) }
+func (t *tenantBinding) StopJDBCRunner() error  { return t.mt.StopJDBCRunner(t.tenant) }
 
 func (t *tenantBinding) Connect(ctx context.Context) error    { return t.mt.Connect(ctx, t.tenant) }
 func (t *tenantBinding) Disconnect(ctx context.Context) error { return t.mt.Disconnect(ctx, t.tenant) }

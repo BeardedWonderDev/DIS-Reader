@@ -22,6 +22,8 @@ type DISReaderService interface {
 }
 
 type DISReaderRemote interface {
+	StartJDBCRunner(ctx context.Context, tenant string) error
+	StopJDBCRunner(ctx context.Context, tenant string) error
 	Connect(ctx context.Context, tenant string) error
 	Disconnect(ctx context.Context, tenant string) error
 	PingBridge(ctx context.Context) error                  // PingBridge checks if the communication with the gRPC bridge server is alive

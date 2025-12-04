@@ -34,8 +34,8 @@ type DB interface {
 // MultiTenantDB mirrors DB but requires the caller to supply a tenant string.
 // This is used by remote mode, while domain code continues to depend on DB.
 type MultiTenantDB interface {
-	StartJDBCRunner() error
-	StopJDBCRunner() error
+	StartJDBCRunner(tenant string) error
+	StopJDBCRunner(tenant string) error
 	Connect(ctx context.Context, tenant string) error
 	Disconnect(ctx context.Context, tenant string) error
 	PingService(ctx context.Context, tenant string) error

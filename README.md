@@ -158,6 +158,10 @@ unitSvc := remote.UnitService("tenant-a")
 units, err := unitSvc.ListUnits(ctx, types.ListParams{Limit: 10})
 if err != nil { log.Fatal(err) }
 fmt.Println("units", len(units))
+
+// Start/stop the remote JDBC runner on the agent (mirrors embedded lifecycle)
+if err := remote.StartJDBCRunner(ctx, "tenant-a"); err != nil { log.Fatal(err) }
+defer remote.StopJDBCRunner(ctx, "tenant-a")
 ```
 
 Defaults and ports:

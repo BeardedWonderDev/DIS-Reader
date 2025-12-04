@@ -34,9 +34,14 @@ func NewRemoteDB(registry bridge.AgentRegistry, logger *slog.Logger, maxRows int
 	}
 }
 
-// Lifecycle methods are no-ops for remote connections.
-func (r *RemoteDB) StartJDBCRunner() error { return nil }
-func (r *RemoteDB) StopJDBCRunner() error  { return nil }
+// Lifecycle control delegates to remote agent per tenant.
+func (r *RemoteDB) StartJDBCRunner(tenant string) error {
+	return r.sendLifecycleJob(context.Background(), bridgeproto.JobKind_JOB_KIND_START_JDBC, tenant)
+}
+
+func (r *RemoteDB) StopJDBCRunner(tenant string) error {
+	return r.sendLifecycleJob(context.Background(), bridgeproto.JobKind_JOB_KIND_STOP_JDBC, tenant)
+}
 
 func (r *RemoteDB) Connect(ctx context.Context, tenant string) error {
 	_, err := r.sendJob(ctx, tenant, &bridgeproto.JobRequest{
@@ -149,6 +154,17 @@ func (r *RemoteDB) sendJob(ctx context.Context, tenant string, req *bridgeproto.
 		return nil, fmt.Errorf("remote error: %s", res.Message)
 	}
 	return res, nil
+}
+
+func (r *RemoteDB) sendLifecycleJob(ctx context.Context, kind bridgeproto.JobKind, tenant string) error {
+	if tenant == "" {
+		return fmt.Errorf("tenant is required for lifecycle operation")
+	}
+	_, err := r.sendJob(ctx, tenant, &bridgeproto.JobRequest{
+		JobId: uuid.New().String(),
+		Kind:  kind,
+	})
+	return err
 }
 
 func protoRowsToResultRows(rows []*bridgeproto.Row) []types.ResultRow {

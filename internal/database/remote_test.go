@@ -12,13 +12,15 @@ import (
 )
 
 type fakeAgent struct {
-	res *bridgeproto.JobResult
-	err error
+	res     *bridgeproto.JobResult
+	err     error
+	lastReq *bridgeproto.JobRequest
 }
 
 func (f *fakeAgent) TenantID() string { return "t1" }
 func (f *fakeAgent) AgentID() string  { return "a1" }
 func (f *fakeAgent) SendJob(ctx context.Context, req *bridgeproto.JobRequest) (*bridgeproto.JobResult, error) {
+	f.lastReq = req
 	return f.res, f.err
 }
 func (f *fakeAgent) Close() error { return nil }
@@ -90,5 +92,27 @@ func TestRemoteDBNoAgent(t *testing.T) {
 	_, err := db.Query(context.Background(), "select 1", "t1")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestRemoteDBStartStopLifecycle(t *testing.T) {
+	agent := &fakeAgent{
+		res: &bridgeproto.JobResult{Status: bridgeproto.Status_STATUS_OK},
+	}
+	reg := &fakeRegistry{agent: agent}
+	db := NewRemoteDB(reg, nil, 1000, 0)
+
+	if err := db.StartJDBCRunner("t1"); err != nil {
+		t.Fatalf("start err: %v", err)
+	}
+	if agent.lastReq == nil || agent.lastReq.Kind != bridgeproto.JobKind_JOB_KIND_START_JDBC {
+		t.Fatalf("expected start jdbc job, got %v", agent.lastReq)
+	}
+
+	if err := db.StopJDBCRunner("t1"); err != nil {
+		t.Fatalf("stop err: %v", err)
+	}
+	if agent.lastReq == nil || agent.lastReq.Kind != bridgeproto.JobKind_JOB_KIND_STOP_JDBC {
+		t.Fatalf("expected stop jdbc job, got %v", agent.lastReq)
 	}
 }
