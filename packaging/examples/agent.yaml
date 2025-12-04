@@ -1,0 +1,19 @@
+# Sample agent config for packaging
+serverURL: "bridge-host:8443"
+clientID: "agent"
+clientSecret: "secret"
+tenantID: "default"
+dis:
+  host: "10.0.0.5"
+  user: "DISUSER"
+  password: "secret"
+  jdbcConfig:
+    javaPath: "java"
+    jdbcPort: "8888"
+tls:
+  insecureSkipVerify: true
+# Bridge/limits
+maxRowsPerQuery: 1000
+maxResultBytes: 0
+credentialFile: "/etc/dis-agent/bridge_agents.yaml"
+credentialReloadSeconds: 60

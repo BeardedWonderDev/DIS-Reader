@@ -1,0 +1,14 @@
+[Unit]
+Description=DIS Agent
+After=network.target
+
+[Service]
+User=disagent
+Group=disagent
+ExecStart=/usr/local/bin/dis-agent
+Restart=always
+EnvironmentFile=-/etc/dis-agent/dis-agent.env
+WorkingDirectory=/etc/dis-agent
+
+[Install]
+WantedBy=multi-user.target

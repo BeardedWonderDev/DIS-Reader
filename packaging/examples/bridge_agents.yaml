@@ -1,0 +1,4 @@
+- clientID: agent
+  clientSecret: secret
+  tenantID: default
+  agentID: agent

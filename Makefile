@@ -4,7 +4,7 @@ GOARCH_LIST = amd64 arm64
 DIST := dist
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: release-agent clean test
+.PHONY: release-agent clean test build-binaries package-tar checksum package-linux
 
 release-agent: clean test build-binaries package-tar checksum
 
@@ -25,6 +25,13 @@ package-tar:
 	@for dir in $(DIST)/dis-agent-*; do \
 		base=$$(basename $$dir); \
 		tar czf $(DIST)/$$base.tar.gz -C $(DIST) $$base; \
+	done
+
+package-linux: build-binaries
+	@which nfpm >/dev/null || (echo "nfpm not installed"; exit 1)
+	@for arch in $(GOARCH_LIST); do \
+		GOOS=linux ARCH=$${arch} VERSION=$(VERSION) nfpm package -f packaging/nfpm.yaml -p deb -t $(DIST)/dis-agent-linux-$${arch}.deb; \
+		GOOS=linux ARCH=$${arch} VERSION=$(VERSION) nfpm package -f packaging/nfpm.yaml -p rpm -t $(DIST)/dis-agent-linux-$${arch}.rpm; \
 	done
 
 checksum:
