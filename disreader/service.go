@@ -3,7 +3,9 @@ package disreader
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
@@ -89,14 +91,46 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 
 	remote := svc.NewRemoteService(b.cfg, logger, multiDB, registry, server)
 
+	// gRPC server: use provided or start our own
 	if b.grpcServer != nil {
 		remote.RegisterBridge(b.grpcServer)
+	} else {
+		grpcPort := envDefault("DISREADER_BRIDGE_PORT", "8443")
+		lis, err := net.Listen("tcp", ":"+grpcPort)
+		if err != nil {
+			return nil, fmt.Errorf("listen gRPC: %w", err)
+		}
+		srv := grpc.NewServer()
+		remote.RegisterBridge(srv)
+		go func() {
+			logger.Info("bridge gRPC listening", slog.String("addr", lis.Addr().String()))
+			_ = srv.Serve(lis)
+		}()
 	}
+
+	// HTTP mux: use provided or start our own
 	if b.mux != nil {
 		remote.RegisterHealth(b.mux)
+	} else {
+		httpPort := envDefault("DISREADER_BRIDGE_HTTP_PORT", "8080")
+		mux := http.NewServeMux()
+		remote.RegisterHealth(mux)
+		go func() {
+			addr := ":" + httpPort
+			logger.Info("bridge HTTP listening", slog.String("addr", addr))
+			_ = http.ListenAndServe(addr, mux)
+		}()
 	}
 
 	return remote, nil
+}
+
+// envDefault returns the env var or fallback.
+func envDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 // buildAuthenticator mirrors legacy behavior, now used by the remote builder.
