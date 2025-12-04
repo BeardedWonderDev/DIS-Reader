@@ -45,9 +45,10 @@ Defaults:
 
 ## Hosting the Bridge Server
 1. Construct `DISReaderService` with a config where `bridge.mode=remote`.
-2. Create a `grpc.Server` and call `svc.RegisterBridge(grpcServer)`.
+2. Create a `grpc.Server` and call `svc.RegisterBridge(grpcServer)`. Optionally register health/metrics/pprof via `svc.RegisterHealth(mux)`.
 3. Start serving on your chosen port (typically 443/8443 behind TLS termination).
 4. Your parent app continues to call domain services (`UnitService`, `InvoiceService`, `PartService`); all DB calls will flow through the agent registry.
+5. Packaged installs are produced by `make release-agent` (deb/rpm/pkg/zip) or via the GitHub Actions `release-agent` workflow.
 
 ## Running the Agent
 1. Create `agent.yaml` (see `configs/agent.yaml.example`).

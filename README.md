@@ -1,7 +1,7 @@
 <!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
 <a id="readme-top"></a>
 <!-- Added links to new bridge/agent docs -->
-For remote-agent setup (bridge server + LAN agent), see `wiki/bridge_mode.md` and the concise walkthrough in `wiki/quickstart_bridge.md`.
+For remote-agent setup (bridge server + LAN agent), see `wiki/bridge_mode.md` and the concise walkthrough in `wiki/quickstart_bridge.md`. Installers (deb/rpm/pkg/zip) are built via `make release-agent` or the `release-agent` GitHub Actions workflow.
 
 <!-- PROJECT SHIELDS -->
 [![Contributors][contributors-shield]][contributors-url]
