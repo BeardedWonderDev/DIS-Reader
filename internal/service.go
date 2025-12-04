@@ -7,8 +7,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/invoices"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/parts"
@@ -28,6 +31,9 @@ type DISReaderService struct {
 	logLevel *slog.LevelVar
 	tempDir  string
 
+	bridgeRegistry bridge.AgentRegistry
+	bridgeServer   *bridge.Server
+
 	unitService    types.UnitService
 	invoiceService types.InvoiceService
 	partService    types.PartService
@@ -44,6 +50,25 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 		logger = slog.New(prettylog.NewHandler(&slog.HandlerOptions{
 			Level: &logLevel,
 		}))
+	}
+
+	if config.Bridge != nil && strings.EqualFold(config.Bridge.Mode, "remote") {
+		registry := bridge.NewInMemoryRegistry()
+		auth := buildAuthenticator(config.Bridge)
+		db := database.NewRemoteDB(config.Bridge.TenantID, registry, logger)
+
+		s := &DISReaderService{
+			config:         config,
+			db:             db,
+			logger:         logger,
+			logLevel:       &logLevel,
+			bridgeRegistry: registry,
+			bridgeServer:   bridge.NewServer(auth, registry, logger),
+			unitService:    unit.NewUnitService(db),
+			invoiceService: invoices.NewInvoiceService(db),
+			partService:    parts.NewService(db),
+		}
+		return s, nil
 	}
 
 	tmp, err := os.MkdirTemp("", "disreader-jdbc-*")
@@ -147,8 +172,10 @@ func (s *DISReaderService) Disconnect(ctx context.Context) error {
 func (s *DISReaderService) Shutdown() error {
 	s.logger.Info("Shutting down DISReaderService")
 	err := s.db.StopJDBCRunner()
-	if remErr := os.RemoveAll(s.tempDir); remErr != nil {
-		types.LogError(s.logger, "Failed to remove temp directory", remErr)
+	if s.tempDir != "" {
+		if remErr := os.RemoveAll(s.tempDir); remErr != nil {
+			types.LogError(s.logger, "Failed to remove temp directory", remErr)
+		}
 	}
 	return err
 }
@@ -175,4 +202,32 @@ func (s *DISReaderService) InvoiceService() types.InvoiceService {
 
 func (s *DISReaderService) PartService() types.PartService {
 	return s.partService
+}
+
+// BridgeServer exposes the bridge server for hosting gRPC handlers when running in remote mode.
+// Returns nil when bridge mode is not enabled.
+func (s *DISReaderService) BridgeServer() proto.AgentServiceServer {
+	return s.bridgeServer
+}
+
+func buildAuthenticator(cfg *types.BridgeConfig) bridge.AgentAuthenticator {
+	if cfg == nil {
+		return &bridge.StaticAuthenticator{Secrets: map[string]bridge.StaticAgentSecret{}}
+	}
+	secrets := map[string]bridge.StaticAgentSecret{}
+	for _, agent := range cfg.Allowed {
+		secrets[agent.ClientID] = bridge.StaticAgentSecret{
+			ClientSecret: agent.ClientSecret,
+			TenantID:     agent.TenantID,
+			AgentID:      agent.AgentID,
+		}
+	}
+	if cfg.ClientID != "" {
+		secrets[cfg.ClientID] = bridge.StaticAgentSecret{
+			ClientSecret: cfg.ClientSecret,
+			TenantID:     cfg.TenantID,
+			AgentID:      cfg.ClientID,
+		}
+	}
+	return &bridge.StaticAuthenticator{Secrets: secrets}
 }

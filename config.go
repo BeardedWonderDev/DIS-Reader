@@ -32,6 +32,8 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetDefault("disConfig.jdbcConfig.jdbcPort", DefaultJDBCPort)
 	viper.SetDefault("debugSearch.defaultOutputMode", string(types.DebugSearchOutputSQLite))
 	viper.SetDefault("debugSearch.defaultOutputPath", "")
+	viper.SetDefault("bridge.mode", "embedded")
+	viper.SetDefault("bridge.tls.insecureSkipVerify", false)
 
 	// If config file exists, use it
 	_, err := os.ReadFile(ConfigFileName)
@@ -59,6 +61,13 @@ func NewConfig() *types.DISUIConfig {
 
 	if err := viper.Unmarshal(&config); err != nil {
 		log.Fatalln("Error while creating config. Shutting down.")
+	}
+
+	if config.Bridge == nil {
+		config.Bridge = &types.BridgeConfig{Mode: "embedded"}
+	}
+	if config.DIS != nil {
+		config.DIS.Bridge = config.Bridge
 	}
 
 	return &config
