@@ -81,7 +81,7 @@ func main() {
 		},
 	}
 
-	disSvc, err := disreader.NewDISReaderService(cfg, nil) // nil logger -> pretty slog handler
+disSvc, err := disreader.NewDISReaderEmbedded(cfg, nil) // nil logger -> pretty slog handler
 	if err != nil {
 		panic(err)
 	}
@@ -274,7 +274,7 @@ Details:
 
 ```go
 logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
-disSvc, _ := disreader.NewDISReaderService(cfg, logger)
+disSvc, _ := disreader.NewDISReaderEmbedded(cfg, logger)
 ```
 
 - The embedded JDBC runner writes JSON lines to stdout/stderr; these are parsed and re-emitted via `slog` with attributes like `status`, `event`, `request_id`.
@@ -294,7 +294,7 @@ disSvc, _ := disreader.NewDISReaderService(cfg, logger)
 ## 9. Summary Checklist
 
 - [ ] Provide a valid `types.DISConfig` (host/user/password/java path/port).
-- [ ] Call `disreader.NewDISReaderService`.
+- [ ] Call `disreader.NewDISReaderEmbedded` (or the remote builder for multi-tenant bridge mode).
 - [ ] Optionally run `TestConnection` or `Connect`.
 - [ ] Use `UnitService` / `InvoiceService` for structured data access.
 - [ ] (Optional) Use `RunDebugSearch` for exploratory discovery.

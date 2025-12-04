@@ -6,7 +6,6 @@ bridge:
     serverURL: ""
     clientID: ""
     clientSecret: ""
-    tenantID: default
 debugSearch:
     defaultOutputMode: sqlite
     defaultOutputPath: debug-search.db

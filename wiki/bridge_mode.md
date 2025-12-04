@@ -35,7 +35,7 @@ Defaults:
 - `bridge.mode` = `embedded` (current behavior).
 - TLS is required; set `insecureSkipVerify: true` only for testing.
 - Auth order of precedence:
-  1) Custom authenticator passed to `NewDISReaderServiceWithAuth`
+  1) Custom authenticator passed via remote builder `.WithAuth(...)`
   2) `credentialFile` (YAML/JSON list of clientID/secret/tenantID/agentID)
   3) Static allow-list in `allowedAgents` / top-level clientID+secret
 - Result limits:
