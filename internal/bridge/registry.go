@@ -6,44 +6,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
-// AgentConnection abstracts an active agent stream.
-type AgentConnection interface {
-	TenantID() string
-	AgentID() string
-	SendJob(ctx context.Context, req *proto.JobRequest) (*proto.JobResult, error)
-	Close() error
-}
-
-// AgentRegistry tracks agent connections per tenant.
-type AgentRegistry interface {
-	Register(ctx context.Context, tenantID string, agentID string, conn AgentConnection) error
-	Unregister(ctx context.Context, tenantID string, agentID string)
-	Pick(ctx context.Context, tenantID string) (AgentConnection, error)
-	Stats() RegistryStats
-	ObserveQuery(tenantID, agentID string, latency time.Duration)
-}
-
-// RegistryStats is a snapshot of connected agents per tenant.
-type RegistryStats struct {
-	TotalAgents int
-	Tenants     map[string]int
-	QueryCounts map[RegistryKey]int64
-	Latency     map[RegistryKey]LatencyAgg
-}
-
-type RegistryKey struct {
-	Tenant string
-	Agent  string
-}
-
-type LatencyAgg struct {
-	Count int64
-	Sum   float64
-	Max   float64
-}
+// Exported via types for external consumers.
+type AgentConnection = types.AgentConnection
+type AgentRegistry = types.AgentRegistry
+type RegistryStats = types.RegistryStats
+type RegistryKey = types.RegistryKey
+type LatencyAgg = types.LatencyAgg
 
 // InMemoryRegistry is a simple in-process registry suitable for single-instance deployments.
 type InMemoryRegistry struct {

@@ -27,19 +27,19 @@ func NewDISReaderRemote(config *types.DISConfig, logger *slog.Logger) *RemoteBui
 type RemoteBuilder struct {
 	cfg           *types.DISConfig
 	logger        *slog.Logger
-	auth          bridge.AgentAuthenticator
-	reg           bridge.AgentRegistry
+	auth          types.AgentAuthenticator
+	reg           types.AgentRegistry
 	grpcServer    *grpc.Server
 	mux           *http.ServeMux
 	defaultTenant string
 }
 
-func (b *RemoteBuilder) WithAuth(auth bridge.AgentAuthenticator) *RemoteBuilder {
+func (b *RemoteBuilder) WithAuth(auth types.AgentAuthenticator) *RemoteBuilder {
 	b.auth = auth
 	return b
 }
 
-func (b *RemoteBuilder) WithRegistry(reg bridge.AgentRegistry) *RemoteBuilder {
+func (b *RemoteBuilder) WithRegistry(reg types.AgentRegistry) *RemoteBuilder {
 	b.reg = reg
 	return b
 }

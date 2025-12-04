@@ -3,7 +3,52 @@ package types
 import (
 	"context"
 	"log/slog"
+	"time"
+
+	"github.com/BeardedWonderDev/DIS-Reader/bridgeproto"
 )
+
+// AgentConnection abstracts an active agent stream (bridge → agent).
+// Exposed for applications that want to provide custom registries.
+type AgentConnection interface {
+	TenantID() string
+	AgentID() string
+	SendJob(ctx context.Context, req *bridgeproto.JobRequest) (*bridgeproto.JobResult, error)
+	Close() error
+}
+
+// AgentRegistry tracks agent connections per tenant.
+type AgentRegistry interface {
+	Register(ctx context.Context, tenantID string, agentID string, conn AgentConnection) error
+	Unregister(ctx context.Context, tenantID string, agentID string)
+	Pick(ctx context.Context, tenantID string) (AgentConnection, error)
+	Stats() RegistryStats
+	ObserveQuery(tenantID, agentID string, latency time.Duration)
+}
+
+// RegistryStats is a snapshot of connected agents per tenant.
+type RegistryStats struct {
+	TotalAgents int
+	Tenants     map[string]int
+	QueryCounts map[RegistryKey]int64
+	Latency     map[RegistryKey]LatencyAgg
+}
+
+type RegistryKey struct {
+	Tenant string
+	Agent  string
+}
+
+type LatencyAgg struct {
+	Count int64
+	Sum   float64
+	Max   float64
+}
+
+// AgentAuthenticator validates agent credentials/tenant binding.
+type AgentAuthenticator interface {
+	Authenticate(ctx context.Context, clientID, clientSecret string, tenantID string) (string, string, error)
+}
 
 type DISReaderService interface {
 	GetConfig() *DISConfig

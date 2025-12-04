@@ -3,13 +3,13 @@ package bridge
 import (
 	"context"
 	"errors"
+
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 // AgentAuthenticator validates an incoming agent hello and returns tenant and agent IDs.
 // Implementations may look up secrets in a datastore or config map.
-type AgentAuthenticator interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string, tenantID string) (string, string, error)
-}
+type AgentAuthenticator = types.AgentAuthenticator
 
 // ReloadableAuthenticator optionally supports live reload of credentials.
 type ReloadableAuthenticator interface {
