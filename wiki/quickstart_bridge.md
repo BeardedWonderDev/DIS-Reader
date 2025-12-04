@@ -7,31 +7,24 @@ This complements the existing README without overwriting it. Steps to run DIS Re
 - `protoc` + plugins already vendored
 - TLS termination (or set `DISREADER_BRIDGE_TLS_INSECURESKIPVERIFY=true` for testing only)
 
-## 1) Start Bridge Server (cloud/hosted)
-```sh
-# bridge mode must be remote in disreader.yaml or envs
-DISREADER_BRIDGE_MODE=remote \
-DISREADER_BRIDGE_CLIENTID=agent \
-DISREADER_BRIDGE_CLIENTSECRET=secret \
-DISREADER_BRIDGE_TENANTID=t1 \
-go run ./cmd/bridge-server
+## 1) Start bridge inside your app (remote builder auto-starts servers)
+- Set `bridge.mode=remote` in config or env.
+- If you don’t provide your own servers, the remote builder will start:
+  - gRPC on `:8443` (override `DISREADER_BRIDGE_PORT`)
+  - HTTP /healthz,/metrics (and pprof if enabled) on `:8080` (override `DISREADER_BRIDGE_HTTP_PORT`)
+- To register handlers on your own servers instead, call `.WithGRPC(server)` / `.WithMux(mux)` on the builder.
+
+Example (app side):
+```go
+remote, err := disreader.NewDISReaderRemote(cfg, logger).
+    WithAuth(customAuth).        // optional
+    WithRegistry(customReg).     // optional
+    WithDefaultTenant("t1").    // optional fallback
+    Build()
+if err != nil { panic(err) }
 ```
-- To load credentials from file instead of env/static list:
-  ```sh
-  DISREADER_BRIDGE_MODE=remote \
-  DISREADER_BRIDGE_CREDENTIALFILE=bridge_agents.yaml \
-  go run ./cmd/bridge-server
-  ```
-  Example `bridge_agents.yaml`:
-  ```yaml
-  - clientID: agent
-    clientSecret: secret
-    tenantID: t1
-    agentID: agent
-  ```
-- gRPC on `:8443` (override `DISREADER_BRIDGE_PORT`)
-- Health/metrics on `:8080` (`/healthz`, `/metrics`; override `DISREADER_BRIDGE_HTTP_PORT`)
-- Attach TLS/ingress as appropriate for your environment.
+
+If you pass your own `*grpc.Server` / `*http.ServeMux`, you are responsible for calling `Serve`/`ListenAndServe`.
 
 ## 2) Run Agent (LAN side)
 ```sh
@@ -54,9 +47,9 @@ YAML
 go run ./cmd/agent
 ```
 
-## 3) Use DIS Reader normally
-- With `bridge.mode=remote` set in `disreader.yaml`, `DISReaderService` routes DB calls through the agent.
-- UI and domain services remain unchanged.
+## 3) Use DIS Reader in remote mode
+- Call tenant-aware methods: `remote.Connect(ctx, "t1")`, `remote.UnitService("t1")`, etc.
+- If you set `WithDefaultTenant`, you can wrap helpers that omit the tenant.
 
 ## Health & Metrics
 - `GET /healthz` returns `status`, `total_agents`, `tenants`.

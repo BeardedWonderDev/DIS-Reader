@@ -9,33 +9,34 @@ Audience: teams already integrating DIS Reader (embedded or remote) who are adop
 - `TestConnection` removed; use `PingService` + `PingDatabase`.
 - Debug search moved under `internal/service` (embedded only) and still uses the DISReaderService interface.
 
-## Steps
-1) Embedded users
-   - Replace `disreader.NewDISReaderService` with `disreader.NewDISReaderEmbedded`.
-   - Remove `TestConnection` calls; use `PingService` + `PingDatabase` if needed.
-   - No tenant changes required.
+## Modes & migration steps
 
-2) Remote single-tenant users
-   - Bridge server: run `cmd/bridge-server` (or embed) with `bridge.mode=remote`.
-   - Agent: run one agent near DIS with its `tenantID` set. No inbound ports to DIS required.
-   - Client: construct via `disreader.NewDISReaderRemote(cfg, logger).WithDefaultTenant("<tenantID>").Build()`.
-   - Calls: use tenant-aware methods (Connect/Ping/UnitService etc.) with that tenant. With a default tenant set, you may wrap your own helpers to avoid passing it each time.
+### Embedded (single-tenant, local JDBC)
+- Replace `disreader.NewDISReaderService` with `disreader.NewDISReaderEmbedded`.
+- `TestConnection` removed; use `PingService` + `PingDatabase` if needed.
+- No tenant handling required.
 
-3) Remote multi-tenant users
-   - Bridge server: same as above; can host multiple agents/tenants concurrently.
-   - Agents: one per tenant (or more for HA); each configured with its own `tenantID`.
-   - Client: `NewDISReaderRemote(...).Build()`; prefer passing tenant per call (`Connect(ctx, tenant)`, `UnitService(tenant)`, etc.). Use `WithDefaultTenant` only if you want a fallback for legacy wrappers.
-   - Drop per-tenant DISReader instances; bind per request via `UnitService(tenant)` or `BindTenant` if constructing services yourself.
+### Remote single-tenant (bridge + one agent)
+- Agent: run one agent near DIS with its `tenantID` set. No inbound ports to DIS required.
+- Bridge/server: the remote builder auto-starts gRPC/HTTP listeners unless you pass your own `WithGRPC`/`WithMux`. Defaults: gRPC :8443, HTTP :8080 (override via env). If you provide servers, start them yourself.
+- Client: `disreader.NewDISReaderRemote(cfg, logger).WithDefaultTenant("<tenantID>").Build()`.
+- Calls: use tenant-aware methods (Connect/Ping/UnitService etc.) with that tenant; if you set `WithDefaultTenant`, you can wrap helpers that omit the tenant.
 
-4) Config
-   - Remove reliance on `bridge.tenantID` as a client default; keep bridge auth fields intact for agents.
+### Remote multi-tenant
+- Agents: one per tenant (or more for HA); each configured with its own `tenantID`.
+- Bridge/server: same auto-start defaults; override with `WithGRPC`/`WithMux` or env ports.
+- Client: `NewDISReaderRemote(...).Build()`; pass tenant per call (`Connect(ctx, tenant)`, `UnitService(tenant)`, etc.). Use `WithDefaultTenant` only for a fallback.
+- Drop per-tenant service instances; bind per request via `UnitService(tenant)` or `BindTenant` if constructing services yourself.
 
-5) Tests/mocks
-   - If you mocked `database.DB`, keep as-is. To mock tenant-aware paths, use `MultiTenantDB` or wrap with `BindTenant`.
+### Config
+- Stop using `bridge.tenantID` as a client default; supply a default via `WithDefaultTenant` or pass tenant explicitly. Keep bridge auth fields for agents (`clientID/secret`, allowedAgents, credentialFile).
 
-6) Bridge/agent
-   - Bridge server is now auto-started by the remote builder unless you supply your own gRPC/mux. The standalone `cmd/bridge-server` binary has been removed.
-   - Agent config still requires `tenantID`; that is the authoritative tenant identity on the agent side.
+### Tests/mocks
+- Existing `database.DB` mocks still work for embedded paths. For tenant-aware code, mock `MultiTenantDB` or wrap with `BindTenant`.
+
+### Bridge/agent notes
+- Bridge listeners are auto-started by the remote builder (unless you provide servers). The standalone `cmd/bridge-server` binary has been removed.
+- Agent config still requires `tenantID`; that is the authoritative tenant identity on the agent side.
 
 ## Verification checklist
 - `go test ./...` passes.
