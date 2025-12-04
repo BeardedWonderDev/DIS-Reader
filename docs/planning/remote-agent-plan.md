@@ -19,19 +19,19 @@ Scope: Move the JDBC runner into a LAN “agent” that dials out to the cloud-h
 
 ## Deliverables by Phase
 
-### Phase 0 — Inventory & Boundaries
+### Phase 0 — Inventory & Boundaries ✅
 - Document current data paths and interfaces that must stay stable (`database.DB`, `DISReaderService`, domain services).
 - Identify new packages and files to introduce (see below).
 - No functional change; commit documentation of boundaries.
 
-### Phase 1 — Protocol & Models
+### Phase 1 — Protocol & Models ✅
 - Add `proto/bridge.proto` defining:
   - `AgentService.Connect` (bi-directional stream)
   - Messages: `AgentHello`, `JobRequest`, `JobResult`, `Heartbeat`, `LogEntry`
   - `ResultRow` map for row data; `Status` enum for ok/error/done
 - Generate Go stubs into `internal/bridge/proto` via `protoc` (tracked output).
 
-### Phase 2 — Bridge Server + Remote DB
+### Phase 2 — Bridge Server + Remote DB ✅
 - New package `internal/bridge/server`:
   - gRPC handler implementing `AgentService`.
   - `AgentRegistry` (in-memory): register/unregister, choose available agent, track heartbeats.
@@ -41,7 +41,7 @@ Scope: Move the JDBC runner into a LAN “agent” that dials out to the cloud-h
   - Supports `Query`, `QueryRow`, `Select`, `Get`, `QueryWithSource`, `PingService`, `PingDatabase`, `Connect`, `Disconnect`.
 - Logging via existing `slog` helpers.
 
-### Phase 3 — Agent Daemon
+### Phase 3 — Agent Daemon ✅
 - New command `cmd/agent/main.go`:
   - Reads `agent.yaml` (or env) for `serverURL`, `clientID`, `clientSecret`, `tenantID`, TLS opts.
   - Runs embedded JDBC (`IBMi400`) locally; connects to cloud gRPC with backoff.
@@ -49,7 +49,7 @@ Scope: Move the JDBC runner into a LAN “agent” that dials out to the cloud-h
   - Sends heartbeats; reconnects on failure; graceful shutdown on signals.
 - Provide sample config at `configs/agent.yaml.example`.
 
-### Phase 4 — Config Wiring & Selection
+### Phase 4 — Config Wiring & Selection ✅
 - Extend `types.DISConfig` / `types.DISUIConfig` with `BridgeConfig`:
   - `Mode string` (embedded|remote), `ServerURL`, `ClientID`, `ClientSecret`, `TenantID`, `TLS` options.
 - Update `config.go` defaults and env mapping (`DISREADER_BRIDGE_*`).
@@ -58,25 +58,31 @@ Scope: Move the JDBC runner into a LAN “agent” that dials out to the cloud-h
   - `remote` → `remoteDB` (requires registry client)
 - Add helper to start bridge server when running in “cloud” role (optional flag/env).
 
-### Phase 5 — Security & Ops
+### Phase 5 — Security & Ops (partial)
 - TLS required on bridge gRPC; support `insecureSkipVerify` only for testing.
 - Health/metrics endpoints for bridge: `/healthz` (readiness based on agent count) and `/metrics` (Prometheus gauges).
 - Heartbeat timeout handling and reconnection in agent.
 - Auth: pluggable `AgentAuthenticator`; default static allow-list with clientID/secret → tenant/agent.
 
-### Phase 6 — Compatibility & Migration
+### Phase 6 — Compatibility & Migration ✅
 - Keep embedded as default; document bridge config in `disreader.yaml` sample.
 - Migration guide (`wiki/bridge_mode.md`) covering agent deploy (systemd example), bridge server wiring, and network expectations (outbound 443 only).
 - Ensure no breaking changes to UI/services; DB backend swap only.
 
-### Phase 7 — Testing & Validation
+### Phase 7 — Testing & Validation (partial)
 - Unit tests for remote DB happy/error paths using mock registry/agent.
 - Integration smoke: in-memory gRPC bridge + agent using SQLite fixture; assert a simple query matches embedded output.
 - Parity check for `PingService`/`PingDatabase` via remote path.
 
-### Phase 8 — Operational Entry Points
-- Optional standalone `bridge-server` command to host gRPC + health/metrics for quick deployment.
-- Document how to mount `RegisterBridge`/`RegisterHealth` on an existing parent server (code snippet).
+### Phase 8 — Operational Entry Points ✅
+- Standalone `cmd/bridge-server` hosts gRPC + health/metrics.
+- Docs added (`wiki/bridge_mode.md`, `wiki/quickstart_bridge.md`); README links to both.
+
+## Next Steps
+- Security/Auth: move from static allow-list to reloadable store (file/DB) with rotation guidance.
+- Payloads: add optional row chunking / max payload guardrails for large result sets.
+- Testing: add parity integration test comparing embedded vs remote against sqlite fixture data, and PingService/PingDatabase parity.
+- Ops: expose metrics counters for query volume/latency per tenant/agent; optionally add pprof toggle.
 
 ## New/Modified Paths
 - New: `proto/bridge.proto`, `internal/bridge/proto/*`, `internal/bridge/{server.go,registry.go,auth.go}`, `internal/database/remote.go`, `cmd/agent/main.go`, `configs/agent.yaml.example`, `docs/planning/remote-agent-plan.md`.
