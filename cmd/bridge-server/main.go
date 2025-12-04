@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strings"
 
-	internal "github.com/BeardedWonderDev/DIS-Reader/internal"
+	"github.com/BeardedWonderDev/DIS-Reader/disreader"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -19,14 +19,18 @@ import (
 func main() {
 	cfg := loadConfig()
 
-	svc, err := internal.NewDISReaderService(cfg.DIS, nil)
+	builder := disreader.NewDISReaderRemote(cfg.DIS, nil)
+	svc, err := builder.Build()
 	if err != nil {
-		log.Fatalf("init service: %v", err)
+		log.Fatalf("init remote service: %v", err)
 	}
-	defer svc.Shutdown()
 
-	if svc.BridgeServer() == nil {
-		log.Fatalf("bridge mode disabled; set bridge.mode=remote")
+	bridgeSvc, ok := svc.(interface {
+		RegisterBridge(*grpc.Server)
+		RegisterHealth(*http.ServeMux)
+	})
+	if !ok {
+		log.Fatalf("remote service does not expose bridge registration")
 	}
 
 	grpcPort := envDefault("DISREADER_BRIDGE_PORT", "8443")
@@ -39,14 +43,14 @@ func main() {
 			log.Fatalf("listen gRPC: %v", err)
 		}
 		srv := grpc.NewServer()
-		svc.RegisterBridge(srv)
+		bridgeSvc.RegisterBridge(srv)
 		log.Printf("bridge gRPC listening on :%s", grpcPort)
 		log.Fatal(srv.Serve(lis))
 	}()
 
 	// HTTP health/metrics
 	mux := http.NewServeMux()
-	svc.RegisterHealth(mux)
+	bridgeSvc.RegisterHealth(mux)
 	log.Printf("bridge HTTP health/metrics on :%s", httpPort)
 	log.Fatal(http.ListenAndServe(":"+httpPort, mux))
 }

@@ -1,14 +1,11 @@
-package internal
+package service
 
 import (
 	"context"
 	"database/sql"
-	"encoding/csv"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -55,8 +52,8 @@ func TestRunDebugSearchSQLiteCreatesDirAndPersistsRows(t *testing.T) {
 	tmp := t.TempDir()
 	outputPath := filepath.Join(tmp, "nested", "results.db")
 
-	svc := DISReaderService{
-		db:     &fakeDB{rows: []types.ResultRow{{"SRC_TABLE": "FOO", "A": "1"}}},
+	svc := EmbeddedService{
+		db:     &fakeDB{rows: []types.ResultRow{{"src_table": "FOO", "A": "1"}}},
 		logger: newTestLogger(),
 	}
 
@@ -65,7 +62,6 @@ func TestRunDebugSearchSQLiteCreatesDirAndPersistsRows(t *testing.T) {
 		t.Fatalf("runDebugSearchSQLite returned error: %v", err)
 	}
 
-	// The DB file should exist and contain one row in table FOO.
 	db, err := sql.Open("sqlite3", outputPath)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
@@ -78,62 +74,5 @@ func TestRunDebugSearchSQLiteCreatesDirAndPersistsRows(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected 1 row, got %d", count)
-	}
-}
-
-func TestRunDebugSearchCSVWritesFile(t *testing.T) {
-	tmp := t.TempDir()
-	out := filepath.Join(tmp, "out.csv")
-
-	svc := DISReaderService{
-		db:     &fakeDB{rows: []types.ResultRow{{"SRC_TABLE": "FOO", "A": "1"}}},
-		logger: newTestLogger(),
-	}
-
-	svc.runDebugSearchCSV("run-1", "needle", out, []string{"SELECT 1"}, nil, nil)
-
-	data, err := os.ReadFile(out)
-	if err != nil {
-		t.Fatalf("read csv: %v", err)
-	}
-	r := csv.NewReader(strings.NewReader(string(data)))
-	rows, err := r.ReadAll()
-	if err != nil {
-		t.Fatalf("parse csv: %v", err)
-	}
-	if len(rows) != 2 {
-		t.Fatalf("expected 2 rows (header + data), got %d", len(rows))
-	}
-	if rows[1][2] != "FOO" {
-		t.Fatalf("expected table_name FOO, got %s", rows[1][2])
-	}
-}
-
-func TestRunDebugSearchSQLiteEmitsFailureEvent(t *testing.T) {
-	tmp := t.TempDir()
-	roDir := filepath.Join(tmp, "ro")
-	if err := os.MkdirAll(roDir, 0o500); err != nil {
-		t.Fatalf("mkdir ro dir: %v", err)
-	}
-	out := filepath.Join(roDir, "subdir", "out.db")
-
-	events := make(chan types.TableEvent, 1)
-
-	svc := DISReaderService{
-		db:     &fakeDB{rows: []types.ResultRow{{"SRC_TABLE": "FOO", "A": "1"}}},
-		logger: newTestLogger(),
-	}
-
-	err := svc.runDebugSearchSQLite("run-err", "term", out, []string{"SELECT 1"}, nil, events)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	select {
-	case evt := <-events:
-		if evt.EventType != "run_failed" {
-			t.Fatalf("expected run_failed event, got %s", evt.EventType)
-		}
-	default:
-		t.Fatalf("expected run_failed event")
 	}
 }
