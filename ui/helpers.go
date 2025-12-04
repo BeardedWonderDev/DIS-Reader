@@ -1,4 +1,4 @@
-package tview2
+package ui
 
 import (
 	"database/sql"
