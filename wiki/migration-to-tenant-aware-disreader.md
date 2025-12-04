@@ -16,12 +16,16 @@ Audience: teams already integrating DIS Reader (embedded or remote) who are adop
    - No tenant changes required.
 
 2) Remote single-tenant users
-   - Replace constructor with fluent builder: `disreader.NewDISReaderRemote(cfg, logger).WithDefaultTenant("your-tenant").Build()`.
-   - Call tenant-aware methods (Connect/Ping/UnitService etc.) with the tenant; if you set `WithDefaultTenant`, you can bind services via `UnitService(tenant)` using that default.
+   - Bridge server: run `cmd/bridge-server` (or embed) with `bridge.mode=remote`.
+   - Agent: run one agent near DIS with its `tenantID` set. No inbound ports to DIS required.
+   - Client: construct via `disreader.NewDISReaderRemote(cfg, logger).WithDefaultTenant("<tenantID>").Build()`.
+   - Calls: use tenant-aware methods (Connect/Ping/UnitService etc.) with that tenant. With a default tenant set, you may wrap your own helpers to avoid passing it each time.
 
 3) Remote multi-tenant users
-   - Use `NewDISReaderRemote(...).Build()` and pass tenant per call (`Connect(ctx, tenant)`, `UnitService(tenant)`, etc.).
-   - Drop any per-tenant service instances; instead bind via `UnitService(tenant)` or `BindTenant` if you construct services yourself.
+   - Bridge server: same as above; can host multiple agents/tenants concurrently.
+   - Agents: one per tenant (or more for HA); each configured with its own `tenantID`.
+   - Client: `NewDISReaderRemote(...).Build()`; prefer passing tenant per call (`Connect(ctx, tenant)`, `UnitService(tenant)`, etc.). Use `WithDefaultTenant` only if you want a fallback for legacy wrappers.
+   - Drop per-tenant DISReader instances; bind per request via `UnitService(tenant)` or `BindTenant` if constructing services yourself.
 
 4) Config
    - Remove reliance on `bridge.tenantID` as a client default; keep bridge auth fields intact for agents.
@@ -30,7 +34,8 @@ Audience: teams already integrating DIS Reader (embedded or remote) who are adop
    - If you mocked `database.DB`, keep as-is. To mock tenant-aware paths, use `MultiTenantDB` or wrap with `BindTenant`.
 
 6) Bridge/agent
-   - No change to agent behavior. Bridge server now constructed via remote builder in `cmd/bridge-server`.
+   - Bridge server is constructed via the remote builder in `cmd/bridge-server`.
+   - Agent config still requires `tenantID`; that is the authoritative tenant identity on the agent side.
 
 ## Verification checklist
 - `go test ./...` passes.

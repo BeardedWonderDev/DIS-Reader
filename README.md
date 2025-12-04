@@ -132,7 +132,7 @@ DISREADER_DISCONFIG_HOST=10.0.0.5 DISREADER_DISCONFIG_USER=XXXXX DISREADER_DISCO
    ```sh
    go run ./cmd/bridge-server --bridge.config=disreader.yaml
    ```
-2. Run the LAN agent near DIS:
+2. Run the LAN agent near DIS (one per tenant, or more for HA):
    ```sh
    ./cmd/agent/agent --config agent.yaml
    ```
@@ -142,8 +142,17 @@ DISREADER_DISCONFIG_HOST=10.0.0.5 DISREADER_DISCONFIG_USER=XXXXX DISREADER_DISCO
    ```
 Bridge config keys:
 - `bridge.mode: embedded|remote` (default embedded)
-- `bridge.serverURL`, `bridge.clientID`, `bridge.clientSecret`, `bridge.tenantID`
+- `bridge.serverURL`, `bridge.clientID`, `bridge.clientSecret`
 - TLS: `bridge.tls.insecure`, `bridge.tls.caFile`
+
+Client construction (Go):
+```go
+remote, err := disreader.NewDISReaderRemote(cfg, logger).
+    WithDefaultTenant("tenant-1"). // optional; omit for pure per-call tenancy
+    Build()
+rows, _ := remote.UnitService("tenant-1").ListUnits(ctx, lp)
+```
+Multi-tenant: set one agent per tenant; call tenant-aware methods (`Connect(ctx, tenant)`, `UnitService(tenant)`). Do not rely on a default tenant from config; supply it via `WithDefaultTenant` or per call.
 
 ### Debug Search Output Modes
 Produce ad-hoc datasets for analysis:
