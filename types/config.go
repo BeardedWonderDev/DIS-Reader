@@ -35,19 +35,20 @@ type JDBCConfig struct {
 }
 
 type BridgeConfig struct {
-	Mode           string                  `mapstructure:"mode"` // embedded | remote
-	ServerURL      string                  `mapstructure:"serverURL"`
-	ClientID       string                  `mapstructure:"clientID"`
-	ClientSecret   string                  `mapstructure:"clientSecret"`
-	TenantID       string                  `mapstructure:"tenantID"`
-	CredentialFile string                  `mapstructure:"credentialFile"`
-	TLS            BridgeTLSConfig         `mapstructure:"tls"`
-	Allowed        []BridgeAgentCredential `mapstructure:"allowedAgents"`
-	PprofEnabled   bool                    `mapstructure:"pprofEnabled"`
-	PprofPath      string                  `mapstructure:"pprofPath"`
-	CredentialReloadSeconds int            `mapstructure:"credentialReloadSeconds"`
-	MaxRowsPerQuery int                   `mapstructure:"maxRowsPerQuery"`
-	MaxResultBytes  int64                 `mapstructure:"maxResultBytes"`
+	Mode                    string                  `mapstructure:"mode"` // embedded | remote
+	ServerURL               string                  `mapstructure:"serverURL"`
+	ClientID                string                  `mapstructure:"clientID"`
+	ClientSecret            string                  `mapstructure:"clientSecret"`
+	TenantID                string                  `mapstructure:"tenantID"`
+	CredentialFile          string                  `mapstructure:"credentialFile"`
+	TLS                     BridgeTLSConfig         `mapstructure:"tls"`
+	Allowed                 []BridgeAgentCredential `mapstructure:"allowedAgents"`
+	DefaultTenant           string                  `mapstructure:"defaultTenant"`
+	PprofEnabled            bool                    `mapstructure:"pprofEnabled"`
+	PprofPath               string                  `mapstructure:"pprofPath"`
+	CredentialReloadSeconds int                     `mapstructure:"credentialReloadSeconds"`
+	MaxRowsPerQuery         int                     `mapstructure:"maxRowsPerQuery"`
+	MaxResultBytes          int64                   `mapstructure:"maxResultBytes"`
 }
 
 type BridgeTLSConfig struct {

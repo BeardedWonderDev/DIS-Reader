@@ -25,6 +25,8 @@ type RemoteService struct {
 	registry bridge.AgentRegistry
 	server   *bridge.Server
 
+	defaultTenant string
+
 	unitFactory    func(tenant string) types.UnitService
 	invoiceFactory func(tenant string) types.InvoiceService
 	partFactory    func(tenant string) types.PartService
@@ -47,6 +49,11 @@ func NewRemoteService(cfg *types.DISConfig, logger *slog.Logger, multiDB databas
 			return parts.NewService(database.BindTenant(multiDB, tenant))
 		},
 	}
+}
+
+// WithDefaultTenant configures the fallback tenant used when a call omits one.
+func (s *RemoteService) WithDefaultTenant(tenant string) {
+	s.defaultTenant = tenant
 }
 
 // Bridge helpers
@@ -74,24 +81,48 @@ func (s *RemoteService) RegisterHealth(mux *http.ServeMux) {
 
 // DISReaderRemote implementations
 func (s *RemoteService) StartJDBCRunner(ctx context.Context, tenant string) error {
-	return s.multiDB.StartJDBCRunner(tenant)
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return err
+	}
+	return s.multiDB.StartJDBCRunner(t)
 }
 
 func (s *RemoteService) StopJDBCRunner(ctx context.Context, tenant string) error {
-	return s.multiDB.StopJDBCRunner(tenant)
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return err
+	}
+	return s.multiDB.StopJDBCRunner(t)
 }
 
 func (s *RemoteService) Connect(ctx context.Context, tenant string) error {
-	return s.multiDB.Connect(ctx, tenant)
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return err
+	}
+	return s.multiDB.Connect(ctx, t)
 }
 func (s *RemoteService) Disconnect(ctx context.Context, tenant string) error {
-	return s.multiDB.Disconnect(ctx, tenant)
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return err
+	}
+	return s.multiDB.Disconnect(ctx, t)
 }
 func (s *RemoteService) PingService(ctx context.Context, tenant string) error {
-	return s.multiDB.PingService(ctx, tenant)
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return err
+	}
+	return s.multiDB.PingService(ctx, t)
 }
 func (s *RemoteService) PingDatabase(ctx context.Context, tenant string) error {
-	return s.multiDB.PingDatabase(ctx, tenant)
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return err
+	}
+	return s.multiDB.PingDatabase(ctx, t)
 }
 
 // PingBridge checks the bridge server/registry availability (tenant-agnostic)
@@ -105,23 +136,39 @@ func (s *RemoteService) PingBridge(ctx context.Context) error {
 
 // PingAgent checks that an agent for the given tenant is available in the registry.
 func (s *RemoteService) PingAgent(ctx context.Context, tenant string) error {
-	if tenant == "" {
-		return fmt.Errorf("tenant is required")
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return err
 	}
-	_, err := s.registry.Pick(ctx, tenant)
+	_, err = s.registry.Pick(ctx, t)
 	return err
 }
 
 func (s *RemoteService) UnitService(tenant string) types.UnitService {
-	return s.unitFactory(tenant)
+	t, _ := s.resolveTenant(tenant) // ignore error for factory; caller should already have validated
+	return s.unitFactory(t)
 }
 
 func (s *RemoteService) InvoiceService(tenant string) types.InvoiceService {
-	return s.invoiceFactory(tenant)
+	t, _ := s.resolveTenant(tenant)
+	return s.invoiceFactory(t)
 }
 
 func (s *RemoteService) PartService(tenant string) types.PartService {
-	return s.partFactory(tenant)
+	t, _ := s.resolveTenant(tenant)
+	return s.partFactory(t)
+}
+
+// resolveTenant chooses the explicit tenant if provided, otherwise the default (if set).
+// Returns an error when both are empty.
+func (s *RemoteService) resolveTenant(tenant string) (string, error) {
+	if tenant != "" {
+		return tenant, nil
+	}
+	if s.defaultTenant != "" {
+		return s.defaultTenant, nil
+	}
+	return "", fmt.Errorf("tenant is required")
 }
 
 // Utilities reused from embedded pprof registration

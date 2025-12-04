@@ -70,6 +70,11 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 		return nil, fmt.Errorf("bridge.mode must be remote for remote builder")
 	}
 
+	// Allow config-specified default tenant if caller didn't set WithDefaultTenant.
+	if b.defaultTenant == "" && b.cfg.Bridge.DefaultTenant != "" {
+		b.defaultTenant = b.cfg.Bridge.DefaultTenant
+	}
+
 	logger := b.logger
 	if logger == nil {
 		logger = slog.Default()
@@ -90,6 +95,7 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 	multiDB := database.NewRemoteDB(registry, logger, b.cfg.Bridge.MaxRowsPerQuery, b.cfg.Bridge.MaxResultBytes)
 
 	remote := svc.NewRemoteService(b.cfg, logger, multiDB, registry, server)
+	remote.WithDefaultTenant(b.defaultTenant)
 
 	// gRPC server: use provided or start our own
 	if b.grpcServer != nil {

@@ -22,6 +22,7 @@ type DISReaderService interface {
 }
 
 type DISReaderRemote interface {
+	// Tenant is optional when a default was configured; otherwise required.
 	StartJDBCRunner(ctx context.Context, tenant string) error
 	StopJDBCRunner(ctx context.Context, tenant string) error
 	Connect(ctx context.Context, tenant string) error
