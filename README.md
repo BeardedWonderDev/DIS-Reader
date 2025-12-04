@@ -154,6 +154,25 @@ rows, _ := remote.UnitService("tenant-1").ListUnits(ctx, lp)
 ```
 Multi-tenant: set one agent per tenant; call tenant-aware methods (`Connect(ctx, tenant)`, `UnitService(tenant)`). Do not rely on a default tenant from config; supply it via `WithDefaultTenant` or per call.
 
+Remote client (full example):
+```go
+ctx := context.Background()
+
+remote, err := disreader.NewDISReaderRemote(cfg, logger).
+    WithDefaultTenant("tenant-a").
+    Build()
+if err != nil { log.Fatal(err) }
+
+if err := remote.PingBridge(ctx); err != nil { log.Fatal(err) }
+if err := remote.PingAgent(ctx, "tenant-a"); err != nil { log.Fatal(err) }
+if err := remote.Connect(ctx, "tenant-a"); err != nil { log.Fatal(err) }
+
+unitSvc := remote.UnitService("tenant-a")
+units, err := unitSvc.ListUnits(ctx, types.ListParams{Limit: 10})
+if err != nil { log.Fatal(err) }
+fmt.Println("units", len(units))
+```
+
 ### Debug Search Output Modes
 Produce ad-hoc datasets for analysis:
 - Default SQLite: `debug-search.db`

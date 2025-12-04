@@ -1,4 +1,8 @@
-- clientID: agent
-  clientSecret: secret
-  tenantID: default
-  agentID: agent
+- clientID: agent-tenant-a
+  clientSecret: secret-a
+  tenantID: tenant-a   # per-tenant mapping
+  agentID: agent-a
+- clientID: agent-tenant-b
+  clientSecret: secret-b
+  tenantID: tenant-b
+  agentID: agent-b
