@@ -36,6 +36,8 @@ Defaults:
 - TLS is required; set `insecureSkipVerify: true` only for testing.
 - Auth order of precedence:
   1) Custom authenticator passed via remote builder `.WithAuth(...)`
+
+**Heads-up:** The bridge is now embedded via the remote builder. If you don’t supply your own `WithGRPC`/`WithMux`, the builder auto-starts gRPC on `:8443` and health/metrics on `:8080` (overridable via env). For a full wiring example with custom auth/registry/servers, see `wiki/remote_builder_example.md`.
   2) `credentialFile` (YAML/JSON list of clientID/secret/tenantID/agentID)
   3) Static allow-list in `allowedAgents` / top-level clientID+secret
 - Result limits:
