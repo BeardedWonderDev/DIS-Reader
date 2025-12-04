@@ -86,6 +86,28 @@ func TestRemoteDBErrorStatus(t *testing.T) {
 	}
 }
 
+func TestRemoteDBZeroMaxRowsUnlimited(t *testing.T) {
+	agent := &fakeAgent{
+		res: &bridgeproto.JobResult{
+			Status: bridgeproto.Status_STATUS_OK,
+			Rows: []*bridgeproto.Row{
+				{Fields: map[string]*structpb.Value{"x": structpb.NewNumberValue(1)}},
+				{Fields: map[string]*structpb.Value{"x": structpb.NewNumberValue(2)}},
+			},
+		},
+	}
+	reg := &fakeRegistry{agent: agent}
+	db := NewRemoteDB(reg, nil, 0, 0)
+
+	rows, err := db.Query(context.Background(), "select 1", "t1")
+	if err != nil {
+		t.Fatalf("expected nil err, got %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected all rows when maxRows is 0, got %d", len(rows))
+	}
+}
+
 func TestRemoteDBNoAgent(t *testing.T) {
 	reg := &fakeRegistry{err: errors.New("no agent")}
 	db := NewRemoteDB(reg, nil, 1000, 0)

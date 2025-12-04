@@ -23,7 +23,7 @@ type RemoteDB struct {
 }
 
 func NewRemoteDB(registry bridge.AgentRegistry, logger *slog.Logger, maxRows int, maxBytes int64) *RemoteDB {
-	if maxRows <= 0 {
+	if maxRows < 0 {
 		maxRows = 1000
 	}
 	return &RemoteDB{
