@@ -243,6 +243,11 @@ func buildAuthenticator(cfg *types.BridgeConfig, override bridge.AgentAuthentica
 	if cfg == nil {
 		return &bridge.StaticAuthenticator{Secrets: map[string]bridge.StaticAgentSecret{}}
 	}
+	if cfg.CredentialFile != "" {
+		if fa, err := bridge.NewFileAuthenticator(cfg.CredentialFile); err == nil {
+			return fa
+		}
+	}
 	secrets := map[string]bridge.StaticAgentSecret{}
 	for _, agent := range cfg.Allowed {
 		secrets[agent.ClientID] = bridge.StaticAgentSecret{

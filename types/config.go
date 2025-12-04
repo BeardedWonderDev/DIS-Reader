@@ -35,13 +35,14 @@ type JDBCConfig struct {
 }
 
 type BridgeConfig struct {
-	Mode         string                  `mapstructure:"mode"` // embedded | remote
-	ServerURL    string                  `mapstructure:"serverURL"`
-	ClientID     string                  `mapstructure:"clientID"`
-	ClientSecret string                  `mapstructure:"clientSecret"`
-	TenantID     string                  `mapstructure:"tenantID"`
-	TLS          BridgeTLSConfig         `mapstructure:"tls"`
-	Allowed      []BridgeAgentCredential `mapstructure:"allowedAgents"`
+	Mode           string                  `mapstructure:"mode"` // embedded | remote
+	ServerURL      string                  `mapstructure:"serverURL"`
+	ClientID       string                  `mapstructure:"clientID"`
+	ClientSecret   string                  `mapstructure:"clientSecret"`
+	TenantID       string                  `mapstructure:"tenantID"`
+	CredentialFile string                  `mapstructure:"credentialFile"`
+	TLS            BridgeTLSConfig         `mapstructure:"tls"`
+	Allowed        []BridgeAgentCredential `mapstructure:"allowedAgents"`
 }
 
 type BridgeTLSConfig struct {

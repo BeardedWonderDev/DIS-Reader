@@ -34,6 +34,7 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetDefault("debugSearch.defaultOutputPath", "")
 	viper.SetDefault("bridge.mode", "embedded")
 	viper.SetDefault("bridge.tls.insecureSkipVerify", false)
+	viper.SetDefault("bridge.credentialFile", "")
 
 	// If config file exists, use it
 	_, err := os.ReadFile(ConfigFileName)
