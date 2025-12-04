@@ -1,6 +1,12 @@
 theme: high-contrast-dark
 disConfig:
     host: 10.255.229.34
+bridge:
+    mode: embedded   # set to 'remote' to proxy via agent
+    serverURL: ""
+    clientID: ""
+    clientSecret: ""
+    tenantID: default
 debugSearch:
     defaultOutputMode: sqlite
     defaultOutputPath: debug-search.db
