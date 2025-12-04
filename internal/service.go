@@ -19,6 +19,7 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
 	"google.golang.org/grpc"
+	"net/http"
 )
 
 //go:embed dis-runner-0.1.1.jar
@@ -209,6 +210,15 @@ func (s *DISReaderService) PartService() types.PartService {
 // Returns nil when bridge mode is not enabled.
 func (s *DISReaderService) BridgeServer() proto.AgentServiceServer {
 	return s.bridgeServer
+}
+
+// RegisterHealth registers /healthz and /metrics on the supplied mux when bridge mode is enabled.
+func (s *DISReaderService) RegisterHealth(mux *http.ServeMux) {
+	if s.bridgeRegistry == nil {
+		return
+	}
+	mux.Handle("/healthz", bridge.HealthHandler(s.bridgeRegistry))
+	mux.Handle("/metrics", bridge.MetricsHandler(s.bridgeRegistry))
 }
 
 // RegisterBridge registers the bridge gRPC handler on the provided server.

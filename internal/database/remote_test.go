@@ -37,6 +37,15 @@ func (r *fakeRegistry) Pick(ctx context.Context, tenantID string) (bridge.AgentC
 	}
 	return r.agent, nil
 }
+func (r *fakeRegistry) Stats() bridge.RegistryStats {
+	if r.err != nil {
+		return bridge.RegistryStats{}
+	}
+	return bridge.RegistryStats{
+		TotalAgents: 1,
+		Tenants:     map[string]int{"t1": 1},
+	}
+}
 
 func TestRemoteDBQueryOk(t *testing.T) {
 	agent := &fakeAgent{

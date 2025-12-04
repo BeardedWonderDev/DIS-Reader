@@ -21,6 +21,13 @@ type AgentRegistry interface {
 	Register(ctx context.Context, tenantID string, agentID string, conn AgentConnection) error
 	Unregister(ctx context.Context, tenantID string, agentID string)
 	Pick(ctx context.Context, tenantID string) (AgentConnection, error)
+	Stats() RegistryStats
+}
+
+// RegistryStats is a snapshot of connected agents per tenant.
+type RegistryStats struct {
+	TotalAgents int
+	Tenants     map[string]int
 }
 
 // InMemoryRegistry is a simple in-process registry suitable for single-instance deployments.
@@ -68,4 +75,15 @@ func (r *InMemoryRegistry) Pick(ctx context.Context, tenantID string) (AgentConn
 		return conn, nil // first available
 	}
 	return nil, errors.New("no agents available")
+}
+
+func (r *InMemoryRegistry) Stats() RegistryStats {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	stats := RegistryStats{Tenants: map[string]int{}}
+	for tenant, agents := range r.agents {
+		stats.Tenants[tenant] = len(agents)
+		stats.TotalAgents += len(agents)
+	}
+	return stats
 }
