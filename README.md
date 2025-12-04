@@ -128,24 +128,11 @@ DISREADER_DISCONFIG_HOST=10.0.0.5 DISREADER_DISCONFIG_USER=XXXXX DISREADER_DISCO
 - Consumers call the exported Go services (or any gRPC/HTTP gateway you layer on) to fetch units, invoices, and parts.
 
 ### Remote mode (agent bridge)
-1. Run the bridge server (cloud side):
-   ```sh
-   go run ./cmd/bridge-server --bridge.config=disreader.yaml
-   ```
-2. Run the LAN agent near DIS (one per tenant, or more for HA):
+1. Run the LAN agent near DIS (one per tenant, or more for HA):
    ```sh
    ./cmd/agent/agent --config agent.yaml
    ```
-3. Point clients at the bridge:
-   ```sh
-   DISREADER_BRIDGE_MODE=remote DISREADER_BRIDGE_SERVERURL="https://bridge.example.com:443" go run ./...
-   ```
-Bridge config keys:
-- `bridge.mode: embedded|remote` (default embedded)
-- `bridge.serverURL`, `bridge.clientID`, `bridge.clientSecret`
-- TLS: `bridge.tls.insecure`, `bridge.tls.caFile`
-
-Client construction (Go):
+2. Client construction (Go):
 ```go
 remote, err := disreader.NewDISReaderRemote(cfg, logger).
     WithDefaultTenant("tenant-1"). // optional; omit for pure per-call tenancy
@@ -172,6 +159,13 @@ units, err := unitSvc.ListUnits(ctx, types.ListParams{Limit: 10})
 if err != nil { log.Fatal(err) }
 fmt.Println("units", len(units))
 ```
+
+Defaults and ports:
+- The remote builder auto-starts gRPC (/AgentService) on `:8443` and HTTP (/healthz,/metrics, pprof if enabled) on `:8080`. Override with env `DISREADER_BRIDGE_PORT` and `DISREADER_BRIDGE_HTTP_PORT`, or supply your own servers via `WithGRPC`/`WithMux`.
+Bridge config keys:
+- `bridge.mode: embedded|remote` (default embedded)
+- `bridge.serverURL`, `bridge.clientID`, `bridge.clientSecret`
+- TLS: `bridge.tls.insecure`, `bridge.tls.caFile`
 
 ### Debug Search Output Modes
 Produce ad-hoc datasets for analysis:

@@ -34,7 +34,7 @@ Audience: teams already integrating DIS Reader (embedded or remote) who are adop
    - If you mocked `database.DB`, keep as-is. To mock tenant-aware paths, use `MultiTenantDB` or wrap with `BindTenant`.
 
 6) Bridge/agent
-   - Bridge server is constructed via the remote builder in `cmd/bridge-server`.
+   - Bridge server is now auto-started by the remote builder unless you supply your own gRPC/mux. The standalone `cmd/bridge-server` binary has been removed.
    - Agent config still requires `tenantID`; that is the authoritative tenant identity on the agent side.
 
 ## Verification checklist
