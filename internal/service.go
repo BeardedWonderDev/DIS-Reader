@@ -18,6 +18,7 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/internal/unit"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
+	"google.golang.org/grpc"
 )
 
 //go:embed dis-runner-0.1.1.jar
@@ -208,6 +209,15 @@ func (s *DISReaderService) PartService() types.PartService {
 // Returns nil when bridge mode is not enabled.
 func (s *DISReaderService) BridgeServer() proto.AgentServiceServer {
 	return s.bridgeServer
+}
+
+// RegisterBridge registers the bridge gRPC handler on the provided server.
+// No-op when bridge mode is disabled.
+func (s *DISReaderService) RegisterBridge(server *grpc.Server) {
+	if s.bridgeServer == nil {
+		return
+	}
+	proto.RegisterAgentServiceServer(server, s.bridgeServer)
 }
 
 func buildAuthenticator(cfg *types.BridgeConfig) bridge.AgentAuthenticator {
