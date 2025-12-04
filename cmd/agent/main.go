@@ -114,11 +114,15 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slo
 
 		if err := runOnce(ctx, cfg, db, logger); err != nil {
 			logger.Error("agent loop error", slog.Any("err", err))
+			time.Sleep(backoff)
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
+			continue
 		}
-		time.Sleep(backoff)
-		if backoff < 30*time.Second {
-			backoff *= 2
-		}
+
+		// Successful run; reset backoff for future interruptions.
+		backoff = time.Second
 	}
 }
 
