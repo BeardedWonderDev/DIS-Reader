@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package bridge;
+
+option go_package = "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// AgentService is a bi-directional stream between cloud and LAN agent.
+service AgentService {
+  rpc Connect(stream AgentToServer) returns (stream ServerToAgent);
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_OK = 1;
+  STATUS_ERROR = 2;
+  STATUS_DONE = 3;
+}
+
+enum JobKind {
+  JOB_KIND_UNSPECIFIED = 0;
+  JOB_KIND_QUERY = 1;
+  JOB_KIND_PING_SERVICE = 2;
+  JOB_KIND_PING_DATABASE = 3;
+  JOB_KIND_CONNECT = 4;
+  JOB_KIND_DISCONNECT = 5;
+}
+
+message AgentHello {
+  string client_id = 1;
+  string client_secret = 2;
+  string version = 3;
+  string tenant_id = 4;
+  map<string, string> labels = 5;
+}
+
+message Heartbeat {
+  google.protobuf.Timestamp at = 1;
+  string agent_id = 2;
+  string tenant_id = 3;
+}
+
+message LogEntry {
+  google.protobuf.Timestamp at = 1;
+  string level = 2;
+  string message = 3;
+  map<string, string> fields = 4;
+}
+
+message Row {
+  map<string, google.protobuf.Value> fields = 1;
+}
+
+message JobRequest {
+  string job_id = 1;
+  JobKind kind = 2;
+  string sql = 3;
+  bool include_src = 4;
+}
+
+message JobResult {
+  string job_id = 1;
+  Status status = 2;
+  string message = 3;
+  repeated Row rows = 4;
+}
+
+message AgentToServer {
+  oneof payload {
+    AgentHello hello = 1;
+    JobResult job_result = 2;
+    Heartbeat heartbeat = 3;
+    LogEntry log = 4;
+  }
+}
+
+message ServerToAgent {
+  oneof payload {
+    JobRequest job_request = 1;
+  }
+}
