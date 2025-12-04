@@ -45,6 +45,12 @@ type DISReaderService struct {
 // starts the JDBC runner, verifies connectivity, and returns an error on failure.
 // Note: This only starts the Java process; AS/400 connectivity is established via Connect.
 func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISReaderService, error) {
+	return NewDISReaderServiceWithAuth(config, logger, nil)
+}
+
+// NewDISReaderServiceWithAuth allows callers to supply a custom AgentAuthenticator.
+// When auth is nil, a static authenticator is derived from bridge config.
+func NewDISReaderServiceWithAuth(config *types.DISConfig, logger *slog.Logger, auth bridge.AgentAuthenticator) (*DISReaderService, error) {
 	var logLevel slog.LevelVar
 	logLevel.Set(config.LogLevel)
 
@@ -56,7 +62,7 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 
 	if config.Bridge != nil && strings.EqualFold(config.Bridge.Mode, "remote") {
 		registry := bridge.NewInMemoryRegistry()
-		auth := buildAuthenticator(config.Bridge)
+		authenticator := buildAuthenticator(config.Bridge, auth)
 		db := database.NewRemoteDB(config.Bridge.TenantID, registry, logger)
 
 		s := &DISReaderService{
@@ -65,7 +71,7 @@ func NewDISReaderService(config *types.DISConfig, logger *slog.Logger) (*DISRead
 			logger:         logger,
 			logLevel:       &logLevel,
 			bridgeRegistry: registry,
-			bridgeServer:   bridge.NewServer(auth, registry, logger),
+			bridgeServer:   bridge.NewServer(authenticator, registry, logger),
 			unitService:    unit.NewUnitService(db),
 			invoiceService: invoices.NewInvoiceService(db),
 			partService:    parts.NewService(db),
@@ -230,7 +236,10 @@ func (s *DISReaderService) RegisterBridge(server *grpc.Server) {
 	proto.RegisterAgentServiceServer(server, s.bridgeServer)
 }
 
-func buildAuthenticator(cfg *types.BridgeConfig) bridge.AgentAuthenticator {
+func buildAuthenticator(cfg *types.BridgeConfig, override bridge.AgentAuthenticator) bridge.AgentAuthenticator {
+	if override != nil {
+		return override
+	}
 	if cfg == nil {
 		return &bridge.StaticAuthenticator{Secrets: map[string]bridge.StaticAgentSecret{}}
 	}
