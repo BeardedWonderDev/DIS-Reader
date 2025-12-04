@@ -11,6 +11,12 @@ type AgentAuthenticator interface {
 	Authenticate(ctx context.Context, clientID, clientSecret string, tenantID string) (string, string, error)
 }
 
+// ReloadableAuthenticator optionally supports live reload of credentials.
+type ReloadableAuthenticator interface {
+	AgentAuthenticator
+	Reload() error
+}
+
 // StaticAuthenticator is a simple map-based authenticator for bootstrapping and tests.
 type StaticAuthenticator struct {
 	Secrets map[string]StaticAgentSecret

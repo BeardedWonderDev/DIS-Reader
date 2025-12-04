@@ -37,6 +37,7 @@ type DISReaderService struct {
 
 	bridgeRegistry bridge.AgentRegistry
 	bridgeServer   *bridge.Server
+	reloadStop     chan struct{}
 
 	unitService    types.UnitService
 	invoiceService types.InvoiceService
@@ -74,10 +75,18 @@ func NewDISReaderServiceWithAuth(config *types.DISConfig, logger *slog.Logger, a
 			logLevel:       &logLevel,
 			bridgeRegistry: registry,
 			bridgeServer:   bridge.NewServer(authenticator, registry, logger),
+			reloadStop:     make(chan struct{}),
 			unitService:    unit.NewUnitService(db),
 			invoiceService: invoices.NewInvoiceService(db),
 			partService:    parts.NewService(db),
 		}
+
+		if config.Bridge.CredentialReloadSeconds > 0 {
+			if r, ok := authenticator.(bridge.ReloadableAuthenticator); ok {
+				go s.startAuthReload(r, time.Duration(config.Bridge.CredentialReloadSeconds)*time.Second)
+			}
+		}
+
 		return s, nil
 	}
 
@@ -181,6 +190,9 @@ func (s *DISReaderService) Disconnect(ctx context.Context) error {
 // Shutdown stops the JDBC runner and cleans up temporary files.
 func (s *DISReaderService) Shutdown() error {
 	s.logger.Info("Shutting down DISReaderService")
+	if s.reloadStop != nil {
+		close(s.reloadStop)
+	}
 	err := s.db.StopJDBCRunner()
 	if s.tempDir != "" {
 		if remErr := os.RemoveAll(s.tempDir); remErr != nil {
@@ -243,6 +255,21 @@ func registerPprof(mux *http.ServeMux, base string) {
 	mux.Handle(base+"trace", http.HandlerFunc(pprof.Trace))
 }
 
+func (s *DISReaderService) startAuthReload(r bridge.ReloadableAuthenticator, interval time.Duration) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			if err := r.Reload(); err != nil && s.logger != nil {
+				s.logger.Warn("auth reload failed", slog.Any("err", err))
+			}
+		case <-s.reloadStop:
+			return
+		}
+	}
+}
+
 // RegisterBridge registers the bridge gRPC handler on the provided server.
 // No-op when bridge mode is disabled.
 func (s *DISReaderService) RegisterBridge(server *grpc.Server) {
@@ -261,9 +288,6 @@ func buildAuthenticator(cfg *types.BridgeConfig, override bridge.AgentAuthentica
 	}
 	if cfg.CredentialFile != "" {
 		if fa, err := bridge.NewFileAuthenticator(cfg.CredentialFile); err == nil {
-			if cfg.CredentialReloadSeconds > 0 {
-				fa.StartAutoReload(time.Duration(cfg.CredentialReloadSeconds) * time.Second)
-			}
 			return fa
 		}
 	}
