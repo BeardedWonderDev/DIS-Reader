@@ -14,21 +14,19 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-// RemoteDB satisfies the DB interface by proxying calls to a remote agent over the bridge.
+// RemoteDB satisfies the MultiTenantDB interface by proxying calls to a remote agent over the bridge.
 type RemoteDB struct {
-	tenantID       string
 	registry       bridge.AgentRegistry
 	Logger         *slog.Logger
 	maxRows        int
 	maxResultBytes int64
 }
 
-func NewRemoteDB(tenantID string, registry bridge.AgentRegistry, logger *slog.Logger, maxRows int, maxBytes int64) *RemoteDB {
+func NewRemoteDB(registry bridge.AgentRegistry, logger *slog.Logger, maxRows int, maxBytes int64) *RemoteDB {
 	if maxRows <= 0 {
 		maxRows = 1000
 	}
 	return &RemoteDB{
-		tenantID:       tenantID,
 		registry:       registry,
 		Logger:         logger,
 		maxRows:        maxRows,
@@ -40,45 +38,45 @@ func NewRemoteDB(tenantID string, registry bridge.AgentRegistry, logger *slog.Lo
 func (r *RemoteDB) StartJDBCRunner() error { return nil }
 func (r *RemoteDB) StopJDBCRunner() error  { return nil }
 
-func (r *RemoteDB) Connect(ctx context.Context) error {
-	_, err := r.sendJob(ctx, &bridgeproto.JobRequest{
+func (r *RemoteDB) Connect(ctx context.Context, tenant string) error {
+	_, err := r.sendJob(ctx, tenant, &bridgeproto.JobRequest{
 		JobId: uuid.New().String(),
 		Kind:  bridgeproto.JobKind_JOB_KIND_CONNECT,
 	})
 	return err
 }
 
-func (r *RemoteDB) Disconnect(ctx context.Context) error {
-	_, err := r.sendJob(ctx, &bridgeproto.JobRequest{
+func (r *RemoteDB) Disconnect(ctx context.Context, tenant string) error {
+	_, err := r.sendJob(ctx, tenant, &bridgeproto.JobRequest{
 		JobId: uuid.New().String(),
 		Kind:  bridgeproto.JobKind_JOB_KIND_DISCONNECT,
 	})
 	return err
 }
 
-func (r *RemoteDB) PingService(ctx context.Context) error {
-	_, err := r.sendJob(ctx, &bridgeproto.JobRequest{
+func (r *RemoteDB) PingService(ctx context.Context, tenant string) error {
+	_, err := r.sendJob(ctx, tenant, &bridgeproto.JobRequest{
 		JobId: uuid.New().String(),
 		Kind:  bridgeproto.JobKind_JOB_KIND_PING_SERVICE,
 	})
 	return err
 }
 
-func (r *RemoteDB) PingDatabase(ctx context.Context) error {
-	_, err := r.sendJob(ctx, &bridgeproto.JobRequest{
+func (r *RemoteDB) PingDatabase(ctx context.Context, tenant string) error {
+	_, err := r.sendJob(ctx, tenant, &bridgeproto.JobRequest{
 		JobId: uuid.New().String(),
 		Kind:  bridgeproto.JobKind_JOB_KIND_PING_DATABASE,
 	})
 	return err
 }
 
-func (r *RemoteDB) Query(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error) {
+func (r *RemoteDB) Query(ctx context.Context, query string, tenant string, args ...interface{}) ([]types.ResultRow, error) {
 	req := &bridgeproto.JobRequest{
 		JobId: uuid.New().String(),
 		Kind:  bridgeproto.JobKind_JOB_KIND_QUERY,
 		Sql:   query,
 	}
-	res, err := r.sendJob(ctx, req)
+	res, err := r.sendJob(ctx, tenant, req)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +84,8 @@ func (r *RemoteDB) Query(ctx context.Context, query string, args ...interface{})
 	return r.enforceLimits(rows), nil
 }
 
-func (r *RemoteDB) QueryRow(ctx context.Context, query string, args ...interface{}) (types.ResultRow, error) {
-	rows, err := r.Query(ctx, query, args...)
+func (r *RemoteDB) QueryRow(ctx context.Context, query string, tenant string, args ...interface{}) (types.ResultRow, error) {
+	rows, err := r.Query(ctx, query, tenant, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,30 +95,30 @@ func (r *RemoteDB) QueryRow(ctx context.Context, query string, args ...interface
 	return rows[0], nil
 }
 
-func (r *RemoteDB) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	rows, err := r.Query(ctx, query, args...)
+func (r *RemoteDB) Select(ctx context.Context, dest interface{}, query string, tenant string, args ...interface{}) error {
+	rows, err := r.Query(ctx, query, tenant, args...)
 	if err != nil {
 		return err
 	}
 	return r.decodeResult(rows, dest)
 }
 
-func (r *RemoteDB) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	row, err := r.QueryRow(ctx, query, args...)
+func (r *RemoteDB) Get(ctx context.Context, dest interface{}, query string, tenant string, args ...interface{}) error {
+	row, err := r.QueryRow(ctx, query, tenant, args...)
 	if err != nil {
 		return err
 	}
 	return r.decodeResult(row, dest)
 }
 
-func (r *RemoteDB) QueryWithSource(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error) {
+func (r *RemoteDB) QueryWithSource(ctx context.Context, query string, tenant string, args ...interface{}) ([]types.ResultRow, error) {
 	req := &bridgeproto.JobRequest{
 		JobId:      uuid.New().String(),
 		Kind:       bridgeproto.JobKind_JOB_KIND_QUERY,
 		Sql:        query,
 		IncludeSrc: true,
 	}
-	res, err := r.sendJob(ctx, req)
+	res, err := r.sendJob(ctx, tenant, req)
 	if err != nil {
 		return nil, err
 	}
@@ -130,14 +128,17 @@ func (r *RemoteDB) QueryWithSource(ctx context.Context, query string, args ...in
 
 // --- helpers ---
 
-func (r *RemoteDB) sendJob(ctx context.Context, req *bridgeproto.JobRequest) (*bridgeproto.JobResult, error) {
-	agent, err := r.registry.Pick(ctx, r.tenantID)
+func (r *RemoteDB) sendJob(ctx context.Context, tenant string, req *bridgeproto.JobRequest) (*bridgeproto.JobResult, error) {
+	if tenant == "" {
+		return nil, fmt.Errorf("tenant is required for remote DB call")
+	}
+	agent, err := r.registry.Pick(ctx, tenant)
 	if err != nil {
 		return nil, err
 	}
 	start := time.Now()
 	res, err := agent.SendJob(ctx, req)
-	r.registry.ObserveQuery(r.tenantID, agent.AgentID(), time.Since(start))
+	r.registry.ObserveQuery(tenant, agent.AgentID(), time.Since(start))
 	if err != nil {
 		return nil, err
 	}

@@ -57,9 +57,9 @@ func TestRemoteDBQueryOk(t *testing.T) {
 		},
 	}
 	reg := &fakeRegistry{agent: agent}
-	db := NewRemoteDB("t1", reg, nil, 1000, 0)
+	db := NewRemoteDB(reg, nil, 1000, 0)
 
-	rows, err := db.Query(context.Background(), "select 1")
+	rows, err := db.Query(context.Background(), "select 1", "t1")
 	if err != nil {
 		t.Fatalf("expected nil err, got %v", err)
 	}
@@ -76,9 +76,9 @@ func TestRemoteDBErrorStatus(t *testing.T) {
 		},
 	}
 	reg := &fakeRegistry{agent: agent}
-	db := NewRemoteDB("t1", reg, nil, 1000, 0)
+	db := NewRemoteDB(reg, nil, 1000, 0)
 
-	_, err := db.Query(context.Background(), "select 1")
+	_, err := db.Query(context.Background(), "select 1", "t1")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -86,8 +86,8 @@ func TestRemoteDBErrorStatus(t *testing.T) {
 
 func TestRemoteDBNoAgent(t *testing.T) {
 	reg := &fakeRegistry{err: errors.New("no agent")}
-	db := NewRemoteDB("t1", reg, nil, 1000, 0)
-	_, err := db.Query(context.Background(), "select 1")
+	db := NewRemoteDB(reg, nil, 1000, 0)
+	_, err := db.Query(context.Background(), "select 1", "t1")
 	if err == nil {
 		t.Fatal("expected error")
 	}

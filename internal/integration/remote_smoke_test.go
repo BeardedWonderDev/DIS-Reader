@@ -61,13 +61,13 @@ func TestRemoteSmokeQuery(t *testing.T) {
 	}()
 
 	// Remote DB hitting registry.
-	remoteDB := database.NewRemoteDB("t1", reg, nil, 1000, 0)
+	remoteDB := database.NewRemoteDB(reg, nil, 1000, 0)
 
 	require.Eventually(t, func() bool {
 		return reg.Stats().TotalAgents > 0
 	}, time.Second, 50*time.Millisecond, "agent should register")
 
-	rows, err := remoteDB.Query(ctx, "select 1")
+	rows, err := remoteDB.Query(ctx, "select 1", "t1")
 	if err != nil {
 		t.Fatalf("remote query err: %v", err)
 	}

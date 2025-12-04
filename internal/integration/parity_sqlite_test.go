@@ -77,7 +77,7 @@ func TestParityEmbeddedVsRemote(t *testing.T) {
 		}
 	}()
 
-	remoteDB := database.NewRemoteDB("t1", reg, nil, 1000, 0)
+	remoteDB := database.NewRemoteDB(reg, nil, 1000, 0)
 
 	// Wait for agent to register or fail
 	select {
@@ -88,7 +88,7 @@ func TestParityEmbeddedVsRemote(t *testing.T) {
 	require.Eventually(t, func() bool { return reg.Stats().TotalAgents > 0 }, time.Second, 25*time.Millisecond)
 
 	// Parity: query rows
-	rows, err := remoteDB.Query(ctx, "select 1")
+	rows, err := remoteDB.Query(ctx, "select 1", "t1")
 	if err != nil {
 		t.Fatalf("remote query err: %v", err)
 	}
@@ -97,10 +97,10 @@ func TestParityEmbeddedVsRemote(t *testing.T) {
 	}
 
 	// Parity: ping service/db
-	if err := remoteDB.PingService(ctx); err != nil {
+	if err := remoteDB.PingService(ctx, "t1"); err != nil {
 		t.Fatalf("remote ping service err: %v", err)
 	}
-	if err := remoteDB.PingDatabase(ctx); err != nil {
+	if err := remoteDB.PingDatabase(ctx, "t1"); err != nil {
 		t.Fatalf("remote ping db err: %v", err)
 	}
 
