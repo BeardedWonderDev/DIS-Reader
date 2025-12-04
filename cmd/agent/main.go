@@ -101,17 +101,38 @@ func main() {
 	}
 	defer db.StopJDBCRunner()
 
+	runAgent(ctx, cfg, db, logger)
+}
+
+func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog.Logger) {
+	backoff := time.Second
+	for {
+		if err := ctx.Err(); err != nil {
+			return
+		}
+
+		if err := runOnce(ctx, cfg, db, logger); err != nil {
+			logger.Error("agent loop error", slog.Any("err", err))
+		}
+		time.Sleep(backoff)
+		if backoff < 30*time.Second {
+			backoff *= 2
+		}
+	}
+}
+
+func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog.Logger) error {
 	creds := dialCredentials(cfg)
 	conn, err := grpc.DialContext(ctx, cfg.ServerURL, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		log.Fatalf("dial bridge: %v", err)
+		return fmt.Errorf("dial bridge: %w", err)
 	}
 	defer conn.Close()
 
 	client := proto.NewAgentServiceClient(conn)
 	stream, err := client.Connect(ctx)
 	if err != nil {
-		log.Fatalf("connect stream: %v", err)
+		return fmt.Errorf("connect stream: %w", err)
 	}
 
 	hello := &proto.AgentHello{
@@ -121,16 +142,17 @@ func main() {
 		TenantId:     cfg.TenantID,
 	}
 	if err := stream.Send(&proto.AgentToServer{Payload: &proto.AgentToServer_Hello{Hello: hello}}); err != nil {
-		log.Fatalf("send hello: %v", err)
+		return fmt.Errorf("send hello: %w", err)
 	}
 
-	go sendHeartbeats(ctx, stream, cfg)
+	hbCtx, cancelHB := context.WithCancel(ctx)
+	defer cancelHB()
+	go sendHeartbeats(hbCtx, stream, cfg)
 
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
-			logger.Error("stream recv", slog.Any("err", err))
-			return
+			return err
 		}
 		req := msg.GetJobRequest()
 		if req == nil {
@@ -139,8 +161,7 @@ func main() {
 
 		res := executeJob(ctx, db, req, logger)
 		if err := stream.Send(&proto.AgentToServer{Payload: &proto.AgentToServer_JobResult{JobResult: res}}); err != nil {
-			logger.Error("send job result", slog.Any("err", err))
-			return
+			return err
 		}
 	}
 }
