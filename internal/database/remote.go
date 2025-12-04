@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
 	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
@@ -134,7 +135,9 @@ func (r *RemoteDB) sendJob(ctx context.Context, req *bridgeproto.JobRequest) (*b
 	if err != nil {
 		return nil, err
 	}
+	start := time.Now()
 	res, err := agent.SendJob(ctx, req)
+	r.registry.ObserveQuery(r.tenantID, agent.AgentID(), time.Since(start))
 	if err != nil {
 		return nil, err
 	}
