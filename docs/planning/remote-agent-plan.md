@@ -58,6 +58,26 @@ Scope: Move the JDBC runner into a LAN “agent” that dials out to the cloud-h
   - `remote` → `remoteDB` (requires registry client)
 - Add helper to start bridge server when running in “cloud” role (optional flag/env).
 
+### Phase 5 — Security & Ops
+- TLS required on bridge gRPC; support `insecureSkipVerify` only for testing.
+- Health/metrics endpoints for bridge: `/healthz` (readiness based on agent count) and `/metrics` (Prometheus gauges).
+- Heartbeat timeout handling and reconnection in agent.
+- Auth: pluggable `AgentAuthenticator`; default static allow-list with clientID/secret → tenant/agent.
+
+### Phase 6 — Compatibility & Migration
+- Keep embedded as default; document bridge config in `disreader.yaml` sample.
+- Migration guide (`wiki/bridge_mode.md`) covering agent deploy (systemd example), bridge server wiring, and network expectations (outbound 443 only).
+- Ensure no breaking changes to UI/services; DB backend swap only.
+
+### Phase 7 — Testing & Validation
+- Unit tests for remote DB happy/error paths using mock registry/agent.
+- Integration smoke: in-memory gRPC bridge + agent using SQLite fixture; assert a simple query matches embedded output.
+- Parity check for `PingService`/`PingDatabase` via remote path.
+
+### Phase 8 — Operational Entry Points
+- Optional standalone `bridge-server` command to host gRPC + health/metrics for quick deployment.
+- Document how to mount `RegisterBridge`/`RegisterHealth` on an existing parent server (code snippet).
+
 ## New/Modified Paths
 - New: `proto/bridge.proto`, `internal/bridge/proto/*`, `internal/bridge/{server.go,registry.go,auth.go}`, `internal/database/remote.go`, `cmd/agent/main.go`, `configs/agent.yaml.example`, `docs/planning/remote-agent-plan.md`.
 - Modified: `types/config.go`, `config.go`, `internal/service.go`, `main.go`, `go.mod` (grpc/proto deps), `disreader.yaml` (sample), possibly `Makefile`/`README` later (not in scope phases 0–4).
