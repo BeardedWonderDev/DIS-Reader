@@ -13,6 +13,11 @@ Add to `disreader.yaml` or envs (`DISREADER_BRIDGE_*`):
 bridge:
   mode: remote            # embedded | remote
   credentialFile: "bridge_agents.yaml"   # optional; overrides static list
+  credentialReloadSeconds: 0             # >0 to auto-reload credentialFile periodically
+  maxRowsPerQuery: 1000                  # 0 = unlimited (applied on remote DB proxy)
+  maxResultBytes: 0                      # 0 = unlimited; drop rows beyond byte budget
+  pprofEnabled: false                    # enable /debug/pprof/* on bridge HTTP mux
+  pprofPath: /debug/pprof/               # custom pprof base path
   serverURL: "bridge.example.com:443"   # agent uses this
   clientID: "agent-001"
   clientSecret: "replace-me"
@@ -33,6 +38,10 @@ Defaults:
   1) Custom authenticator passed to `NewDISReaderServiceWithAuth`
   2) `credentialFile` (YAML/JSON list of clientID/secret/tenantID/agentID)
   3) Static allow-list in `allowedAgents` / top-level clientID+secret
+- Result limits:
+  - `maxRowsPerQuery` trims row count on the remote DB proxy; agents also honor `DISAGENT_MAX_ROWS` (default 1000).
+  - `maxResultBytes` caps total marshaled response size (best-effort).
+- Debugging: enable `pprofEnabled` and protect the bridge HTTP port via network ACLs if exposing pprof.
 
 ## Hosting the Bridge Server
 1. Construct `DISReaderService` with a config where `bridge.mode=remote`.

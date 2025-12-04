@@ -60,9 +60,10 @@ go run ./cmd/agent
 
 ## Health & Metrics
 - `GET /healthz` returns `status`, `total_agents`, `tenants`.
-- `GET /metrics` exposes `bridge_agents_total` and `bridge_agents_per_tenant`.
+- `GET /metrics` exposes `bridge_agents_total`, `bridge_agents_per_tenant`, per-tenant/agent query counts, and latency summary (mean/max).
+- Optional: enable pprof by setting `bridge.pprofEnabled=true` (or `DISREADER_BRIDGE_PPROFENABLED=true`) — only do this on trusted networks.
 
 ## Notes
-- Auth is static allow-list (clientID/secret). Rotate by updating bridge config and restarting.
+- Auth options: custom authenticator, credentialFile (with optional reload), or static allow-list (clientID/secret). Rotate by updating creds and reloading; file auth can auto-reload with `credentialReloadSeconds`.
 - Agent reconnects with exponential backoff and sends heartbeats every 30s.
 - Result values send timestamps as epoch millis; other values use protobuf `structpb.Value`.
