@@ -46,7 +46,7 @@ package-windows: build-binaries
 		cp packaging/examples/bridge_agents.yaml $$OUT/bridge_agents.yaml; \
 		cp packaging/windows/install_service.ps1 $$OUT/install_service.ps1; \
 		cp packaging/windows/uninstall_service.ps1 $$OUT/uninstall_service.ps1; \
-		zip -j $(DIST)/dis-agent-windows-$${arch}.zip $$OUT/dis-agent $$OUT/agent.yaml $$OUT/bridge_agents.yaml $$OUT/install_service.ps1 $$OUT/uninstall_service.ps1; \
+		(cd $$OUT && zip -r ../dis-agent-windows-$${arch}.zip dis-agent agent.yaml bridge_agents.yaml install_service.ps1 uninstall_service.ps1); \
 	done
 
 checksum:
