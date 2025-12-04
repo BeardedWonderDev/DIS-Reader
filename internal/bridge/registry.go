@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 )
@@ -22,23 +23,40 @@ type AgentRegistry interface {
 	Unregister(ctx context.Context, tenantID string, agentID string)
 	Pick(ctx context.Context, tenantID string) (AgentConnection, error)
 	Stats() RegistryStats
+	ObserveQuery(tenantID, agentID string, latency time.Duration)
 }
 
 // RegistryStats is a snapshot of connected agents per tenant.
 type RegistryStats struct {
 	TotalAgents int
 	Tenants     map[string]int
+	QueryCounts map[RegistryKey]int64
+	Latency     map[RegistryKey]LatencyAgg
+}
+
+type RegistryKey struct {
+	Tenant string
+	Agent  string
+}
+
+type LatencyAgg struct {
+	Count int64
+	Sum   float64
 }
 
 // InMemoryRegistry is a simple in-process registry suitable for single-instance deployments.
 type InMemoryRegistry struct {
 	mu     sync.RWMutex
 	agents map[string]map[string]AgentConnection // tenant -> agentID -> conn
+	counts map[RegistryKey]int64
+	lat    map[RegistryKey]LatencyAgg
 }
 
 func NewInMemoryRegistry() *InMemoryRegistry {
 	return &InMemoryRegistry{
 		agents: map[string]map[string]AgentConnection{},
+		counts: map[RegistryKey]int64{},
+		lat:    map[RegistryKey]LatencyAgg{},
 	}
 }
 
@@ -80,10 +98,27 @@ func (r *InMemoryRegistry) Pick(ctx context.Context, tenantID string) (AgentConn
 func (r *InMemoryRegistry) Stats() RegistryStats {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	stats := RegistryStats{Tenants: map[string]int{}}
+	stats := RegistryStats{Tenants: map[string]int{}, QueryCounts: map[RegistryKey]int64{}, Latency: map[RegistryKey]LatencyAgg{}}
 	for tenant, agents := range r.agents {
 		stats.Tenants[tenant] = len(agents)
 		stats.TotalAgents += len(agents)
 	}
+	for k, v := range r.counts {
+		stats.QueryCounts[k] = v
+	}
+	for k, v := range r.lat {
+		stats.Latency[k] = v
+	}
 	return stats
+}
+
+func (r *InMemoryRegistry) ObserveQuery(tenantID, agentID string, latency time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := RegistryKey{Tenant: tenantID, Agent: agentID}
+	r.counts[key]++
+	agg := r.lat[key]
+	agg.Count++
+	agg.Sum += latency.Seconds()
+	r.lat[key] = agg
 }

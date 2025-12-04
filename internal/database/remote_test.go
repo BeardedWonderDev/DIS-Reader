@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
 	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
@@ -46,6 +47,7 @@ func (r *fakeRegistry) Stats() bridge.RegistryStats {
 		Tenants:     map[string]int{"t1": 1},
 	}
 }
+func (r *fakeRegistry) ObserveQuery(tenantID, agentID string, latency time.Duration) {}
 
 func TestRemoteDBQueryOk(t *testing.T) {
 	agent := &fakeAgent{
