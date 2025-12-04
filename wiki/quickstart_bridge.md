@@ -16,6 +16,19 @@ DISREADER_BRIDGE_CLIENTSECRET=secret \
 DISREADER_BRIDGE_TENANTID=t1 \
 go run ./cmd/bridge-server
 ```
+- To load credentials from file instead of env/static list:
+  ```sh
+  DISREADER_BRIDGE_MODE=remote \
+  DISREADER_BRIDGE_CREDENTIALFILE=bridge_agents.yaml \
+  go run ./cmd/bridge-server
+  ```
+  Example `bridge_agents.yaml`:
+  ```yaml
+  - clientID: agent
+    clientSecret: secret
+    tenantID: t1
+    agentID: agent
+  ```
 - gRPC on `:8443` (override `DISREADER_BRIDGE_PORT`)
 - Health/metrics on `:8080` (`/healthz`, `/metrics`; override `DISREADER_BRIDGE_HTTP_PORT`)
 - Attach TLS/ingress as appropriate for your environment.

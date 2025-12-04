@@ -12,6 +12,7 @@ Add to `disreader.yaml` or envs (`DISREADER_BRIDGE_*`):
 ```yaml
 bridge:
   mode: remote            # embedded | remote
+  credentialFile: "bridge_agents.yaml"   # optional; overrides static list
   serverURL: "bridge.example.com:443"   # agent uses this
   clientID: "agent-001"
   clientSecret: "replace-me"
@@ -28,6 +29,10 @@ bridge:
 Defaults:
 - `bridge.mode` = `embedded` (current behavior).
 - TLS is required; set `insecureSkipVerify: true` only for testing.
+- Auth order of precedence:
+  1) Custom authenticator passed to `NewDISReaderServiceWithAuth`
+  2) `credentialFile` (YAML/JSON list of clientID/secret/tenantID/agentID)
+  3) Static allow-list in `allowedAgents` / top-level clientID+secret
 
 ## Hosting the Bridge Server
 1. Construct `DISReaderService` with a config where `bridge.mode=remote`.
