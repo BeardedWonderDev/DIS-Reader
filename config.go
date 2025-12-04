@@ -35,6 +35,9 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetDefault("bridge.mode", "embedded")
 	viper.SetDefault("bridge.tls.insecureSkipVerify", false)
 	viper.SetDefault("bridge.credentialFile", "")
+	viper.SetDefault("bridge.credentialReloadSeconds", 0)
+	viper.SetDefault("bridge.maxRowsPerQuery", 1000)
+	viper.SetDefault("bridge.maxResultBytes", 0) // 0 = unlimited
 	viper.SetDefault("bridge.pprofEnabled", false)
 	viper.SetDefault("bridge.pprofPath", "/debug/pprof/")
 

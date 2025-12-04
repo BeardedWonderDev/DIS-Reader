@@ -57,7 +57,7 @@ func TestRemoteDBQueryOk(t *testing.T) {
 		},
 	}
 	reg := &fakeRegistry{agent: agent}
-	db := NewRemoteDB("t1", reg, nil)
+	db := NewRemoteDB("t1", reg, nil, 1000, 0)
 
 	rows, err := db.Query(context.Background(), "select 1")
 	if err != nil {
@@ -76,7 +76,7 @@ func TestRemoteDBErrorStatus(t *testing.T) {
 		},
 	}
 	reg := &fakeRegistry{agent: agent}
-	db := NewRemoteDB("t1", reg, nil)
+	db := NewRemoteDB("t1", reg, nil, 1000, 0)
 
 	_, err := db.Query(context.Background(), "select 1")
 	if err == nil {
@@ -86,7 +86,7 @@ func TestRemoteDBErrorStatus(t *testing.T) {
 
 func TestRemoteDBNoAgent(t *testing.T) {
 	reg := &fakeRegistry{err: errors.New("no agent")}
-	db := NewRemoteDB("t1", reg, nil)
+	db := NewRemoteDB("t1", reg, nil, 1000, 0)
 	_, err := db.Query(context.Background(), "select 1")
 	if err == nil {
 		t.Fatal("expected error")

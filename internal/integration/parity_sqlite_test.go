@@ -77,7 +77,7 @@ func TestParityEmbeddedVsRemote(t *testing.T) {
 		}
 	}()
 
-	remoteDB := database.NewRemoteDB("t1", reg, nil)
+	remoteDB := database.NewRemoteDB("t1", reg, nil, 1000, 0)
 
 	// Wait for agent to register or fail
 	select {

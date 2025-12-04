@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -14,16 +15,23 @@ import (
 
 // RemoteDB satisfies the DB interface by proxying calls to a remote agent over the bridge.
 type RemoteDB struct {
-	tenantID string
-	registry bridge.AgentRegistry
-	Logger   *slog.Logger
+	tenantID       string
+	registry       bridge.AgentRegistry
+	Logger         *slog.Logger
+	maxRows        int
+	maxResultBytes int64
 }
 
-func NewRemoteDB(tenantID string, registry bridge.AgentRegistry, logger *slog.Logger) *RemoteDB {
+func NewRemoteDB(tenantID string, registry bridge.AgentRegistry, logger *slog.Logger, maxRows int, maxBytes int64) *RemoteDB {
+	if maxRows <= 0 {
+		maxRows = 1000
+	}
 	return &RemoteDB{
-		tenantID: tenantID,
-		registry: registry,
-		Logger:   logger,
+		tenantID:       tenantID,
+		registry:       registry,
+		Logger:         logger,
+		maxRows:        maxRows,
+		maxResultBytes: maxBytes,
 	}
 }
 
@@ -73,7 +81,8 @@ func (r *RemoteDB) Query(ctx context.Context, query string, args ...interface{})
 	if err != nil {
 		return nil, err
 	}
-	return protoRowsToResultRows(res.Rows), nil
+	rows := protoRowsToResultRows(res.Rows)
+	return r.enforceLimits(rows), nil
 }
 
 func (r *RemoteDB) QueryRow(ctx context.Context, query string, args ...interface{}) (types.ResultRow, error) {
@@ -114,7 +123,8 @@ func (r *RemoteDB) QueryWithSource(ctx context.Context, query string, args ...in
 	if err != nil {
 		return nil, err
 	}
-	return protoRowsToResultRows(res.Rows), nil
+	rows := protoRowsToResultRows(res.Rows)
+	return r.enforceLimits(rows), nil
 }
 
 // --- helpers ---
@@ -147,6 +157,27 @@ func protoRowsToResultRows(rows []*bridgeproto.Row) []types.ResultRow {
 		out = append(out, m)
 	}
 	return out
+}
+
+func (r *RemoteDB) enforceLimits(rows []types.ResultRow) []types.ResultRow {
+	limited := rows
+	if r.maxRows > 0 && len(limited) > r.maxRows {
+		limited = limited[:r.maxRows]
+	}
+	if r.maxResultBytes > 0 {
+		var total int64
+		out := make([]types.ResultRow, 0, len(limited))
+		for _, row := range limited {
+			b, _ := json.Marshal(row)
+			if total+int64(len(b)) > r.maxResultBytes {
+				break
+			}
+			total += int64(len(b))
+			out = append(out, row)
+		}
+		limited = out
+	}
+	return limited
 }
 
 func (r *RemoteDB) decodeResult(raw interface{}, dest interface{}) error {

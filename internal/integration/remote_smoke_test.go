@@ -61,7 +61,7 @@ func TestRemoteSmokeQuery(t *testing.T) {
 	}()
 
 	// Remote DB hitting registry.
-	remoteDB := database.NewRemoteDB("t1", reg, nil)
+	remoteDB := database.NewRemoteDB("t1", reg, nil, 1000, 0)
 
 	require.Eventually(t, func() bool {
 		return reg.Stats().TotalAgents > 0

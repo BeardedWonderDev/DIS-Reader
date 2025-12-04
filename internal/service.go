@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
@@ -64,7 +65,7 @@ func NewDISReaderServiceWithAuth(config *types.DISConfig, logger *slog.Logger, a
 	if config.Bridge != nil && strings.EqualFold(config.Bridge.Mode, "remote") {
 		registry := bridge.NewInMemoryRegistry()
 		authenticator := buildAuthenticator(config.Bridge, auth)
-		db := database.NewRemoteDB(config.Bridge.TenantID, registry, logger)
+		db := database.NewRemoteDB(config.Bridge.TenantID, registry, logger, config.Bridge.MaxRowsPerQuery, config.Bridge.MaxResultBytes)
 
 		s := &DISReaderService{
 			config:         config,
@@ -260,6 +261,9 @@ func buildAuthenticator(cfg *types.BridgeConfig, override bridge.AgentAuthentica
 	}
 	if cfg.CredentialFile != "" {
 		if fa, err := bridge.NewFileAuthenticator(cfg.CredentialFile); err == nil {
+			if cfg.CredentialReloadSeconds > 0 {
+				fa.StartAutoReload(time.Duration(cfg.CredentialReloadSeconds) * time.Second)
+			}
 			return fa
 		}
 	}

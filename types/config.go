@@ -45,6 +45,9 @@ type BridgeConfig struct {
 	Allowed        []BridgeAgentCredential `mapstructure:"allowedAgents"`
 	PprofEnabled   bool                    `mapstructure:"pprofEnabled"`
 	PprofPath      string                  `mapstructure:"pprofPath"`
+	CredentialReloadSeconds int            `mapstructure:"credentialReloadSeconds"`
+	MaxRowsPerQuery int                   `mapstructure:"maxRowsPerQuery"`
+	MaxResultBytes  int64                 `mapstructure:"maxResultBytes"`
 }
 
 type BridgeTLSConfig struct {

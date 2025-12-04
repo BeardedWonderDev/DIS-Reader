@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,6 +17,7 @@ type FileAuthenticator struct {
 	path    string
 	mu      sync.RWMutex
 	secrets map[string]StaticAgentSecret
+	stopCh  chan struct{}
 }
 
 type fileAgent struct {
@@ -26,7 +28,7 @@ type fileAgent struct {
 }
 
 func NewFileAuthenticator(path string) (*FileAuthenticator, error) {
-	f := &FileAuthenticator{path: path, secrets: map[string]StaticAgentSecret{}}
+	f := &FileAuthenticator{path: path, secrets: map[string]StaticAgentSecret{}, stopCh: make(chan struct{})}
 	if err := f.Reload(); err != nil {
 		return nil, err
 	}
@@ -70,4 +72,32 @@ func (f *FileAuthenticator) Reload() error {
 	f.secrets = m
 	f.mu.Unlock()
 	return nil
+}
+
+// StartAutoReload triggers periodic reload. Pass interval <=0 to skip.
+func (f *FileAuthenticator) StartAutoReload(interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				_ = f.Reload()
+			case <-f.stopCh:
+				return
+			}
+		}
+	}()
+}
+
+func (f *FileAuthenticator) StopAutoReload() {
+	select {
+	case <-f.stopCh:
+		return
+	default:
+		close(f.stopCh)
+	}
 }
