@@ -27,13 +27,13 @@ builds:
 
 archives:
   - id: archives
-    builds:
+    ids:
       - agent
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     files:
       - LICENSE
       - README.md
@@ -73,23 +73,22 @@ msi:
     replace: true
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-brews:
+homebrew_casks:
   - name: dis-agent
     ids:
-      - agent
+      - archives
     url_template: "https://github.com/BeardedWonderDev/DIS-Reader/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-    skip_upload: true
     homepage: "https://github.com/BeardedWonderDev/DIS-Reader"
     description: "DIS remote bridge agent (headless)."
     license: "Apache-2.0"
-    directory: Formula
-    install: |
-      bin.install "dis-agent"
-      (etc/"dis-agent").install "agent.yaml" => "agent.yaml.sample"
-      (etc/"dis-agent").install "bridge_agents.yaml" => "bridge_agents.yaml.sample"
-    test: |
-      system "#{bin}/dis-agent", "--help"
+    binaries:
+      - dis-agent
+    repository:
+      owner: BeardedWonderDev
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    skip_upload: true
 
 dockers_v2:
   - id: dis-agent
