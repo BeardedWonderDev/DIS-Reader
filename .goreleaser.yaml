@@ -110,7 +110,8 @@ checksum:
 release:
   draft: false
   replace_existing_draft: true
-  prerelease: "{{ .IsPreRelease }}"
+  prerelease: auto
+  make_latest: false
 
 changelog:
   use: git
