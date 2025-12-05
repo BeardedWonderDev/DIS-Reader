@@ -90,7 +90,8 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 		auth = buildAuthenticator(b.cfg.Bridge, nil)
 	}
 
-	server := bridge.NewServer(auth, registry, logger)
+	server := bridge.NewServer(auth, registry, logger,
+		bridge.WithAutoConnectOnRegister(b.cfg.Bridge.AutoConnectOnRegister))
 
 	multiDB := database.NewRemoteDB(registry, logger, b.cfg.Bridge.MaxRowsPerQuery, b.cfg.Bridge.MaxResultBytes)
 

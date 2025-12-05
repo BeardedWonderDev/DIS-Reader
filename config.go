@@ -33,6 +33,7 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetDefault("debugSearch.defaultOutputMode", string(types.DebugSearchOutputSQLite))
 	viper.SetDefault("debugSearch.defaultOutputPath", "")
 	viper.SetDefault("bridge.mode", "embedded")
+	viper.SetDefault("bridge.autoConnectOnRegister", true)
 	viper.SetDefault("bridge.tls.insecureSkipVerify", false)
 	viper.SetDefault("bridge.credentialFile", "")
 	viper.SetDefault("bridge.credentialReloadSeconds", 0)

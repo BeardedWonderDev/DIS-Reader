@@ -26,19 +26,34 @@ type Server struct {
 	registry AgentRegistry
 	logger   *slog.Logger
 
+	autoConnectOnRegister bool
+
 	heartbeatGrace time.Duration
 }
 
-func NewServer(auth AgentAuthenticator, registry AgentRegistry, logger *slog.Logger) *Server {
+type ServerOption func(*Server)
+
+func WithAutoConnectOnRegister(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.autoConnectOnRegister = enabled
+	}
+}
+
+func NewServer(auth AgentAuthenticator, registry AgentRegistry, logger *slog.Logger, opts ...ServerOption) *Server {
 	if registry == nil {
 		registry = NewInMemoryRegistry()
 	}
-	return &Server{
-		auth:           auth,
-		registry:       registry,
-		logger:         logger,
-		heartbeatGrace: defaultHeartbeatGrace,
+	s := &Server{
+		auth:                  auth,
+		registry:              registry,
+		logger:                logger,
+		heartbeatGrace:        defaultHeartbeatGrace,
+		autoConnectOnRegister: true,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Connect is the bi-directional stream entrypoint for agents.
@@ -68,11 +83,27 @@ func (s *Server) Connect(stream proto.AgentService_ConnectServer) error {
 	}
 	defer s.registry.Unregister(context.Background(), tenantID, agentID)
 
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- conn.run(ctx, s.heartbeatGrace)
+	}()
+
+	if s.autoConnectOnRegister {
+		ctxConnect, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if _, err := conn.SendJob(ctxConnect, &proto.JobRequest{
+			JobId: uuid.New().String(),
+			Kind:  proto.JobKind_JOB_KIND_CONNECT,
+		}); err != nil && s.logger != nil {
+			s.logger.Warn("agent auto-connect failed", slog.String("tenant_id", tenantID), slog.String("agent_id", agentID), slog.Any("err", err))
+		}
+		cancel()
+	}
+
 	if s.logger != nil {
 		s.logger.Info("agent connected", slog.String("tenant_id", tenantID), slog.String("agent_id", agentID), slog.Any("labels", hello.Labels))
 	}
 
-	err = conn.run(ctx, s.heartbeatGrace)
+	err = <-errCh
 	if err != nil {
 		if s.logger != nil {
 			s.logger.Warn("agent stream closed", slog.String("tenant_id", tenantID), slog.String("agent_id", agentID), slog.Any("err", err))

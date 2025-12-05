@@ -40,6 +40,7 @@ type BridgeConfig struct {
 	ClientID                string                  `mapstructure:"clientID"`
 	ClientSecret            string                  `mapstructure:"clientSecret"`
 	TenantID                string                  `mapstructure:"tenantID"`
+	AutoConnectOnRegister   bool                    `mapstructure:"autoConnectOnRegister"`
 	CredentialFile          string                  `mapstructure:"credentialFile"`
 	TLS                     BridgeTLSConfig         `mapstructure:"tls"`
 	Allowed                 []BridgeAgentCredential `mapstructure:"allowedAgents"`

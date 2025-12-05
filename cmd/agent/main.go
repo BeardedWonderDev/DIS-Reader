@@ -37,12 +37,13 @@ const (
 )
 
 type AgentConfig struct {
-	ServerURL    string          `mapstructure:"serverURL"`
-	ClientID     string          `mapstructure:"clientID"`
-	ClientSecret string          `mapstructure:"clientSecret"`
-	TenantID     string          `mapstructure:"tenantID"`
-	DIS          types.DISConfig `mapstructure:"dis"`
-	TLS          struct {
+	ServerURL          string          `mapstructure:"serverURL"`
+	ClientID           string          `mapstructure:"clientID"`
+	ClientSecret       string          `mapstructure:"clientSecret"`
+	TenantID           string          `mapstructure:"tenantID"`
+	AutoConnectOnStart bool            `mapstructure:"autoConnectOnStart"`
+	DIS                types.DISConfig `mapstructure:"dis"`
+	TLS                struct {
 		Enabled            bool `mapstructure:"enabled"`
 		InsecureSkipVerify bool `mapstructure:"insecureSkipVerify"`
 	} `mapstructure:"tls"`
@@ -57,6 +58,7 @@ func loadConfigWith(v *viper.Viper) (*AgentConfig, error) {
 	v.SetDefault("dis.logLevel", slog.LevelInfo)
 	v.SetDefault("dis.jdbcConfig.javaPath", defaultJavaPath)
 	v.SetDefault("dis.jdbcConfig.jdbcPort", defaultJDBCPort)
+	v.SetDefault("autoConnectOnStart", false)
 	v.SetDefault("tls.enabled", true)
 	v.SetDefault("tls.insecureSkipVerify", false)
 
@@ -161,6 +163,14 @@ func main() {
 		log.Fatalf("start jdbc runner: %v", err)
 	}
 	defer db.StopJDBCRunner()
+
+	if cfg.AutoConnectOnStart && cfg.DIS.Host != "" && cfg.DIS.User != "" && cfg.DIS.Password != "" {
+		ctxConnect, cancel := context.WithTimeout(ctx, 15*time.Second)
+		if err := db.Connect(ctxConnect); err != nil {
+			log.Fatalf("auto-connect failed: %v", err)
+		}
+		cancel()
+	}
 
 	runAgent(ctx, cfg, db, logger)
 }
