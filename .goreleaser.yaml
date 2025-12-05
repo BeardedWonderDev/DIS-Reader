@@ -98,7 +98,7 @@ dockers_v2:
       - ghcr.io/beardedwonderdev/dis-agent
     tags:
       - "{{ .Version }}"
-      - latest
+      - "{{ if not .IsPreRelease }}latest{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
@@ -111,7 +111,9 @@ release:
   draft: false
   replace_existing_draft: true
   prerelease: auto
-  make_latest: false
+  mode: replace
 
 changelog:
-  use: git
+  use: gitgithub
+  ai:
+    use: openai
