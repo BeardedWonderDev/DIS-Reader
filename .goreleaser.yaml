@@ -98,7 +98,7 @@ dockers_v2:
       - ghcr.io/beardedwonderdev/dis-agent
     tags:
       - "{{ .Version }}"
-      - "{{ if not .IsPreRelease }}latest{{ end }}"
+      - "{{ if .IsRelease }}latest{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
