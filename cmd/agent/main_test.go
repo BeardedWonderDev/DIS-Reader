@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io"
+	"sync/atomic"
 	"testing"
 
 	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
@@ -43,13 +44,15 @@ func TestExecuteJob_StartStopJDBC(t *testing.T) {
 	ctx := context.Background()
 	cfg := &AgentConfig{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var loggerVal atomic.Value
+	loggerVal.Store(logger)
 
-	startRes := executeJob(ctx, cfg, db, &bridgeproto.JobRequest{JobId: "1", Kind: bridgeproto.JobKind_JOB_KIND_START_JDBC}, logger)
+	startRes := executeJob(ctx, cfg, db, &bridgeproto.JobRequest{JobId: "1", Kind: bridgeproto.JobKind_JOB_KIND_START_JDBC}, &loggerVal)
 	if startRes.Status != bridgeproto.Status_STATUS_OK || !db.startCalled {
 		t.Fatalf("expected start to succeed and flag to be set, res=%v", startRes)
 	}
 
-	stopRes := executeJob(ctx, cfg, db, &bridgeproto.JobRequest{JobId: "2", Kind: bridgeproto.JobKind_JOB_KIND_STOP_JDBC}, logger)
+	stopRes := executeJob(ctx, cfg, db, &bridgeproto.JobRequest{JobId: "2", Kind: bridgeproto.JobKind_JOB_KIND_STOP_JDBC}, &loggerVal)
 	if stopRes.Status != bridgeproto.Status_STATUS_OK || !db.stopCalled {
 		t.Fatalf("expected stop to succeed and flag to be set, res=%v", stopRes)
 	}

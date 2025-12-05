@@ -28,6 +28,7 @@ type Server struct {
 	logger   *slog.Logger
 
 	autoConnectOnRegister bool
+	agentConfig           *proto.AgentConfig
 
 	heartbeatGrace time.Duration
 }
@@ -37,6 +38,13 @@ type ServerOption func(*Server)
 func WithAutoConnectOnRegister(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.autoConnectOnRegister = enabled
+	}
+}
+
+// WithAgentConfig sends the provided config to agents immediately after they register.
+func WithAgentConfig(cfg *proto.AgentConfig) ServerOption {
+	return func(s *Server) {
+		s.agentConfig = cfg
 	}
 }
 
@@ -83,6 +91,15 @@ func (s *Server) Connect(stream proto.AgentService_ConnectServer) error {
 		return status.Errorf(codes.Internal, "registry error: %v", err)
 	}
 	defer s.registry.Unregister(context.Background(), tenantID, agentID)
+
+	if s.agentConfig != nil {
+		if err := stream.Send(&proto.ServerToAgent{Payload: &proto.ServerToAgent_Config{Config: s.agentConfig}}); err != nil {
+			return status.Errorf(codes.Internal, "send agent config: %v", err)
+		}
+		if s.logger != nil {
+			s.logger.Info("agent config sent", append(logging.CommonAttrs(tenantID, agentID, "", "bridge_connect", "config"), slog.Bool("has_loki", s.agentConfig.GetLoki() != nil))...)
+		}
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -216,8 +233,8 @@ func (c *streamAgentConnection) run(ctx context.Context, grace time.Duration) er
 					attrs = append(attrs, slog.String(k, v))
 				}
 				attrs = append(attrs, slog.String("message", payload.Log.Message))
-			c.logger.Log(ctx, level, "agent log", attrs...)
-		}
+				c.logger.Log(ctx, level, "agent log", attrs...)
+			}
 		default:
 			if c.logger != nil {
 				c.logger.Debug("unhandled agent message", slog.Any("payload", fmt.Sprintf("%T", payload)))

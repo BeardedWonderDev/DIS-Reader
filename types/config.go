@@ -50,6 +50,7 @@ type BridgeConfig struct {
 	CredentialReloadSeconds int                     `mapstructure:"credentialReloadSeconds"`
 	MaxRowsPerQuery         int                     `mapstructure:"maxRowsPerQuery"`
 	MaxResultBytes          int64                   `mapstructure:"maxResultBytes"`
+	Loki                    *LokiConfig             `mapstructure:"loki"`
 }
 
 type BridgeTLSConfig struct {
@@ -61,4 +62,13 @@ type BridgeAgentCredential struct {
 	ClientSecret string `mapstructure:"clientSecret"`
 	TenantID     string `mapstructure:"tenantID"`
 	AgentID      string `mapstructure:"agentID"`
+}
+
+type LokiConfig struct {
+	URL        string            `mapstructure:"url"`
+	TenantID   string            `mapstructure:"tenantID"`
+	APIKey     string            `mapstructure:"apiKey"`
+	AuthHeader string            `mapstructure:"authHeader"`
+	Labels     map[string]string `mapstructure:"labels"`
+	MinLevel   slog.Level        `mapstructure:"minLevel"`
 }

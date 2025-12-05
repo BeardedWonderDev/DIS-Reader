@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -21,6 +23,10 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/internal/runnerjar"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
+	kitlog "github.com/go-kit/log"
+	"github.com/grafana/loki-client-go/loki"
+	"github.com/prometheus/common/config"
+	slogloki "github.com/samber/slog-loki/v3"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -142,9 +148,14 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
-	logger := slog.New(prettylog.NewHandler(&slog.HandlerOptions{
+	baseHandler := prettylog.NewHandler(&slog.HandlerOptions{
 		Level: slog.Level(cfg.DIS.LogLevel),
-	}))
+	})
+	logger := slog.New(baseHandler)
+
+	var loggerValue atomic.Value
+	loggerValue.Store(logger)
+
 	logger.Info("agent starting",
 		slog.String("server", logging.RedactURLHost(cfg.ServerURL)),
 		slog.String("tenant_id", cfg.TenantID),
@@ -185,24 +196,24 @@ func main() {
 		cancel()
 	}
 
-	runAgent(ctx, cfg, db, logger)
+	runAgent(ctx, cfg, db, baseHandler, &loggerValue)
 }
 
-func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog.Logger) {
+func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler slog.Handler, loggerVal *atomic.Value) {
 	backoff := time.Second
 	for {
 		if err := ctx.Err(); err != nil {
 			return
 		}
 
-		logger.Info("bridge connect attempt",
+		currentLogger(loggerVal).Info("bridge connect attempt",
 			append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"),
 				slog.String("server", logging.RedactURLHost(cfg.ServerURL)),
 				slog.Duration("backoff", backoff),
 			)...)
 
-		if err := runOnce(ctx, cfg, db, logger); err != nil {
-			logger.Error("agent loop error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
+		if err := runOnce(ctx, cfg, db, baseHandler, loggerVal); err != nil {
+			currentLogger(loggerVal).Error("agent loop error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 			time.Sleep(backoff)
 			if backoff < 30*time.Second {
 				backoff *= 2
@@ -215,20 +226,20 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slo
 	}
 }
 
-func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog.Logger) error {
+func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler slog.Handler, loggerVal *atomic.Value) error {
 	creds := dialCredentials(cfg)
 	conn, err := grpc.DialContext(ctx, cfg.ServerURL, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		logger.Error("bridge dial failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
+		currentLogger(loggerVal).Error("bridge dial failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 		return fmt.Errorf("dial bridge: %w", err)
 	}
 	defer conn.Close()
-	logger.Info("bridge dialed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.String("server", logging.RedactURLHost(cfg.ServerURL)))...)
+	currentLogger(loggerVal).Info("bridge dialed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.String("server", logging.RedactURLHost(cfg.ServerURL)))...)
 
 	client := proto.NewAgentServiceClient(conn)
 	stream, err := client.Connect(ctx)
 	if err != nil {
-		logger.Error("agent stream connect failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
+		currentLogger(loggerVal).Error("agent stream connect failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 		return fmt.Errorf("connect stream: %w", err)
 	}
 
@@ -239,34 +250,44 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog
 		TenantId:     cfg.TenantID,
 	}
 	if err := stream.Send(&proto.AgentToServer{Payload: &proto.AgentToServer_Hello{Hello: hello}}); err != nil {
-		logger.Error("send hello failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "hello"), slog.Any("err", err))...)
+		currentLogger(loggerVal).Error("send hello failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "hello"), slog.Any("err", err))...)
 		return fmt.Errorf("send hello: %w", err)
 	}
-	logger.Info("hello sent", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "hello"), slog.String("version", hello.Version))...)
+	currentLogger(loggerVal).Info("hello sent", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "hello"), slog.String("version", hello.Version))...)
 
 	hbCtx, cancelHB := context.WithCancel(ctx)
 	defer cancelHB()
-	go sendHeartbeats(hbCtx, stream, cfg, logger)
+	go sendHeartbeats(hbCtx, stream, cfg, loggerVal)
 
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
-			logger.Warn("agent stream recv error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "recv"), slog.Any("err", err))...)
+			currentLogger(loggerVal).Warn("agent stream recv error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "recv"), slog.Any("err", err))...)
 			return err
-		}
-		req := msg.GetJobRequest()
-		if req == nil {
-			continue
 		}
 
-		res := executeJob(ctx, cfg, db, req, logger)
-		if err := stream.Send(&proto.AgentToServer{Payload: &proto.AgentToServer_JobResult{JobResult: res}}); err != nil {
-			return err
+		switch payload := msg.Payload.(type) {
+		case *proto.ServerToAgent_JobRequest:
+			if payload.JobRequest == nil {
+				continue
+			}
+			res := executeJob(ctx, cfg, db, payload.JobRequest, loggerVal)
+			if err := stream.Send(&proto.AgentToServer{Payload: &proto.AgentToServer_JobResult{JobResult: res}}); err != nil {
+				return err
+			}
+		case *proto.ServerToAgent_Config:
+			if payload.Config != nil {
+				if err := applyAgentConfig(baseHandler, loggerVal, payload.Config, cfg); err != nil {
+					currentLogger(loggerVal).Warn("apply agent config failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "config"), slog.Any("err", err))...)
+				}
+			}
+		default:
+			continue
 		}
 	}
 }
 
-func executeJob(ctx context.Context, cfg *AgentConfig, db database.DB, req *proto.JobRequest, logger *slog.Logger) *proto.JobResult {
+func executeJob(ctx context.Context, cfg *AgentConfig, db database.DB, req *proto.JobRequest, loggerVal *atomic.Value) *proto.JobResult {
 	res := &proto.JobResult{JobId: req.JobId}
 	const defaultMaxRows = 1000
 	maxRows := defaultMaxRows
@@ -279,7 +300,7 @@ func executeJob(ctx context.Context, cfg *AgentConfig, db database.DB, req *prot
 	start := time.Now()
 	attrs := logging.CommonAttrs(cfg.TenantID, cfg.ClientID, req.JobId, "job", req.Kind.String())
 	attrs = append(attrs, slog.String("sql_hint", logging.SQLHint(req.Sql)))
-	logger.Debug("job started", attrs...)
+	currentLogger(loggerVal).Debug("job started", attrs...)
 
 	switch req.Kind {
 	case proto.JobKind_JOB_KIND_QUERY:
@@ -321,12 +342,10 @@ func executeJob(ctx context.Context, cfg *AgentConfig, db database.DB, req *prot
 
 	attrs = append(attrs, logging.DurationAttr(time.Since(start)))
 
-	if logger != nil {
-		if res.Status == proto.Status_STATUS_ERROR {
-			logger.Error("job failed", append(attrs, slog.String("message", res.Message))...)
-		} else {
-			logger.Debug("job completed", append(attrs, slog.String("status", res.Status.String()))...)
-		}
+	if res.Status == proto.Status_STATUS_ERROR {
+		currentLogger(loggerVal).Error("job failed", append(attrs, slog.String("message", res.Message))...)
+	} else {
+		currentLogger(loggerVal).Debug("job completed", append(attrs, slog.String("status", res.Status.String()))...)
 	}
 
 	return res
@@ -349,7 +368,7 @@ func dialCredentials(cfg *AgentConfig) credentials.TransportCredentials {
 	return credentials.NewTLS(&tls.Config{})
 }
 
-func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient, cfg *AgentConfig, logger *slog.Logger) {
+func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient, cfg *AgentConfig, loggerVal *atomic.Value) {
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -366,7 +385,7 @@ func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient
 					},
 				},
 			}); err != nil {
-				logger.Warn("heartbeat send failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "heartbeat", "send"), slog.Any("err", err))...)
+				currentLogger(loggerVal).Warn("heartbeat send failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "heartbeat", "send"), slog.Any("err", err))...)
 				return
 			}
 		}
@@ -391,4 +410,134 @@ func resultRowsToProto(rows []types.ResultRow) []*proto.Row {
 		out = append(out, &proto.Row{Fields: fields})
 	}
 	return out
+}
+
+func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *proto.AgentConfig, agentCfg *AgentConfig) error {
+	if cfg == nil || cfg.Loki == nil || strings.TrimSpace(cfg.Loki.Url) == "" {
+		return nil
+	}
+
+	handler, err := newLokiHandler(cfg.Loki)
+	if err != nil {
+		return err
+	}
+
+	combined := slog.New(fanoutHandler{handlers: []slog.Handler{baseHandler, handler}})
+	loggerVal.Store(combined)
+	combined.Info("loki logging enabled",
+		slog.String("endpoint", logging.RedactURLHost(cfg.Loki.Url)),
+		slog.String("tenant_id", cfg.Loki.TenantId),
+		slog.String("agent_id", agentCfg.ClientID),
+	)
+	return nil
+}
+
+func newLokiHandler(cfg *proto.LokiConfig) (slog.Handler, error) {
+	endpoint := strings.TrimSpace(cfg.GetUrl())
+	if endpoint == "" {
+		return nil, fmt.Errorf("loki endpoint is required")
+	}
+
+	clientCfg, err := loki.NewDefaultConfig(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("loki config: %w", err)
+	}
+
+	if key := strings.TrimSpace(cfg.GetApiKey()); key != "" {
+		clientCfg.Client.Authorization = &config.Authorization{
+			Type:        "Bearer",
+			Credentials: config.Secret(key),
+		}
+	}
+
+	if t := strings.TrimSpace(cfg.GetTenantId()); t != "" {
+		clientCfg.TenantID = t
+	}
+
+	client, err := loki.NewWithLogger(clientCfg, kitlog.NewNopLogger())
+	if err != nil {
+		return nil, fmt.Errorf("loki client: %w", err)
+	}
+
+	minLevel := logging.MapLogLevel(cfg.GetMinLevel())
+	opt := slogloki.Option{Client: client, Level: minLevel}
+	handler := opt.NewLokiHandler()
+	attrs := labelAttrs(cfg.GetLabels())
+	if cfg.GetTenantId() != "" {
+		attrs = append(attrs, slog.String("tenant_id", cfg.GetTenantId()))
+	}
+	if len(attrs) > 0 {
+		handler = handler.WithAttrs(attrs)
+	}
+	return handler, nil
+}
+
+func labelAttrs(labels map[string]string) []slog.Attr {
+	if len(labels) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	attrs := make([]slog.Attr, 0, len(keys))
+	for _, k := range keys {
+		attrs = append(attrs, slog.String(k, labels[k]))
+	}
+	return attrs
+}
+
+func currentLogger(loggerVal *atomic.Value) *slog.Logger {
+	if loggerVal == nil {
+		return slog.Default()
+	}
+	if l := loggerVal.Load(); l != nil {
+		if logPtr, ok := l.(*slog.Logger); ok && logPtr != nil {
+			return logPtr
+		}
+	}
+	return slog.Default()
+}
+
+// fanoutHandler duplicates records to multiple handlers.
+type fanoutHandler struct {
+	handlers []slog.Handler
+}
+
+func (h fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, handler := range h.handlers {
+		if handler.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h fanoutHandler) Handle(ctx context.Context, record slog.Record) error {
+	var firstErr error
+	for _, handler := range h.handlers {
+		if handler.Enabled(ctx, record.Level) {
+			if err := handler.Handle(ctx, record); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (h fanoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	copyHandlers := make([]slog.Handler, len(h.handlers))
+	for i, handler := range h.handlers {
+		copyHandlers[i] = handler.WithAttrs(attrs)
+	}
+	return fanoutHandler{handlers: copyHandlers}
+}
+
+func (h fanoutHandler) WithGroup(name string) slog.Handler {
+	copyHandlers := make([]slog.Handler, len(h.handlers))
+	for i, handler := range h.handlers {
+		copyHandlers[i] = handler.WithGroup(name)
+	}
+	return fanoutHandler{handlers: copyHandlers}
 }

@@ -41,6 +41,8 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetDefault("bridge.maxResultBytes", 0) // 0 = unlimited
 	viper.SetDefault("bridge.pprofEnabled", false)
 	viper.SetDefault("bridge.pprofPath", "/debug/pprof/")
+	viper.SetDefault("bridge.loki.minLevel", slog.LevelInfo)
+	viper.SetDefault("bridge.loki.authHeader", "Authorization")
 
 	// If config file exists, use it
 	_, err := os.ReadFile(ConfigFileName)

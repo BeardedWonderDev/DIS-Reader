@@ -69,6 +69,19 @@ message JobResult {
   repeated Row rows = 4;
 }
 
+message LokiConfig {
+  string url = 1;
+  string tenant_id = 2;
+  string api_key = 3;
+  string auth_header = 4;
+  map<string, string> labels = 5;
+  string min_level = 6;
+}
+
+message AgentConfig {
+  LokiConfig loki = 1;
+}
+
 message AgentToServer {
   oneof payload {
     AgentHello hello = 1;
@@ -81,5 +94,6 @@ message AgentToServer {
 message ServerToAgent {
   oneof payload {
     JobRequest job_request = 1;
+    AgentConfig config = 2;
   }
 }

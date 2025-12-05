@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
+	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	svc "github.com/BeardedWonderDev/DIS-Reader/internal/service"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"strings"
 )
 
 // Embedded entrypoint
@@ -95,8 +97,11 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 		auth = buildAuthenticator(b.cfg.Bridge, nil)
 	}
 
+	agentCfg := buildAgentConfig(b.cfg.Bridge)
+
 	server := bridge.NewServer(auth, registry, logger,
-		bridge.WithAutoConnectOnRegister(b.cfg.Bridge.AutoConnectOnRegister))
+		bridge.WithAutoConnectOnRegister(b.cfg.Bridge.AutoConnectOnRegister),
+		bridge.WithAgentConfig(agentCfg))
 
 	multiDB := database.NewRemoteDB(registry, logger, b.cfg.Bridge.MaxRowsPerQuery, b.cfg.Bridge.MaxResultBytes)
 
@@ -183,6 +188,30 @@ func buildAuthenticator(cfg *types.BridgeConfig, override bridge.AgentAuthentica
 		}
 	}
 	return &bridge.StaticAuthenticator{Secrets: secrets}
+}
+
+// buildAgentConfig converts the bridge Loki configuration into a proto payload
+// that can be sent to agents during registration.
+func buildAgentConfig(cfg *types.BridgeConfig) *bridgeproto.AgentConfig {
+	if cfg == nil || cfg.Loki == nil || cfg.Loki.URL == "" {
+		return nil
+	}
+
+	labels := cfg.Loki.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	return &bridgeproto.AgentConfig{
+		Loki: &bridgeproto.LokiConfig{
+			Url:        cfg.Loki.URL,
+			TenantId:   cfg.Loki.TenantID,
+			ApiKey:     cfg.Loki.APIKey,
+			AuthHeader: cfg.Loki.AuthHeader,
+			Labels:     labels,
+			MinLevel:   strings.ToLower(cfg.Loki.MinLevel.String()),
+		},
+	}
 }
 
 // grpcLoggingUnary logs unary RPCs using the provided slog logger.
