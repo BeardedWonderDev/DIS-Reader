@@ -25,28 +25,12 @@
           <Component Id="MainExecutable" Guid="*">
             <File Id="ExeFile" Source="dis-agent.exe" KeyPath="yes" />
           </Component>
-          <Component Id="AgentConfigSample" Guid="*">
-            <File Id="AgentYaml" Source="agent.yaml" KeyPath="yes" />
-          </Component>
-          <Component Id="BridgeAgentsSample" Guid="*">
-            <File Id="BridgeAgentsYaml" Source="bridge_agents.yaml" KeyPath="yes" />
-          </Component>
-          <Component Id="InstallServiceScript" Guid="*">
-            <File Id="InstallPs1" Source="install_service.ps1" KeyPath="yes" />
-          </Component>
-          <Component Id="UninstallServiceScript" Guid="*">
-            <File Id="UninstallPs1" Source="uninstall_service.ps1" KeyPath="yes" />
-          </Component>
         </Directory>
       </Directory>
     </Directory>
 
     <Feature Id="DefaultFeature" Title="{{ .ProjectName }}" Level="1">
       <ComponentRef Id="MainExecutable" />
-      <ComponentRef Id="AgentConfigSample" />
-      <ComponentRef Id="BridgeAgentsSample" />
-      <ComponentRef Id="InstallServiceScript" />
-      <ComponentRef Id="UninstallServiceScript" />
     </Feature>
   </Product>
 </Wix>

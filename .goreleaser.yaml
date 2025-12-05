@@ -102,7 +102,6 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     dockerfile: packaging/docker/Dockerfile
-    use: buildx
 
 checksum:
   name_template: "checksums.txt"
