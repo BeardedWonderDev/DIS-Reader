@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
-
+version: 2
 project_name: dis-agent
 
 before:
@@ -24,12 +24,6 @@ builds:
     ldflags:
       - "-s -w"
     mod_timestamp: "{{ .CommitTimestamp }}"
-    extra_files:
-      - packaging/examples/agent.yaml
-      - packaging/examples/bridge_agents.yaml
-      - packaging/windows/install_service.ps1
-      - packaging/windows/uninstall_service.ps1
-      - packaging/launchd/com.dis.agent.plist
 
 archives:
   - id: archives
@@ -82,7 +76,7 @@ msi:
 brews:
   - name: dis-agent
     ids:
-      - archives
+      - agent
     url_template: "https://github.com/BeardedWonderDev/DIS-Reader/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
     skip_upload: true
@@ -97,21 +91,18 @@ brews:
     test: |
       system "#{bin}/dis-agent", "--help"
 
-dockers:
-  - image_templates:
-      - "ghcr.io/beardedwonderdev/dis-agent:{{ .Version }}"
-      - "ghcr.io/beardedwonderdev/dis-agent:latest"
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/{{ .Arch }}"
-    goos: linux
-    goarch:
-      - amd64
-      - arm64
+dockers_v2:
+  - id: dis-agent
+    images:
+      - ghcr.io/beardedwonderdev/dis-agent
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
     dockerfile: packaging/docker/Dockerfile
-    ids:
-      - agent
-    skip_push: false
+    use: buildx
 
 checksum:
   name_template: "checksums.txt"
