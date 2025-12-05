@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/logging"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -88,25 +89,33 @@ func (s *Server) Connect(stream proto.AgentService_ConnectServer) error {
 		errCh <- conn.run(ctx, s.heartbeatGrace)
 	}()
 
+	connectStart := time.Now()
 	if s.autoConnectOnRegister {
 		ctxConnect, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if _, err := conn.SendJob(ctxConnect, &proto.JobRequest{
 			JobId: uuid.New().String(),
 			Kind:  proto.JobKind_JOB_KIND_CONNECT,
 		}); err != nil && s.logger != nil {
-			s.logger.Warn("agent auto-connect failed", slog.String("tenant_id", tenantID), slog.String("agent_id", agentID), slog.Any("err", err))
+			s.logger.Warn("agent auto-connect failed",
+				append(logging.CommonAttrs(tenantID, agentID, "", "dis_connect", "connect"), slog.Any("err", err))...)
 		}
 		cancel()
 	}
 
 	if s.logger != nil {
-		s.logger.Info("agent connected", slog.String("tenant_id", tenantID), slog.String("agent_id", agentID), slog.Any("labels", hello.Labels))
+		attrs := logging.CommonAttrs(tenantID, agentID, "", "bridge_connect", "connect")
+		attrs = append(attrs,
+			slog.Any("labels", hello.Labels),
+			slog.String("version", hello.Version),
+			logging.DurationAttr(time.Since(connectStart)),
+		)
+		s.logger.Info("agent connected", attrs...)
 	}
 
 	err = <-errCh
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Warn("agent stream closed", slog.String("tenant_id", tenantID), slog.String("agent_id", agentID), slog.Any("err", err))
+			s.logger.Warn("agent stream closed", append(logging.CommonAttrs(tenantID, agentID, "", "bridge_connect", "stream"), slog.Any("err", err))...)
 		}
 	}
 	return nil
@@ -201,12 +210,14 @@ func (c *streamAgentConnection) run(ctx context.Context, grace time.Duration) er
 			c.lastHB = time.Now()
 		case *proto.AgentToServer_Log:
 			if c.logger != nil {
-				c.logger.Info("agent log",
-					slog.String("agent_id", c.agentID),
-					slog.String("tenant_id", c.tenantID),
-					slog.String("level", payload.Log.Level),
-					slog.String("message", payload.Log.Message))
-			}
+				level := logging.MapLogLevel(payload.Log.Level)
+				attrs := logging.CommonAttrs(c.tenantID, c.agentID, "", "agent_log", "log")
+				for k, v := range payload.Log.Fields {
+					attrs = append(attrs, slog.String(k, v))
+				}
+				attrs = append(attrs, slog.String("message", payload.Log.Message))
+			c.logger.Log(ctx, level, "agent log", attrs...)
+		}
 		default:
 			if c.logger != nil {
 				c.logger.Debug("unhandled agent message", slog.Any("payload", fmt.Sprintf("%T", payload)))
@@ -214,6 +225,9 @@ func (c *streamAgentConnection) run(ctx context.Context, grace time.Duration) er
 		}
 
 		if time.Since(c.lastHB) > grace {
+			if c.logger != nil {
+				c.logger.Warn("heartbeat timeout", logging.CommonAttrs(c.tenantID, c.agentID, "", "heartbeat", "timeout")...)
+			}
 			return errors.New("heartbeat timeout")
 		}
 	}

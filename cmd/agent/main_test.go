@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
+	"log/slog"
 )
 
 // stubDB implements database.DB with in-memory flags for lifecycle assertions.
@@ -39,13 +41,15 @@ func (s *stubDB) QueryWithSource(ctx context.Context, query string, args ...inte
 func TestExecuteJob_StartStopJDBC(t *testing.T) {
 	db := &stubDB{}
 	ctx := context.Background()
+	cfg := &AgentConfig{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	startRes := executeJob(ctx, db, &bridgeproto.JobRequest{JobId: "1", Kind: bridgeproto.JobKind_JOB_KIND_START_JDBC}, nil)
+	startRes := executeJob(ctx, cfg, db, &bridgeproto.JobRequest{JobId: "1", Kind: bridgeproto.JobKind_JOB_KIND_START_JDBC}, logger)
 	if startRes.Status != bridgeproto.Status_STATUS_OK || !db.startCalled {
 		t.Fatalf("expected start to succeed and flag to be set, res=%v", startRes)
 	}
 
-	stopRes := executeJob(ctx, db, &bridgeproto.JobRequest{JobId: "2", Kind: bridgeproto.JobKind_JOB_KIND_STOP_JDBC}, nil)
+	stopRes := executeJob(ctx, cfg, db, &bridgeproto.JobRequest{JobId: "2", Kind: bridgeproto.JobKind_JOB_KIND_STOP_JDBC}, logger)
 	if stopRes.Status != bridgeproto.Status_STATUS_OK || !db.stopCalled {
 		t.Fatalf("expected stop to succeed and flag to be set, res=%v", stopRes)
 	}

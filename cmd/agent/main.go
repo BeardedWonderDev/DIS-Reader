@@ -17,6 +17,7 @@ import (
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/logging"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/runnerjar"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
@@ -141,6 +142,18 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
+	logger := slog.New(prettylog.NewHandler(&slog.HandlerOptions{
+		Level: slog.Level(cfg.DIS.LogLevel),
+	}))
+	logger.Info("agent starting",
+		slog.String("server", logging.RedactURLHost(cfg.ServerURL)),
+		slog.String("tenant_id", cfg.TenantID),
+		slog.String("agent_id", cfg.ClientID),
+		slog.Bool("auto_connect_on_start", cfg.AutoConnectOnStart),
+		slog.Bool("tls_enabled", cfg.TLS.Enabled),
+		slog.Bool("tls_insecure_skip_verify", cfg.TLS.InsecureSkipVerify),
+	)
+
 	var cleanupJar func() error
 	if cfg.DIS.JDBCConfig != nil && cfg.DIS.JDBCConfig.JarPath == "" {
 		extracted, err := runnerjar.Extract()
@@ -154,21 +167,21 @@ func main() {
 		defer cleanupJar()
 	}
 
-	logger := slog.New(prettylog.NewHandler(&slog.HandlerOptions{
-		Level: slog.Level(cfg.DIS.LogLevel),
-	}))
-
 	db := database.NewIBMi400(&cfg.DIS, logger)
 	if err := db.StartJDBCRunner(); err != nil {
 		log.Fatalf("start jdbc runner: %v", err)
 	}
+	logger.Info("jdbc runner started", slog.String("phase", "jdbc_start"))
 	defer db.StopJDBCRunner()
 
 	if cfg.AutoConnectOnStart && cfg.DIS.Host != "" && cfg.DIS.User != "" && cfg.DIS.Password != "" {
 		ctxConnect, cancel := context.WithTimeout(ctx, 15*time.Second)
+		start := time.Now()
 		if err := db.Connect(ctxConnect); err != nil {
+			logger.Error("auto-connect failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "dis_connect", "connect"), logging.DurationAttr(time.Since(start)))...)
 			log.Fatalf("auto-connect failed: %v", err)
 		}
+		logger.Info("auto-connect succeeded", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "dis_connect", "connect"), logging.DurationAttr(time.Since(start)))...)
 		cancel()
 	}
 
@@ -182,8 +195,14 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slo
 			return
 		}
 
+		logger.Info("bridge connect attempt",
+			append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"),
+				slog.String("server", logging.RedactURLHost(cfg.ServerURL)),
+				slog.Duration("backoff", backoff),
+			)...)
+
 		if err := runOnce(ctx, cfg, db, logger); err != nil {
-			logger.Error("agent loop error", slog.Any("err", err))
+			logger.Error("agent loop error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 			time.Sleep(backoff)
 			if backoff < 30*time.Second {
 				backoff *= 2
@@ -200,13 +219,16 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog
 	creds := dialCredentials(cfg)
 	conn, err := grpc.DialContext(ctx, cfg.ServerURL, grpc.WithTransportCredentials(creds))
 	if err != nil {
+		logger.Error("bridge dial failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 		return fmt.Errorf("dial bridge: %w", err)
 	}
 	defer conn.Close()
+	logger.Info("bridge dialed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.String("server", logging.RedactURLHost(cfg.ServerURL)))...)
 
 	client := proto.NewAgentServiceClient(conn)
 	stream, err := client.Connect(ctx)
 	if err != nil {
+		logger.Error("agent stream connect failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 		return fmt.Errorf("connect stream: %w", err)
 	}
 
@@ -217,16 +239,19 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog
 		TenantId:     cfg.TenantID,
 	}
 	if err := stream.Send(&proto.AgentToServer{Payload: &proto.AgentToServer_Hello{Hello: hello}}); err != nil {
+		logger.Error("send hello failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "hello"), slog.Any("err", err))...)
 		return fmt.Errorf("send hello: %w", err)
 	}
+	logger.Info("hello sent", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "hello"), slog.String("version", hello.Version))...)
 
 	hbCtx, cancelHB := context.WithCancel(ctx)
 	defer cancelHB()
-	go sendHeartbeats(hbCtx, stream, cfg)
+	go sendHeartbeats(hbCtx, stream, cfg, logger)
 
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
+			logger.Warn("agent stream recv error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "recv"), slog.Any("err", err))...)
 			return err
 		}
 		req := msg.GetJobRequest()
@@ -234,14 +259,14 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, logger *slog
 			continue
 		}
 
-		res := executeJob(ctx, db, req, logger)
+		res := executeJob(ctx, cfg, db, req, logger)
 		if err := stream.Send(&proto.AgentToServer{Payload: &proto.AgentToServer_JobResult{JobResult: res}}); err != nil {
 			return err
 		}
 	}
 }
 
-func executeJob(ctx context.Context, db database.DB, req *proto.JobRequest, logger *slog.Logger) *proto.JobResult {
+func executeJob(ctx context.Context, cfg *AgentConfig, db database.DB, req *proto.JobRequest, logger *slog.Logger) *proto.JobResult {
 	res := &proto.JobResult{JobId: req.JobId}
 	const defaultMaxRows = 1000
 	maxRows := defaultMaxRows
@@ -250,6 +275,11 @@ func executeJob(ctx context.Context, db database.DB, req *proto.JobRequest, logg
 			maxRows = n
 		}
 	}
+
+	start := time.Now()
+	attrs := logging.CommonAttrs(cfg.TenantID, cfg.ClientID, req.JobId, "job", req.Kind.String())
+	attrs = append(attrs, slog.String("sql_hint", logging.SQLHint(req.Sql)))
+	logger.Debug("job started", attrs...)
 
 	switch req.Kind {
 	case proto.JobKind_JOB_KIND_QUERY:
@@ -271,6 +301,7 @@ func executeJob(ctx context.Context, db database.DB, req *proto.JobRequest, logg
 		}
 		res.Rows = resultRowsToProto(rows)
 		res.Status = proto.Status_STATUS_OK
+		attrs = append(attrs, logging.RowsAttrs(len(rows), res.Message != "")...)
 	case proto.JobKind_JOB_KIND_PING_SERVICE:
 		res.Status, res.Message = statusFromError(db.PingService(ctx))
 	case proto.JobKind_JOB_KIND_PING_DATABASE:
@@ -288,8 +319,14 @@ func executeJob(ctx context.Context, db database.DB, req *proto.JobRequest, logg
 		res.Message = "unknown job kind"
 	}
 
-	if logger != nil && res.Status == proto.Status_STATUS_ERROR {
-		logger.Error("job failed", slog.String("job_id", req.JobId), slog.String("message", res.Message))
+	attrs = append(attrs, logging.DurationAttr(time.Since(start)))
+
+	if logger != nil {
+		if res.Status == proto.Status_STATUS_ERROR {
+			logger.Error("job failed", append(attrs, slog.String("message", res.Message))...)
+		} else {
+			logger.Debug("job completed", append(attrs, slog.String("status", res.Status.String()))...)
+		}
 	}
 
 	return res
@@ -312,7 +349,7 @@ func dialCredentials(cfg *AgentConfig) credentials.TransportCredentials {
 	return credentials.NewTLS(&tls.Config{})
 }
 
-func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient, cfg *AgentConfig) {
+func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient, cfg *AgentConfig, logger *slog.Logger) {
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -320,7 +357,7 @@ func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient
 		case <-ctx.Done():
 			return
 		case t := <-ticker.C:
-			stream.Send(&proto.AgentToServer{
+			if err := stream.Send(&proto.AgentToServer{
 				Payload: &proto.AgentToServer_Heartbeat{
 					Heartbeat: &proto.Heartbeat{
 						At:       timestamppb.New(t),
@@ -328,7 +365,10 @@ func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient
 						AgentId:  cfg.ClientID,
 					},
 				},
-			})
+			}); err != nil {
+				logger.Warn("heartbeat send failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "heartbeat", "send"), slog.Any("err", err))...)
+				return
+			}
 		}
 	}
 }
