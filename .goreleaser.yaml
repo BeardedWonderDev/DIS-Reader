@@ -1,0 +1,125 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+
+project_name: dis-agent
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: agent
+    main: ./cmd/agent
+    binary: dis-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    extra_files:
+      - packaging/examples/agent.yaml
+      - packaging/examples/bridge_agents.yaml
+      - packaging/windows/install_service.ps1
+      - packaging/windows/uninstall_service.ps1
+      - packaging/launchd/com.dis.agent.plist
+
+archives:
+  - id: archives
+    builds:
+      - agent
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - packaging/examples/agent.yaml
+      - packaging/examples/bridge_agents.yaml
+      - packaging/windows/install_service.ps1
+      - packaging/windows/uninstall_service.ps1
+      - packaging/launchd/com.dis.agent.plist
+
+nfpms:
+  - id: linux
+    package_name: dis-agent
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
+    maintainer: "DIS Reader Team <maintainer@example.com>"
+    description: "DIS remote bridge agent (AS/400 JDBC bridge helper)."
+    homepage: "https://github.com/BeardedWonderDev/DIS-Reader"
+    license: "Apache-2.0"
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+    contents:
+      - src: packaging/examples/agent.yaml
+        dst: /etc/dis-agent/agent.yaml
+        type: config|noreplace
+      - src: packaging/examples/bridge_agents.yaml
+        dst: /etc/dis-agent/bridge_agents.yaml
+        type: config|noreplace
+      - src: packaging/systemd/dis-agent.service
+        dst: /lib/systemd/system/dis-agent.service
+        type: config|noreplace
+
+msi:
+  - id: windows-msi
+    name: "dis-agent-{{ .MsiArch }}"
+    wxs: packaging/windows/agent.wxs
+    replace: true
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+brews:
+  - name: dis-agent
+    ids:
+      - archives
+    url_template: "https://github.com/BeardedWonderDev/DIS-Reader/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    skip_upload: true
+    homepage: "https://github.com/BeardedWonderDev/DIS-Reader"
+    description: "DIS remote bridge agent (headless)."
+    license: "Apache-2.0"
+    directory: Formula
+    install: |
+      bin.install "dis-agent"
+      (etc/"dis-agent").install "agent.yaml" => "agent.yaml.sample"
+      (etc/"dis-agent").install "bridge_agents.yaml" => "bridge_agents.yaml.sample"
+    test: |
+      system "#{bin}/dis-agent", "--help"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/beardedwonderdev/dis-agent:{{ .Version }}"
+      - "ghcr.io/beardedwonderdev/dis-agent:latest"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/{{ .Arch }}"
+    goos: linux
+    goarch:
+      - amd64
+      - arm64
+    dockerfile: packaging/docker/Dockerfile
+    ids:
+      - agent
+    skip_push: false
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  draft: false
+  replace_existing_draft: true
+  prerelease: "{{ .IsPrerelease }}"
+
+changelog:
+  use: git

@@ -12,7 +12,14 @@ mkdir -p "$STAGE/usr/local/bin"
 mkdir -p "$STAGE/Library/Application Support/dis-agent"
 mkdir -p "$STAGE/Library/LaunchDaemons"
 
-cp "$ROOT/dist/dis-agent-darwin-${ARCH}/dis-agent" "$STAGE/usr/local/bin/dis-agent"
+BIN_PATH="$ROOT/dist/dis-agent_darwin_${ARCH}/dis-agent"
+
+if [ ! -f "$BIN_PATH" ]; then
+  echo "Binary not found at $BIN_PATH"
+  exit 1
+fi
+
+cp "$BIN_PATH" "$STAGE/usr/local/bin/dis-agent"
 cp "$ROOT/packaging/examples/agent.yaml" "$STAGE/Library/Application Support/dis-agent/agent.yaml"
 cp "$ROOT/packaging/examples/bridge_agents.yaml" "$STAGE/Library/Application Support/dis-agent/bridge_agents.yaml"
 cp "$ROOT/packaging/launchd/com.dis.agent.plist" "$STAGE/Library/LaunchDaemons/com.dis.agent.plist"
