@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
@@ -30,6 +31,7 @@ const (
 	defaultJavaPath        = "java"
 	defaultJDBCPort        = "8888"
 	heartbeatInterval      = 30 * time.Second
+	agentEnvPrefix         = "disagent"
 )
 
 type AgentConfig struct {
@@ -44,25 +46,38 @@ type AgentConfig struct {
 }
 
 func loadConfig() (*AgentConfig, error) {
-	viper.SetConfigFile(defaultAgentConfigFile)
-	viper.SetDefault("dis.logLevel", slog.LevelInfo)
-	viper.SetDefault("dis.jdbcConfig.javaPath", defaultJavaPath)
-	viper.SetDefault("dis.jdbcConfig.jdbcPort", defaultJDBCPort)
+	return loadConfigWith(viper.New())
+}
 
-	viper.SetEnvPrefix("DISAGENT")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
+func loadConfigWith(v *viper.Viper) (*AgentConfig, error) {
+	v.SetConfigFile(defaultAgentConfigFile)
+	v.SetDefault("dis.logLevel", slog.LevelInfo)
+	v.SetDefault("dis.jdbcConfig.javaPath", defaultJavaPath)
+	v.SetDefault("dis.jdbcConfig.jdbcPort", defaultJDBCPort)
+	v.SetDefault("tls.insecureSkipVerify", false)
 
-	// Config file is optional; fall back to env-only.
-	if _, err := os.Stat(defaultAgentConfigFile); err == nil {
-		if err := viper.ReadInConfig(); err != nil {
+	if _, err := os.ReadFile(defaultAgentConfigFile); err == nil {
+		if err := v.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("read config: %w", err)
+		}
+	} else {
+		if os.IsNotExist(err) {
+			log.Printf("Could not find %s. Attempting to use environment variables.\n", defaultAgentConfigFile)
+		} else {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 	}
 
 	var cfg AgentConfig
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return nil, err
+	for _, fieldName := range getFlattenedStructFields(reflect.TypeOf(cfg)) {
+		envKey := strings.ToUpper(fmt.Sprintf("%s_%s", agentEnvPrefix, strings.ReplaceAll(fieldName, ".", "_")))
+		if envVar, ok := os.LookupEnv(envKey); ok {
+			v.Set(fieldName, envVar)
+		}
+	}
+
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
 	if cfg.ServerURL == "" {
@@ -72,7 +87,6 @@ func loadConfig() (*AgentConfig, error) {
 		return nil, errors.New("clientID and clientSecret are required")
 	}
 
-	// Ensure JDBCConfig exists
 	if cfg.DIS.JDBCConfig == nil {
 		cfg.DIS.JDBCConfig = &types.JDBCConfig{
 			JavaPath: defaultJavaPath,
@@ -81,6 +95,35 @@ func loadConfig() (*AgentConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+func getFlattenedStructFields(t reflect.Type) []string {
+	return getFlattenedStructFieldsHelper(t, []string{})
+}
+
+func getFlattenedStructFieldsHelper(t reflect.Type, prefixes []string) []string {
+	unwrappedT := t
+	if t.Kind() == reflect.Pointer {
+		unwrappedT = t.Elem()
+	}
+
+	flattenedFields := make([]string, 0)
+	for i := 0; i < unwrappedT.NumField(); i++ {
+		field := unwrappedT.Field(i)
+		fieldName := field.Tag.Get("mapstructure")
+		switch field.Type.Kind() {
+		case reflect.Struct, reflect.Pointer:
+			flattenedFields = append(flattenedFields, getFlattenedStructFieldsHelper(field.Type, append(prefixes, fieldName))...)
+		default:
+			flattenedField := fieldName
+			if len(prefixes) > 0 {
+				flattenedField = fmt.Sprintf("%s.%s", strings.Join(prefixes, "."), fieldName)
+			}
+			flattenedFields = append(flattenedFields, flattenedField)
+		}
+	}
+
+	return flattenedFields
 }
 
 func main() {
