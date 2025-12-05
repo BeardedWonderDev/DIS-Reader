@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	_ "embed"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -11,13 +10,11 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/invoices"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/parts"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/runnerjar"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/unit"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
 )
-
-//go:embed dis-runner-0.1.1.jar
-var runnerJar []byte
 
 // EmbeddedService implements the DISReaderService interface for embedded mode.
 type EmbeddedService struct {
@@ -41,24 +38,21 @@ func NewEmbeddedService(config *types.DISConfig, logger *slog.Logger) (*Embedded
 		logger = slog.New(prettylog.NewHandler(&slog.HandlerOptions{Level: &logLevel}))
 	}
 
-	tmp, err := os.MkdirTemp("", "disreader-jdbc-*")
-	if err != nil {
-		types.LogError(logger, "Failed to create temp directory", err)
-		return nil, err
+	if config.JDBCConfig == nil {
+		config.JDBCConfig = &types.JDBCConfig{}
 	}
 
-	jarPath := tmp + string(os.PathSeparator) + "dis-runner-0.1.1.jar"
-	if err := os.WriteFile(jarPath, runnerJar, 0644); err != nil {
-		types.LogError(logger, "Failed to write runner jar", err)
-		os.RemoveAll(tmp)
+	extracted, err := runnerjar.Extract()
+	if err != nil {
+		types.LogError(logger, "Failed to prepare runner jar", err)
 		return nil, err
 	}
-	config.JDBCConfig.JarPath = jarPath
+	config.JDBCConfig.JarPath = extracted.JarPath
 
 	db := database.NewIBMi400(config, logger)
 	if err := db.StartJDBCRunner(); err != nil {
 		types.LogError(logger, "Failed to start JDBC runner", err)
-		os.RemoveAll(tmp)
+		extracted.Cleanup()
 		return nil, err
 	}
 
@@ -67,7 +61,7 @@ func NewEmbeddedService(config *types.DISConfig, logger *slog.Logger) (*Embedded
 		db:             db,
 		logger:         logger,
 		logLevel:       &logLevel,
-		tempDir:        tmp,
+		tempDir:        extracted.Dir,
 		unitService:    unit.NewUnitService(db),
 		invoiceService: invoices.NewInvoiceService(db),
 		partService:    parts.NewService(db),
@@ -77,7 +71,7 @@ func NewEmbeddedService(config *types.DISConfig, logger *slog.Logger) (*Embedded
 	if err := s.db.PingService(context.Background()); err != nil {
 		types.LogError(s.logger, "JDBC runner ping failed after start", err)
 		s.db.StopJDBCRunner()
-		os.RemoveAll(tmp)
+		extracted.Cleanup()
 		return nil, err
 	}
 

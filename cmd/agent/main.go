@@ -17,6 +17,7 @@ import (
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/runnerjar"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
 	"github.com/spf13/viper"
@@ -133,6 +134,19 @@ func main() {
 	cfg, err := loadConfig()
 	if err != nil {
 		log.Fatalf("config error: %v", err)
+	}
+
+	var cleanupJar func() error
+	if cfg.DIS.JDBCConfig != nil && cfg.DIS.JDBCConfig.JarPath == "" {
+		extracted, err := runnerjar.Extract()
+		if err != nil {
+			log.Fatalf("prepare runner jar: %v", err)
+		}
+		cfg.DIS.JDBCConfig.JarPath = extracted.JarPath
+		cleanupJar = extracted.Cleanup
+	}
+	if cleanupJar != nil {
+		defer cleanupJar()
 	}
 
 	logger := slog.New(prettylog.NewHandler(&slog.HandlerOptions{
