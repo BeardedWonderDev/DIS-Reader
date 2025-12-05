@@ -77,7 +77,8 @@ homebrew_casks:
   - name: dis-agent
     ids:
       - archives
-    url_template: "https://github.com/BeardedWonderDev/DIS-Reader/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    url:
+      template: "https://github.com/BeardedWonderDev/DIS-Reader/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     homepage: "https://github.com/BeardedWonderDev/DIS-Reader"
     description: "DIS remote bridge agent (headless)."
     license: "Apache-2.0"
@@ -88,6 +89,7 @@ homebrew_casks:
       name: homebrew-tap
       branch: main
       token: "{{ .Env.GITHUB_TOKEN }}"
+    directory: Casks
     skip_upload: true
 
 dockers_v2:
