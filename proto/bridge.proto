@@ -95,6 +95,7 @@ message AgentRuntimeConfig {
   string java_path = 5;
   string tenant_id = 6;
   string client_secret = 7; // write-only
+  bool force_restart = 8;   // when true, agent should reconnect/apply immediately
 }
 
 message AgentToServer {

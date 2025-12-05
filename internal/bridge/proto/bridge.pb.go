@@ -671,7 +671,8 @@ type AgentRuntimeConfig struct {
 	JdbcPort      string                 `protobuf:"bytes,4,opt,name=jdbc_port,json=jdbcPort,proto3" json:"jdbc_port,omitempty"`
 	JavaPath      string                 `protobuf:"bytes,5,opt,name=java_path,json=javaPath,proto3" json:"java_path,omitempty"`
 	TenantId      string                 `protobuf:"bytes,6,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	ClientSecret  string                 `protobuf:"bytes,7,opt,name=client_secret,json=clientSecret,proto3" json:"client_secret,omitempty"` // write-only
+	ClientSecret  string                 `protobuf:"bytes,7,opt,name=client_secret,json=clientSecret,proto3" json:"client_secret,omitempty"`  // write-only
+	ForceRestart  bool                   `protobuf:"varint,8,opt,name=force_restart,json=forceRestart,proto3" json:"force_restart,omitempty"` // when true, agent should reconnect/apply immediately
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -753,6 +754,13 @@ func (x *AgentRuntimeConfig) GetClientSecret() string {
 		return x.ClientSecret
 	}
 	return ""
+}
+
+func (x *AgentRuntimeConfig) GetForceRestart() bool {
+	if x != nil {
+		return x.ForceRestart
+	}
+	return false
 }
 
 type AgentToServer struct {
@@ -1009,7 +1017,7 @@ const file_proto_bridge_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"k\n" +
 	"\vAgentConfig\x12&\n" +
 	"\x04loki\x18\x01 \x01(\v2\x12.bridge.LokiConfigR\x04loki\x124\n" +
-	"\aruntime\x18\x02 \x01(\v2\x1a.bridge.AgentRuntimeConfigR\aruntime\"\xe9\x01\n" +
+	"\aruntime\x18\x02 \x01(\v2\x1a.bridge.AgentRuntimeConfigR\aruntime\"\x8e\x02\n" +
 	"\x12AgentRuntimeConfig\x12\x19\n" +
 	"\bdis_host\x18\x01 \x01(\tR\adisHost\x12\x19\n" +
 	"\bdis_user\x18\x02 \x01(\tR\adisUser\x12!\n" +
@@ -1017,7 +1025,8 @@ const file_proto_bridge_proto_rawDesc = "" +
 	"\tjdbc_port\x18\x04 \x01(\tR\bjdbcPort\x12\x1b\n" +
 	"\tjava_path\x18\x05 \x01(\tR\bjavaPath\x12\x1b\n" +
 	"\ttenant_id\x18\x06 \x01(\tR\btenantId\x12#\n" +
-	"\rclient_secret\x18\a \x01(\tR\fclientSecret\"\xd3\x01\n" +
+	"\rclient_secret\x18\a \x01(\tR\fclientSecret\x12#\n" +
+	"\rforce_restart\x18\b \x01(\bR\fforceRestart\"\xd3\x01\n" +
 	"\rAgentToServer\x12*\n" +
 	"\x05hello\x18\x01 \x01(\v2\x12.bridge.AgentHelloH\x00R\x05hello\x122\n" +
 	"\n" +

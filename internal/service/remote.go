@@ -159,6 +159,21 @@ func (s *RemoteService) PartService(tenant string) types.PartService {
 	return s.partFactory(t)
 }
 
+// UpdateAgentConfig lets callers push a fresh AgentConfig to connected agents and
+// update the default used for future agent registrations.
+func (s *RemoteService) UpdateAgentConfig(ctx context.Context, cfg *proto.AgentConfig, tenant string, broadcast bool) error {
+	if s.server == nil {
+		return fmt.Errorf("bridge server not initialized")
+	}
+	_ = ctx // reserved for future cancellation support
+	clientID := ""
+	if s.config != nil && s.config.Bridge != nil {
+		clientID = s.config.Bridge.ClientID
+	}
+	s.server.SetAgentConfig(cfg, broadcast, tenant, clientID)
+	return nil
+}
+
 // resolveTenant chooses the explicit tenant if provided, otherwise the default (if set).
 // Returns an error when both are empty.
 func (s *RemoteService) resolveTenant(tenant string) (string, error) {

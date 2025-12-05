@@ -35,6 +35,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+var errRestartRequired = errors.New("restart requested by bridge")
+
 const (
 	defaultAgentConfigFile = "agent.yaml"
 	defaultJavaPath        = "java"
@@ -214,6 +216,11 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler
 
 		if err := runOnce(ctx, cfg, db, baseHandler, loggerVal); err != nil {
 			currentLogger(loggerVal).Error("agent loop error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
+			if errors.Is(err, errRestartRequired) {
+				time.Sleep(backoff)
+				backoff = time.Second
+				continue
+			}
 			time.Sleep(backoff)
 			if backoff < 30*time.Second {
 				backoff *= 2
@@ -420,6 +427,7 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 	// Apply runtime overrides first so downstream jobs use remote-configured values.
 	if rt := cfg.GetRuntime(); rt != nil {
 		restart := false
+		reconnect := false
 		trim := func(s string) string { return strings.TrimSpace(s) }
 
 		if h := trim(rt.GetDisHost()); h != "" {
@@ -453,7 +461,14 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 			agentCfg.TenantID = t
 		}
 		if s := trim(rt.GetClientSecret()); s != "" {
-			agentCfg.ClientSecret = s
+			if agentCfg.ClientSecret != s {
+				agentCfg.ClientSecret = s
+				reconnect = true
+			}
+		}
+		if rt.GetForceRestart() {
+			restart = true
+			reconnect = true
 		}
 
 		if restart && db != nil {
@@ -464,6 +479,9 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 			if err := db.StartJDBCRunner(); err != nil {
 				return fmt.Errorf("restart jdbc runner: %w", err)
 			}
+		}
+		if reconnect {
+			return errRestartRequired
 		}
 	}
 

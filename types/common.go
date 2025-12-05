@@ -79,4 +79,8 @@ type DISReaderRemote interface {
 	UnitService(tenant string) UnitService
 	InvoiceService(tenant string) InvoiceService
 	PartService(tenant string) PartService
+	// UpdateAgentConfig pushes a new AgentConfig to connected agents (optionally filtered by tenant)
+	// and updates the server defaults used for future connections. If broadcast is false, only future
+	// connections will see the update.
+	UpdateAgentConfig(ctx context.Context, cfg *bridgeproto.AgentConfig, tenant string, broadcast bool) error
 }

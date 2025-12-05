@@ -49,6 +49,17 @@ func (f *FileAuthenticator) Authenticate(_ context.Context, clientID, clientSecr
 	return secret.TenantID, secret.AgentID, nil
 }
 
+// Upsert updates the in-memory secret map (not persisted to disk). Useful for
+// live rotations coordinated by the bridge controller.
+func (f *FileAuthenticator) Upsert(clientID string, secret StaticAgentSecret) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.secrets == nil {
+		f.secrets = map[string]StaticAgentSecret{}
+	}
+	f.secrets[clientID] = secret
+}
+
 func (f *FileAuthenticator) Reload() error {
 	b, err := os.ReadFile(filepath.Clean(f.path))
 	if err != nil {

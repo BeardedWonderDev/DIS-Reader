@@ -6,11 +6,13 @@ package bridgeproto
 import internalproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 
 type (
-	Status     = internalproto.Status
-	JobKind    = internalproto.JobKind
-	JobRequest = internalproto.JobRequest
-	JobResult  = internalproto.JobResult
-	Row        = internalproto.Row
+	Status             = internalproto.Status
+	JobKind            = internalproto.JobKind
+	JobRequest         = internalproto.JobRequest
+	JobResult          = internalproto.JobResult
+	Row                = internalproto.Row
+	AgentConfig        = internalproto.AgentConfig
+	AgentRuntimeConfig = internalproto.AgentRuntimeConfig
 )
 
 // Re-export enums so consumers can reference them without the internal path.

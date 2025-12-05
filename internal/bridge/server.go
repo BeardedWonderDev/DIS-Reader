@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,9 @@ type Server struct {
 	agentConfig           *proto.AgentConfig
 
 	heartbeatGrace time.Duration
+
+	mu    sync.RWMutex
+	conns map[RegistryKey]*streamAgentConnection
 }
 
 type ServerOption func(*Server)
@@ -58,6 +62,7 @@ func NewServer(auth AgentAuthenticator, registry AgentRegistry, logger *slog.Log
 		logger:                logger,
 		heartbeatGrace:        defaultHeartbeatGrace,
 		autoConnectOnRegister: true,
+		conns:                 map[RegistryKey]*streamAgentConnection{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -93,15 +98,24 @@ func (s *Server) Connect(stream proto.AgentService_ConnectServer) error {
 	defer s.registry.Unregister(context.Background(), tenantID, agentID)
 
 	if s.agentConfig != nil {
-		if err := stream.Send(&proto.ServerToAgent{Payload: &proto.ServerToAgent_Config{Config: s.agentConfig}}); err != nil {
+		s.mu.RLock()
+		cfg := s.agentConfig
+		s.mu.RUnlock()
+		if err := stream.Send(&proto.ServerToAgent{Payload: &proto.ServerToAgent_Config{Config: cfg}}); err != nil {
 			return status.Errorf(codes.Internal, "send agent config: %v", err)
 		}
 		if s.logger != nil {
 			s.logger.Info("agent config sent", append(logging.CommonAttrs(tenantID, agentID, "", "bridge_connect", "config"),
-				slog.Bool("has_loki", s.agentConfig.GetLoki() != nil),
-				slog.Bool("has_runtime", s.agentConfig.GetRuntime() != nil))...)
+				slog.Bool("has_loki", cfg.GetLoki() != nil),
+				slog.Bool("has_runtime", cfg.GetRuntime() != nil))...)
 		}
 	}
+
+	// Track live connection for targeted/broadcast config pushes.
+	key := RegistryKey{Tenant: tenantID, Agent: agentID}
+	s.mu.Lock()
+	s.conns[key] = conn
+	s.mu.Unlock()
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -132,12 +146,65 @@ func (s *Server) Connect(stream proto.AgentService_ConnectServer) error {
 	}
 
 	err = <-errCh
+
+	s.mu.Lock()
+	delete(s.conns, key)
+	s.mu.Unlock()
 	if err != nil {
 		if s.logger != nil {
 			s.logger.Warn("agent stream closed", append(logging.CommonAttrs(tenantID, agentID, "", "bridge_connect", "stream"), slog.Any("err", err))...)
 		}
 	}
 	return nil
+}
+
+// SetAgentConfig updates the server-side AgentConfig and optionally broadcasts
+// it to currently connected agents. Caller supplies full config payload.
+func (s *Server) SetAgentConfig(cfg *proto.AgentConfig, broadcast bool, tenant string, clientID string) int {
+	if cfg == nil {
+		return 0
+	}
+	s.mu.Lock()
+	s.agentConfig = cfg
+	s.mu.Unlock()
+
+	// If runtime includes a client secret, update authenticator for future connects.
+	if rt := cfg.GetRuntime(); rt != nil && strings.TrimSpace(rt.GetClientSecret()) != "" {
+		tID := strings.TrimSpace(rt.GetTenantId())
+		if clientID == "" {
+			clientID = tID
+		}
+		if ma, ok := s.auth.(MutableAuthenticator); ok && clientID != "" {
+			ma.Upsert(clientID, StaticAgentSecret{ClientSecret: rt.GetClientSecret(), TenantID: tID, AgentID: clientID})
+		}
+	}
+
+	if !broadcast {
+		return 0
+	}
+
+	s.mu.RLock()
+	conns := make(map[RegistryKey]*streamAgentConnection, len(s.conns))
+	for k, v := range s.conns {
+		conns[k] = v
+	}
+	s.mu.RUnlock()
+
+	sent := 0
+	for key, conn := range conns {
+		if tenant != "" && key.Tenant != tenant {
+			continue
+		}
+		if err := conn.SendConfig(cfg); err == nil {
+			sent++
+			if s.logger != nil {
+				s.logger.Info("agent config broadcast", slog.String("tenant", key.Tenant), slog.String("agent", key.Agent))
+			}
+		} else if s.logger != nil {
+			s.logger.Warn("agent config broadcast failed", slog.String("tenant", key.Tenant), slog.String("agent", key.Agent), slog.Any("err", err))
+		}
+	}
+	return sent
 }
 
 // streamAgentConnection wraps the gRPC stream and fulfills AgentConnection.
@@ -166,6 +233,13 @@ func newStreamAgentConnection(stream proto.AgentService_ConnectServer, tenantID,
 
 func (c *streamAgentConnection) TenantID() string { return c.tenantID }
 func (c *streamAgentConnection) AgentID() string  { return c.agentID }
+
+func (c *streamAgentConnection) SendConfig(cfg *proto.AgentConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	return c.stream.Send(&proto.ServerToAgent{Payload: &proto.ServerToAgent_Config{Config: cfg}})
+}
 
 func (c *streamAgentConnection) SendJob(ctx context.Context, req *proto.JobRequest) (*proto.JobResult, error) {
 	if req.JobId == "" {
