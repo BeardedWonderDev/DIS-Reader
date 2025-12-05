@@ -12,7 +12,12 @@ mkdir -p "$STAGE/usr/local/bin"
 mkdir -p "$STAGE/Library/Application Support/dis-agent"
 mkdir -p "$STAGE/Library/LaunchDaemons"
 
-BIN_PATH="$ROOT/dist/dis-agent_darwin_${ARCH}/dis-agent"
+# Map GoReleaser output folders to requested arch
+case "$ARCH" in
+  amd64) BIN_PATH="$ROOT/dist/agent_darwin_amd64_v1/dis-agent" ;;
+  arm64) BIN_PATH="$ROOT/dist/agent_darwin_arm64_v8.0/dis-agent" ;;
+  *) echo "Unsupported ARCH: $ARCH" ; exit 1 ;;
+esac
 
 if [ ! -f "$BIN_PATH" ]; then
   echo "Binary not found at $BIN_PATH"
