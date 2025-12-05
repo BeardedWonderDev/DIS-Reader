@@ -1,17 +1,22 @@
 package disreader
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	svc "github.com/BeardedWonderDev/DIS-Reader/internal/service"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Embedded entrypoint
@@ -107,11 +112,16 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 		if err != nil {
 			return nil, fmt.Errorf("listen gRPC: %w", err)
 		}
-		srv := grpc.NewServer()
+		srv := grpc.NewServer(
+			grpc.ChainUnaryInterceptor(grpcLoggingUnary(logger)),
+			grpc.ChainStreamInterceptor(grpcLoggingStream(logger)),
+		)
 		remote.RegisterBridge(srv)
 		go func() {
 			logger.Info("bridge gRPC listening", slog.String("addr", lis.Addr().String()))
-			_ = srv.Serve(lis)
+			if err := srv.Serve(lis); err != nil {
+				logger.Error("bridge gRPC server error", slog.Any("err", err))
+			}
 		}()
 	}
 
@@ -124,8 +134,12 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 		remote.RegisterHealth(mux)
 		go func() {
 			addr := ":" + httpPort
+			httpLogger := slog.NewLogLogger(logger.Handler(), slog.LevelError)
+			srv := &http.Server{Addr: addr, Handler: mux, ErrorLog: httpLogger}
 			logger.Info("bridge HTTP listening", slog.String("addr", addr))
-			_ = http.ListenAndServe(addr, mux)
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error("bridge HTTP server error", slog.Any("err", err))
+			}
 		}()
 	}
 
@@ -169,4 +183,50 @@ func buildAuthenticator(cfg *types.BridgeConfig, override bridge.AgentAuthentica
 		}
 	}
 	return &bridge.StaticAuthenticator{Secrets: secrets}
+}
+
+// grpcLoggingUnary logs unary RPCs using the provided slog logger.
+func grpcLoggingUnary(logger *slog.Logger) grpc.UnaryServerInterceptor {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		start := time.Now()
+		resp, err := handler(ctx, req)
+		code := status.Code(err)
+		level := slog.LevelInfo
+		if code != codes.OK {
+			level = slog.LevelError
+		}
+		logger.LogAttrs(ctx, level, "grpc request",
+			slog.String("method", info.FullMethod),
+			slog.String("code", code.String()),
+			slog.Duration("duration", time.Since(start)),
+		)
+		return resp, err
+	}
+}
+
+// grpcLoggingStream logs stream RPCs using the provided slog logger.
+func grpcLoggingStream(logger *slog.Logger) grpc.StreamServerInterceptor {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		start := time.Now()
+		err := handler(srv, stream)
+		code := status.Code(err)
+		level := slog.LevelInfo
+		if code != codes.OK {
+			level = slog.LevelError
+		}
+		logger.LogAttrs(stream.Context(), level, "grpc stream",
+			slog.String("method", info.FullMethod),
+			slog.String("code", code.String()),
+			slog.Bool("is_client_stream", info.IsClientStream),
+			slog.Bool("is_server_stream", info.IsServerStream),
+			slog.Duration("duration", time.Since(start)),
+		)
+		return err
+	}
 }
