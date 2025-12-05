@@ -18,6 +18,7 @@ func TestLoadConfigWithEnv(t *testing.T) {
 		"DISAGENT_DIS_PASSWORD":            "password",
 		"DISAGENT_DIS_JDBCCONFIG_JAVAPATH": "/usr/bin/java",
 		"DISAGENT_DIS_JDBCCONFIG_JDBCPORT": "9999",
+		"DISAGENT_TLS_ENABLED":             "false",
 		"DISAGENT_TLS_INSECURESKIPVERIFY":  "true",
 	}
 
@@ -68,6 +69,9 @@ func TestLoadConfigWithEnv(t *testing.T) {
 	}
 	if cfg.DIS.JDBCConfig.JDBCPort != env["DISAGENT_DIS_JDBCCONFIG_JDBCPORT"] {
 		t.Fatalf("JDBCPort = %s, want %s", cfg.DIS.JDBCConfig.JDBCPort, env["DISAGENT_DIS_JDBCCONFIG_JDBCPORT"])
+	}
+	if cfg.TLS.Enabled {
+		t.Fatalf("expected tls.enabled to be false")
 	}
 	if !cfg.TLS.InsecureSkipVerify {
 		t.Fatalf("expected tls.insecureSkipVerify to be true")

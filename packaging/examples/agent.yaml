@@ -11,6 +11,7 @@ dis:
     javaPath: "java"
     jdbcPort: "8888"
 tls:
+  enabled: true
   insecureSkipVerify: true
 # Bridge/limits
 maxRowsPerQuery: 1000

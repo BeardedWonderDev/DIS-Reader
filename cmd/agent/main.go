@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -42,6 +43,7 @@ type AgentConfig struct {
 	TenantID     string          `mapstructure:"tenantID"`
 	DIS          types.DISConfig `mapstructure:"dis"`
 	TLS          struct {
+		Enabled            bool `mapstructure:"enabled"`
 		InsecureSkipVerify bool `mapstructure:"insecureSkipVerify"`
 	} `mapstructure:"tls"`
 }
@@ -55,6 +57,7 @@ func loadConfigWith(v *viper.Viper) (*AgentConfig, error) {
 	v.SetDefault("dis.logLevel", slog.LevelInfo)
 	v.SetDefault("dis.jdbcConfig.javaPath", defaultJavaPath)
 	v.SetDefault("dis.jdbcConfig.jdbcPort", defaultJDBCPort)
+	v.SetDefault("tls.enabled", true)
 	v.SetDefault("tls.insecureSkipVerify", false)
 
 	if _, err := os.ReadFile(defaultAgentConfigFile); err == nil {
@@ -290,6 +293,9 @@ func statusFromError(err error) (proto.Status, string) {
 }
 
 func dialCredentials(cfg *AgentConfig) credentials.TransportCredentials {
+	if !cfg.TLS.Enabled {
+		return insecure.NewCredentials()
+	}
 	if cfg.TLS.InsecureSkipVerify {
 		return credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})
 	}
