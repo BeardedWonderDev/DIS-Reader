@@ -24,7 +24,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           VERSION="${GITHUB_REF_NAME#refs/tags/}"
-          gh release create "$VERSION" --title "$VERSION" --notes "Automated release for $VERSION" || true
+          PRERELEASE_FLAG=""
+          if [[ "$VERSION" == *"-alpha"* || "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "$VERSION" --title "$VERSION" --notes "Automated release for $VERSION" $PRERELEASE_FLAG || true
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -36,6 +40,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rpm msitools wixl genisoimage zip unzip
           which wixl
+
+      - name: Set up Docker Buildx (docker-container driver)
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -67,4 +76,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#refs/tags/}"
-          gh release upload "$VERSION" dist/dis-agent-darwin-*.pkg --clobber
+          shopt -s nullglob
+          PKGS=(dist/dis-agent-darwin-*.pkg)
+          if (( ${#PKGS[@]} )); then
+            gh release upload "$VERSION" "${PKGS[@]}" --clobber
+          else
+            echo "No macOS pkg files to upload; skipping."
+          fi
