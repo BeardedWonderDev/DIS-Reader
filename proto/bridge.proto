@@ -80,6 +80,21 @@ message LokiConfig {
 
 message AgentConfig {
   LokiConfig loki = 1;
+  AgentRuntimeConfig runtime = 2;
+}
+
+// AgentRuntimeConfig carries configuration overrides that the bridge pushes
+// down to agents. Any non-empty field should replace the agent's local
+// setting; secrets are write-only and must never be echoed back from the
+// agent.
+message AgentRuntimeConfig {
+  string dis_host = 1;
+  string dis_user = 2;
+  string dis_password = 3; // write-only
+  string jdbc_port = 4;
+  string java_path = 5;
+  string tenant_id = 6;
+  string client_secret = 7; // write-only
 }
 
 message AgentToServer {

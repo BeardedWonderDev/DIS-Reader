@@ -96,8 +96,8 @@ func loadConfigWith(v *viper.Viper) (*AgentConfig, error) {
 	if cfg.ServerURL == "" {
 		return nil, errors.New("serverURL is required")
 	}
-	if cfg.ClientID == "" || cfg.ClientSecret == "" {
-		return nil, errors.New("clientID and clientSecret are required")
+	if cfg.ClientID == "" {
+		return nil, errors.New("clientID is required")
 	}
 
 	if cfg.DIS.JDBCConfig == nil {
@@ -277,7 +277,7 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler 
 			}
 		case *proto.ServerToAgent_Config:
 			if payload.Config != nil {
-				if err := applyAgentConfig(baseHandler, loggerVal, payload.Config, cfg); err != nil {
+				if err := applyAgentConfig(baseHandler, loggerVal, payload.Config, cfg, db); err != nil {
 					currentLogger(loggerVal).Warn("apply agent config failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "config"), slog.Any("err", err))...)
 				}
 			}
@@ -412,8 +412,63 @@ func resultRowsToProto(rows []types.ResultRow) []*proto.Row {
 	return out
 }
 
-func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *proto.AgentConfig, agentCfg *AgentConfig) error {
-	if cfg == nil || cfg.Loki == nil || strings.TrimSpace(cfg.Loki.Url) == "" {
+func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *proto.AgentConfig, agentCfg *AgentConfig, db database.DB) error {
+	if cfg == nil {
+		return nil
+	}
+
+	// Apply runtime overrides first so downstream jobs use remote-configured values.
+	if rt := cfg.GetRuntime(); rt != nil {
+		restart := false
+		trim := func(s string) string { return strings.TrimSpace(s) }
+
+		if h := trim(rt.GetDisHost()); h != "" {
+			agentCfg.DIS.Host = h
+		}
+		if u := trim(rt.GetDisUser()); u != "" {
+			agentCfg.DIS.User = u
+		}
+		if p := trim(rt.GetDisPassword()); p != "" {
+			agentCfg.DIS.Password = p
+		}
+		if jp := trim(rt.GetJdbcPort()); jp != "" {
+			if agentCfg.DIS.JDBCConfig == nil {
+				agentCfg.DIS.JDBCConfig = &types.JDBCConfig{}
+			}
+			if agentCfg.DIS.JDBCConfig.JDBCPort != jp {
+				agentCfg.DIS.JDBCConfig.JDBCPort = jp
+				restart = true
+			}
+		}
+		if jp := trim(rt.GetJavaPath()); jp != "" {
+			if agentCfg.DIS.JDBCConfig == nil {
+				agentCfg.DIS.JDBCConfig = &types.JDBCConfig{}
+			}
+			if agentCfg.DIS.JDBCConfig.JavaPath != jp {
+				agentCfg.DIS.JDBCConfig.JavaPath = jp
+				restart = true
+			}
+		}
+		if t := trim(rt.GetTenantId()); t != "" {
+			agentCfg.TenantID = t
+		}
+		if s := trim(rt.GetClientSecret()); s != "" {
+			agentCfg.ClientSecret = s
+		}
+
+		if restart && db != nil {
+			// Best-effort restart so new ports/paths take effect before connect jobs.
+			if err := db.StopJDBCRunner(); err != nil {
+				currentLogger(loggerVal).Warn("failed to stop jdbc runner for remote config", slog.Any("err", err))
+			}
+			if err := db.StartJDBCRunner(); err != nil {
+				return fmt.Errorf("restart jdbc runner: %w", err)
+			}
+		}
+	}
+
+	// Loki config remains optional; only apply when provided.
+	if cfg.Loki == nil || strings.TrimSpace(cfg.Loki.Url) == "" {
 		return nil
 	}
 

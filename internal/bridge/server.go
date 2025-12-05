@@ -97,7 +97,9 @@ func (s *Server) Connect(stream proto.AgentService_ConnectServer) error {
 			return status.Errorf(codes.Internal, "send agent config: %v", err)
 		}
 		if s.logger != nil {
-			s.logger.Info("agent config sent", append(logging.CommonAttrs(tenantID, agentID, "", "bridge_connect", "config"), slog.Bool("has_loki", s.agentConfig.GetLoki() != nil))...)
+			s.logger.Info("agent config sent", append(logging.CommonAttrs(tenantID, agentID, "", "bridge_connect", "config"),
+				slog.Bool("has_loki", s.agentConfig.GetLoki() != nil),
+				slog.Bool("has_runtime", s.agentConfig.GetRuntime() != nil))...)
 		}
 	}
 

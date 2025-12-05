@@ -97,7 +97,7 @@ func (b *RemoteBuilder) Build() (types.DISReaderRemote, error) {
 		auth = buildAuthenticator(b.cfg.Bridge, nil)
 	}
 
-	agentCfg := buildAgentConfig(b.cfg.Bridge)
+	agentCfg := buildAgentConfig(b.cfg, b.cfg.Bridge)
 
 	server := bridge.NewServer(auth, registry, logger,
 		bridge.WithAutoConnectOnRegister(b.cfg.Bridge.AutoConnectOnRegister),
@@ -192,26 +192,61 @@ func buildAuthenticator(cfg *types.BridgeConfig, override bridge.AgentAuthentica
 
 // buildAgentConfig converts the bridge Loki configuration into a proto payload
 // that can be sent to agents during registration.
-func buildAgentConfig(cfg *types.BridgeConfig) *bridgeproto.AgentConfig {
-	if cfg == nil || cfg.Loki == nil || cfg.Loki.URL == "" {
+func buildAgentConfig(disCfg *types.DISConfig, bridgeCfg *types.BridgeConfig) *bridgeproto.AgentConfig {
+	var cfg bridgeproto.AgentConfig
+
+	if bridgeCfg != nil && bridgeCfg.Loki != nil && bridgeCfg.Loki.URL != "" {
+		labels := bridgeCfg.Loki.Labels
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		cfg.Loki = &bridgeproto.LokiConfig{
+			Url:        bridgeCfg.Loki.URL,
+			TenantId:   bridgeCfg.Loki.TenantID,
+			ApiKey:     bridgeCfg.Loki.APIKey,
+			AuthHeader: bridgeCfg.Loki.AuthHeader,
+			Labels:     labels,
+			MinLevel:   strings.ToLower(bridgeCfg.Loki.MinLevel.String()),
+		}
+	}
+
+	if disCfg != nil {
+		runtime := &bridgeproto.AgentRuntimeConfig{}
+		if disCfg.Host != "" {
+			runtime.DisHost = disCfg.Host
+		}
+		if disCfg.User != "" {
+			runtime.DisUser = disCfg.User
+		}
+		if disCfg.Password != "" {
+			runtime.DisPassword = disCfg.Password
+		}
+		if disCfg.JDBCConfig != nil {
+			if disCfg.JDBCConfig.JDBCPort != "" {
+				runtime.JdbcPort = disCfg.JDBCConfig.JDBCPort
+			}
+			if disCfg.JDBCConfig.JavaPath != "" {
+				runtime.JavaPath = disCfg.JDBCConfig.JavaPath
+			}
+		}
+		if disCfg.Bridge != nil {
+			if disCfg.Bridge.TenantID != "" {
+				runtime.TenantId = disCfg.Bridge.TenantID
+			}
+			if disCfg.Bridge.ClientSecret != "" {
+				runtime.ClientSecret = disCfg.Bridge.ClientSecret
+			}
+		}
+		if runtime.DisHost != "" || runtime.DisUser != "" || runtime.DisPassword != "" || runtime.JdbcPort != "" || runtime.JavaPath != "" || runtime.TenantId != "" || runtime.ClientSecret != "" {
+			cfg.Runtime = runtime
+		}
+	}
+
+	if cfg.Runtime == nil && cfg.Loki == nil {
 		return nil
 	}
 
-	labels := cfg.Loki.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-
-	return &bridgeproto.AgentConfig{
-		Loki: &bridgeproto.LokiConfig{
-			Url:        cfg.Loki.URL,
-			TenantId:   cfg.Loki.TenantID,
-			ApiKey:     cfg.Loki.APIKey,
-			AuthHeader: cfg.Loki.AuthHeader,
-			Labels:     labels,
-			MinLevel:   strings.ToLower(cfg.Loki.MinLevel.String()),
-		},
-	}
+	return &cfg
 }
 
 // grpcLoggingUnary logs unary RPCs using the provided slog logger.
