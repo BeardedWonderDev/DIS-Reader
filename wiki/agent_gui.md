@@ -27,9 +27,9 @@ A Wails-based desktop UI to configure and manage the agent service via the local
 3. Fill config fields: `serverURL`, `clientID/Secret`, DIS host/user/password, JDBC port, Java path, TLS flags, auto-connect.
 4. Actions:
    - **Save & Apply**: writes config via `/config/apply`.
-   - **Save + Restart**: apply then restart service.
-   - **Save + Install + Start**: best for first run—apply config, install service, start service.
-   - **Service buttons**: Install, Start, Stop, Restart, Status.
+   - **Save + Restart**: apply then restart the agent service.
+   - **Save + Install + Start**: first-run fast path—apply config, install the OS service (systemd/launchd/SCM), then start it.
+   - **Service buttons**: Install, Start, Stop, Restart, Status (direct calls to the control API).
 5. Status pane shows bridge connected state, agent/server info, last heartbeat/error, and raw JSON status.
 
 ### First-run recipe

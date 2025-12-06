@@ -73,6 +73,9 @@
       <button onclick="service('restart')" class="secondary">Restart</button>
       <button onclick="service('status')" class="secondary">Status</button>
     </div>
+    <div class="row" style="margin-top:8px;">
+      <span id="serviceMsg" class="muted"></span>
+    </div>
   </div>
 
   <div class="card">
@@ -139,11 +142,22 @@ async function service(action) {
   if (token) headers['Authorization'] = 'Bearer ' + token;
   try {
     const res = await fetch(`${api}/service/${action}`, { method: 'POST', headers, body: '{}' });
-    const data = await res.json();
-    document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+    const text = await res.text();
+    document.getElementById('raw').textContent = text || '{}';
+    const msg = document.getElementById('serviceMsg');
+    if (res.ok) {
+      msg.textContent = `${action} succeeded`;
+      msg.className = 'success';
+    } else {
+      msg.textContent = `${action} failed: ${text}`;
+      msg.className = 'error';
+    }
     refreshStatus();
   } catch (e) {
     document.getElementById('raw').textContent = 'Error: ' + e;
+    const msg = document.getElementById('serviceMsg');
+    msg.textContent = `${action} error: ${e}`;
+    msg.className = 'error';
   }
 }
 
