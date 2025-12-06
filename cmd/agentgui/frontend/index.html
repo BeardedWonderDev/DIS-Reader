@@ -93,6 +93,8 @@
     <div class="row" style="margin-top:12px;">
       <button onclick="applyConfig()">Save & Apply</button>
       <button class="secondary" onclick="validateConfig()">Validate</button>
+      <button class="secondary" onclick="applyAndRestart()">Save + Restart</button>
+      <button class="secondary" onclick="applyInstallStart()">Save + Install + Start</button>
       <span id="configMsg" class="muted"></span>
     </div>
   </div>
@@ -104,8 +106,8 @@
 
 <script>
 async function refreshStatus() {
-  const api = document.getElementById('api').value.trim();
-  const token = document.getElementById('token').value.trim();
+  const api = getApi();
+  const token = getToken();
   const headers = {};
   if (token) headers['Authorization'] = 'Bearer ' + token;
   try {
@@ -131,8 +133,8 @@ async function refreshStatus() {
 }
 
 async function service(action) {
-  const api = document.getElementById('api').value.trim();
-  const token = document.getElementById('token').value.trim();
+  const api = getApi();
+  const token = getToken();
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = 'Bearer ' + token;
   try {
@@ -146,8 +148,8 @@ async function service(action) {
 }
 
 async function loadConfig() {
-  const api = document.getElementById('api').value.trim();
-  const token = document.getElementById('token').value.trim();
+  const api = getApi();
+  const token = getToken();
   const headers = {};
   if (token) headers['Authorization'] = 'Bearer ' + token;
   try {
@@ -197,8 +199,8 @@ function buildConfigPayload() {
 }
 
 async function applyConfig() {
-  const api = document.getElementById('api').value.trim();
-  const token = document.getElementById('token').value.trim();
+  const api = getApi();
+  const token = getToken();
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const payload = buildConfigPayload();
@@ -220,8 +222,8 @@ async function applyConfig() {
 }
 
 async function validateConfig() {
-  const api = document.getElementById('api').value.trim();
-  const token = document.getElementById('token').value.trim();
+  const api = getApi();
+  const token = getToken();
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const payload = buildConfigPayload();
@@ -252,6 +254,48 @@ function scheduleRefresh() {
 
 document.getElementById('refresh').addEventListener('change', scheduleRefresh);
 
+function getApi() {
+  return document.getElementById('api').value.trim();
+}
+function getToken() {
+  return document.getElementById('token').value.trim();
+}
+
+function savePrefs() {
+  try {
+    localStorage.setItem('agent_api', getApi());
+    localStorage.setItem('agent_token', getToken());
+    localStorage.setItem('agent_refresh', document.getElementById('refresh').value);
+  } catch (e) {}
+}
+function loadPrefs() {
+  try {
+    const api = localStorage.getItem('agent_api'); if (api) document.getElementById('api').value = api;
+    const token = localStorage.getItem('agent_token'); if (token) document.getElementById('token').value = token;
+    const refresh = localStorage.getItem('agent_refresh'); if (refresh) document.getElementById('refresh').value = refresh;
+  } catch (e) {}
+}
+
+document.getElementById('api').addEventListener('change', savePrefs);
+document.getElementById('token').addEventListener('change', savePrefs);
+document.getElementById('refresh').addEventListener('change', savePrefs);
+
+async function applyAndRestart() {
+  const ok = await applyConfig();
+  if (ok) {
+    await service('restart');
+  }
+}
+
+async function applyInstallStart() {
+  const ok = await applyConfig();
+  if (ok) {
+    await service('install');
+    await service('start');
+  }
+}
+
+loadPrefs();
 refreshStatus();
 loadConfig();
 scheduleRefresh();
