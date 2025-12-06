@@ -7,15 +7,13 @@ before:
     - go mod download
 
 builds:
-  - id: agent
+  - id: agent-linux
     main: ./cmd/agent
     binary: dis-agent
     env:
       - CGO_ENABLED=0
     goos:
       - linux
-      - darwin
-      - windows
     goarch:
       - amd64
       - arm64
@@ -24,18 +22,79 @@ builds:
     ldflags:
       - "-s -w"
     mod_timestamp: "{{ .CommitTimestamp }}"
-  - id: agentctl
+
+  - id: agent-darwin
+    main: ./cmd/agent
+    binary: dis-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agent-windows
+    main: ./cmd/agent
+    binary: dis-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agentctl-linux
     main: ./cmd/agentctl
     binary: agentctl
     env:
       - CGO_ENABLED=0
     goos:
       - linux
-      - darwin
-      - windows
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agentctl-darwin
+    main: ./cmd/agentctl
+    binary: agentctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agentctl-windows
+    main: ./cmd/agentctl
+    binary: agentctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
     flags:
       - -trimpath
     ldflags:
@@ -91,10 +150,10 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - id: archives
+  - id: archives-linux
     ids:
-      - agent
-      - agentctl
+      - agent-linux
+      - agentctl-linux
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
@@ -108,6 +167,33 @@ archives:
       - packaging/windows/install_service.ps1
       - packaging/windows/uninstall_service.ps1
       - packaging/launchd/com.dis.agent.plist
+
+  - id: archives-darwin
+    ids:
+      - agent-darwin
+      - agentctl-darwin
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/examples/agent.yaml
+      - packaging/examples/bridge_agents.yaml
+      - packaging/launchd/com.dis.agent.plist
+
+  - id: archives-windows
+    ids:
+      - agent-windows
+      - agentctl-windows
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/examples/agent.yaml
+      - packaging/examples/bridge_agents.yaml
+      - packaging/windows/install_service.ps1
+      - packaging/windows/uninstall_service.ps1
 
   - id: archives-gui-linux
     ids:
@@ -189,6 +275,10 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     dockerfile: packaging/docker/Dockerfile
+    build_flag_templates:
+      - "--build-arg=BINARY=dis-agent"
+      - "--build-arg=TARGETOS={{ .Os }}"
+      - "--build-arg=TARGETARCH={{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
