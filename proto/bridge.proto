@@ -28,6 +28,7 @@ enum JobKind {
   JOB_KIND_DISCONNECT = 5;
   JOB_KIND_START_JDBC = 6;
   JOB_KIND_STOP_JDBC = 7;
+  JOB_KIND_READ_CONFIG = 8;
 }
 
 message AgentHello {
@@ -67,6 +68,7 @@ message JobResult {
   Status status = 2;
   string message = 3;
   repeated Row rows = 4;
+  AgentConfigStatus config_status = 5;
 }
 
 message LokiConfig {
@@ -81,6 +83,23 @@ message LokiConfig {
 message AgentConfig {
   LokiConfig loki = 1;
   AgentRuntimeConfig runtime = 2;
+}
+
+// AgentRuntimeStatus mirrors AgentRuntimeConfig but excludes secrets; used for readbacks.
+message AgentRuntimeStatus {
+  string dis_host = 1;
+  string dis_user = 2;
+  string jdbc_port = 3;
+  string java_path = 4;
+  string tenant_id = 5;
+  bool has_password = 6;
+  bool has_client_secret = 7;
+}
+
+// AgentConfigStatus is a sanitized snapshot returned by agents.
+message AgentConfigStatus {
+  LokiConfig loki = 1;
+  AgentRuntimeStatus runtime = 2;
 }
 
 // AgentRuntimeConfig carries configuration overrides that the bridge pushes

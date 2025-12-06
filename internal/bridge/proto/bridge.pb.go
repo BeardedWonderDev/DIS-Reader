@@ -86,6 +86,7 @@ const (
 	JobKind_JOB_KIND_DISCONNECT    JobKind = 5
 	JobKind_JOB_KIND_START_JDBC    JobKind = 6
 	JobKind_JOB_KIND_STOP_JDBC     JobKind = 7
+	JobKind_JOB_KIND_READ_CONFIG   JobKind = 8
 )
 
 // Enum value maps for JobKind.
@@ -99,6 +100,7 @@ var (
 		5: "JOB_KIND_DISCONNECT",
 		6: "JOB_KIND_START_JDBC",
 		7: "JOB_KIND_STOP_JDBC",
+		8: "JOB_KIND_READ_CONFIG",
 	}
 	JobKind_value = map[string]int32{
 		"JOB_KIND_UNSPECIFIED":   0,
@@ -109,6 +111,7 @@ var (
 		"JOB_KIND_DISCONNECT":    5,
 		"JOB_KIND_START_JDBC":    6,
 		"JOB_KIND_STOP_JDBC":     7,
+		"JOB_KIND_READ_CONFIG":   8,
 	}
 )
 
@@ -461,6 +464,7 @@ type JobResult struct {
 	Status        Status                 `protobuf:"varint,2,opt,name=status,proto3,enum=bridge.Status" json:"status,omitempty"`
 	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	Rows          []*Row                 `protobuf:"bytes,4,rep,name=rows,proto3" json:"rows,omitempty"`
+	ConfigStatus  *AgentConfigStatus     `protobuf:"bytes,5,opt,name=config_status,json=configStatus,proto3" json:"config_status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -519,6 +523,13 @@ func (x *JobResult) GetMessage() string {
 func (x *JobResult) GetRows() []*Row {
 	if x != nil {
 		return x.Rows
+	}
+	return nil
+}
+
+func (x *JobResult) GetConfigStatus() *AgentConfigStatus {
+	if x != nil {
+		return x.ConfigStatus
 	}
 	return nil
 }
@@ -659,6 +670,152 @@ func (x *AgentConfig) GetRuntime() *AgentRuntimeConfig {
 	return nil
 }
 
+// AgentRuntimeStatus mirrors AgentRuntimeConfig but excludes secrets; used for readbacks.
+type AgentRuntimeStatus struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	DisHost         string                 `protobuf:"bytes,1,opt,name=dis_host,json=disHost,proto3" json:"dis_host,omitempty"`
+	DisUser         string                 `protobuf:"bytes,2,opt,name=dis_user,json=disUser,proto3" json:"dis_user,omitempty"`
+	JdbcPort        string                 `protobuf:"bytes,3,opt,name=jdbc_port,json=jdbcPort,proto3" json:"jdbc_port,omitempty"`
+	JavaPath        string                 `protobuf:"bytes,4,opt,name=java_path,json=javaPath,proto3" json:"java_path,omitempty"`
+	TenantId        string                 `protobuf:"bytes,5,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	HasPassword     bool                   `protobuf:"varint,6,opt,name=has_password,json=hasPassword,proto3" json:"has_password,omitempty"`
+	HasClientSecret bool                   `protobuf:"varint,7,opt,name=has_client_secret,json=hasClientSecret,proto3" json:"has_client_secret,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AgentRuntimeStatus) Reset() {
+	*x = AgentRuntimeStatus{}
+	mi := &file_proto_bridge_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentRuntimeStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentRuntimeStatus) ProtoMessage() {}
+
+func (x *AgentRuntimeStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_bridge_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentRuntimeStatus.ProtoReflect.Descriptor instead.
+func (*AgentRuntimeStatus) Descriptor() ([]byte, []int) {
+	return file_proto_bridge_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AgentRuntimeStatus) GetDisHost() string {
+	if x != nil {
+		return x.DisHost
+	}
+	return ""
+}
+
+func (x *AgentRuntimeStatus) GetDisUser() string {
+	if x != nil {
+		return x.DisUser
+	}
+	return ""
+}
+
+func (x *AgentRuntimeStatus) GetJdbcPort() string {
+	if x != nil {
+		return x.JdbcPort
+	}
+	return ""
+}
+
+func (x *AgentRuntimeStatus) GetJavaPath() string {
+	if x != nil {
+		return x.JavaPath
+	}
+	return ""
+}
+
+func (x *AgentRuntimeStatus) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *AgentRuntimeStatus) GetHasPassword() bool {
+	if x != nil {
+		return x.HasPassword
+	}
+	return false
+}
+
+func (x *AgentRuntimeStatus) GetHasClientSecret() bool {
+	if x != nil {
+		return x.HasClientSecret
+	}
+	return false
+}
+
+// AgentConfigStatus is a sanitized snapshot returned by agents.
+type AgentConfigStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Loki          *LokiConfig            `protobuf:"bytes,1,opt,name=loki,proto3" json:"loki,omitempty"`
+	Runtime       *AgentRuntimeStatus    `protobuf:"bytes,2,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentConfigStatus) Reset() {
+	*x = AgentConfigStatus{}
+	mi := &file_proto_bridge_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentConfigStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentConfigStatus) ProtoMessage() {}
+
+func (x *AgentConfigStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_bridge_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentConfigStatus.ProtoReflect.Descriptor instead.
+func (*AgentConfigStatus) Descriptor() ([]byte, []int) {
+	return file_proto_bridge_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AgentConfigStatus) GetLoki() *LokiConfig {
+	if x != nil {
+		return x.Loki
+	}
+	return nil
+}
+
+func (x *AgentConfigStatus) GetRuntime() *AgentRuntimeStatus {
+	if x != nil {
+		return x.Runtime
+	}
+	return nil
+}
+
 // AgentRuntimeConfig carries configuration overrides that the bridge pushes
 // down to agents. Any non-empty field should replace the agent's local
 // setting; secrets are write-only and must never be echoed back from the
@@ -679,7 +836,7 @@ type AgentRuntimeConfig struct {
 
 func (x *AgentRuntimeConfig) Reset() {
 	*x = AgentRuntimeConfig{}
-	mi := &file_proto_bridge_proto_msgTypes[8]
+	mi := &file_proto_bridge_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -691,7 +848,7 @@ func (x *AgentRuntimeConfig) String() string {
 func (*AgentRuntimeConfig) ProtoMessage() {}
 
 func (x *AgentRuntimeConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_bridge_proto_msgTypes[8]
+	mi := &file_proto_bridge_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -704,7 +861,7 @@ func (x *AgentRuntimeConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRuntimeConfig.ProtoReflect.Descriptor instead.
 func (*AgentRuntimeConfig) Descriptor() ([]byte, []int) {
-	return file_proto_bridge_proto_rawDescGZIP(), []int{8}
+	return file_proto_bridge_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AgentRuntimeConfig) GetDisHost() string {
@@ -778,7 +935,7 @@ type AgentToServer struct {
 
 func (x *AgentToServer) Reset() {
 	*x = AgentToServer{}
-	mi := &file_proto_bridge_proto_msgTypes[9]
+	mi := &file_proto_bridge_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -790,7 +947,7 @@ func (x *AgentToServer) String() string {
 func (*AgentToServer) ProtoMessage() {}
 
 func (x *AgentToServer) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_bridge_proto_msgTypes[9]
+	mi := &file_proto_bridge_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -803,7 +960,7 @@ func (x *AgentToServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentToServer.ProtoReflect.Descriptor instead.
 func (*AgentToServer) Descriptor() ([]byte, []int) {
-	return file_proto_bridge_proto_rawDescGZIP(), []int{9}
+	return file_proto_bridge_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AgentToServer) GetPayload() isAgentToServer_Payload {
@@ -890,7 +1047,7 @@ type ServerToAgent struct {
 
 func (x *ServerToAgent) Reset() {
 	*x = ServerToAgent{}
-	mi := &file_proto_bridge_proto_msgTypes[10]
+	mi := &file_proto_bridge_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -902,7 +1059,7 @@ func (x *ServerToAgent) String() string {
 func (*ServerToAgent) ProtoMessage() {}
 
 func (x *ServerToAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_bridge_proto_msgTypes[10]
+	mi := &file_proto_bridge_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -915,7 +1072,7 @@ func (x *ServerToAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerToAgent.ProtoReflect.Descriptor instead.
 func (*ServerToAgent) Descriptor() ([]byte, []int) {
-	return file_proto_bridge_proto_rawDescGZIP(), []int{10}
+	return file_proto_bridge_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ServerToAgent) GetPayload() isServerToAgent_Payload {
@@ -997,12 +1154,13 @@ const file_proto_bridge_proto_rawDesc = "" +
 	"\x04kind\x18\x02 \x01(\x0e2\x0f.bridge.JobKindR\x04kind\x12\x10\n" +
 	"\x03sql\x18\x03 \x01(\tR\x03sql\x12\x1f\n" +
 	"\vinclude_src\x18\x04 \x01(\bR\n" +
-	"includeSrc\"\x85\x01\n" +
+	"includeSrc\"\xc5\x01\n" +
 	"\tJobResult\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12&\n" +
 	"\x06status\x18\x02 \x01(\x0e2\x0e.bridge.StatusR\x06status\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1f\n" +
-	"\x04rows\x18\x04 \x03(\v2\v.bridge.RowR\x04rows\"\x85\x02\n" +
+	"\x04rows\x18\x04 \x03(\v2\v.bridge.RowR\x04rows\x12>\n" +
+	"\rconfig_status\x18\x05 \x01(\v2\x19.bridge.AgentConfigStatusR\fconfigStatus\"\x85\x02\n" +
 	"\n" +
 	"LokiConfig\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x1b\n" +
@@ -1017,7 +1175,18 @@ const file_proto_bridge_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"k\n" +
 	"\vAgentConfig\x12&\n" +
 	"\x04loki\x18\x01 \x01(\v2\x12.bridge.LokiConfigR\x04loki\x124\n" +
-	"\aruntime\x18\x02 \x01(\v2\x1a.bridge.AgentRuntimeConfigR\aruntime\"\x8e\x02\n" +
+	"\aruntime\x18\x02 \x01(\v2\x1a.bridge.AgentRuntimeConfigR\aruntime\"\xf0\x01\n" +
+	"\x12AgentRuntimeStatus\x12\x19\n" +
+	"\bdis_host\x18\x01 \x01(\tR\adisHost\x12\x19\n" +
+	"\bdis_user\x18\x02 \x01(\tR\adisUser\x12\x1b\n" +
+	"\tjdbc_port\x18\x03 \x01(\tR\bjdbcPort\x12\x1b\n" +
+	"\tjava_path\x18\x04 \x01(\tR\bjavaPath\x12\x1b\n" +
+	"\ttenant_id\x18\x05 \x01(\tR\btenantId\x12!\n" +
+	"\fhas_password\x18\x06 \x01(\bR\vhasPassword\x12*\n" +
+	"\x11has_client_secret\x18\a \x01(\bR\x0fhasClientSecret\"q\n" +
+	"\x11AgentConfigStatus\x12&\n" +
+	"\x04loki\x18\x01 \x01(\v2\x12.bridge.LokiConfigR\x04loki\x124\n" +
+	"\aruntime\x18\x02 \x01(\v2\x1a.bridge.AgentRuntimeStatusR\aruntime\"\x8e\x02\n" +
 	"\x12AgentRuntimeConfig\x12\x19\n" +
 	"\bdis_host\x18\x01 \x01(\tR\adisHost\x12\x19\n" +
 	"\bdis_user\x18\x02 \x01(\tR\adisUser\x12!\n" +
@@ -1043,7 +1212,7 @@ const file_proto_bridge_proto_rawDesc = "" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tSTATUS_OK\x10\x01\x12\x10\n" +
 	"\fSTATUS_ERROR\x10\x02\x12\x0f\n" +
-	"\vSTATUS_DONE\x10\x03*\xce\x01\n" +
+	"\vSTATUS_DONE\x10\x03*\xe8\x01\n" +
 	"\aJobKind\x12\x18\n" +
 	"\x14JOB_KIND_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eJOB_KIND_QUERY\x10\x01\x12\x19\n" +
@@ -1052,7 +1221,8 @@ const file_proto_bridge_proto_rawDesc = "" +
 	"\x10JOB_KIND_CONNECT\x10\x04\x12\x17\n" +
 	"\x13JOB_KIND_DISCONNECT\x10\x05\x12\x17\n" +
 	"\x13JOB_KIND_START_JDBC\x10\x06\x12\x16\n" +
-	"\x12JOB_KIND_STOP_JDBC\x10\a2K\n" +
+	"\x12JOB_KIND_STOP_JDBC\x10\a\x12\x18\n" +
+	"\x14JOB_KIND_READ_CONFIG\x10\b2K\n" +
 	"\fAgentService\x12;\n" +
 	"\aConnect\x12\x15.bridge.AgentToServer\x1a\x15.bridge.ServerToAgent(\x010\x01B>Z<github.com/BeardedWonderDev/DIS-Reader/internal/bridge/protob\x06proto3"
 
@@ -1069,7 +1239,7 @@ func file_proto_bridge_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_bridge_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_proto_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_proto_bridge_proto_goTypes = []any{
 	(Status)(0),                   // 0: bridge.Status
 	(JobKind)(0),                  // 1: bridge.JobKind
@@ -1081,42 +1251,47 @@ var file_proto_bridge_proto_goTypes = []any{
 	(*JobResult)(nil),             // 7: bridge.JobResult
 	(*LokiConfig)(nil),            // 8: bridge.LokiConfig
 	(*AgentConfig)(nil),           // 9: bridge.AgentConfig
-	(*AgentRuntimeConfig)(nil),    // 10: bridge.AgentRuntimeConfig
-	(*AgentToServer)(nil),         // 11: bridge.AgentToServer
-	(*ServerToAgent)(nil),         // 12: bridge.ServerToAgent
-	nil,                           // 13: bridge.AgentHello.LabelsEntry
-	nil,                           // 14: bridge.LogEntry.FieldsEntry
-	nil,                           // 15: bridge.Row.FieldsEntry
-	nil,                           // 16: bridge.LokiConfig.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 17: google.protobuf.Timestamp
-	(*structpb.Value)(nil),        // 18: google.protobuf.Value
+	(*AgentRuntimeStatus)(nil),    // 10: bridge.AgentRuntimeStatus
+	(*AgentConfigStatus)(nil),     // 11: bridge.AgentConfigStatus
+	(*AgentRuntimeConfig)(nil),    // 12: bridge.AgentRuntimeConfig
+	(*AgentToServer)(nil),         // 13: bridge.AgentToServer
+	(*ServerToAgent)(nil),         // 14: bridge.ServerToAgent
+	nil,                           // 15: bridge.AgentHello.LabelsEntry
+	nil,                           // 16: bridge.LogEntry.FieldsEntry
+	nil,                           // 17: bridge.Row.FieldsEntry
+	nil,                           // 18: bridge.LokiConfig.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
+	(*structpb.Value)(nil),        // 20: google.protobuf.Value
 }
 var file_proto_bridge_proto_depIdxs = []int32{
-	13, // 0: bridge.AgentHello.labels:type_name -> bridge.AgentHello.LabelsEntry
-	17, // 1: bridge.Heartbeat.at:type_name -> google.protobuf.Timestamp
-	17, // 2: bridge.LogEntry.at:type_name -> google.protobuf.Timestamp
-	14, // 3: bridge.LogEntry.fields:type_name -> bridge.LogEntry.FieldsEntry
-	15, // 4: bridge.Row.fields:type_name -> bridge.Row.FieldsEntry
+	15, // 0: bridge.AgentHello.labels:type_name -> bridge.AgentHello.LabelsEntry
+	19, // 1: bridge.Heartbeat.at:type_name -> google.protobuf.Timestamp
+	19, // 2: bridge.LogEntry.at:type_name -> google.protobuf.Timestamp
+	16, // 3: bridge.LogEntry.fields:type_name -> bridge.LogEntry.FieldsEntry
+	17, // 4: bridge.Row.fields:type_name -> bridge.Row.FieldsEntry
 	1,  // 5: bridge.JobRequest.kind:type_name -> bridge.JobKind
 	0,  // 6: bridge.JobResult.status:type_name -> bridge.Status
 	5,  // 7: bridge.JobResult.rows:type_name -> bridge.Row
-	16, // 8: bridge.LokiConfig.labels:type_name -> bridge.LokiConfig.LabelsEntry
-	8,  // 9: bridge.AgentConfig.loki:type_name -> bridge.LokiConfig
-	10, // 10: bridge.AgentConfig.runtime:type_name -> bridge.AgentRuntimeConfig
-	2,  // 11: bridge.AgentToServer.hello:type_name -> bridge.AgentHello
-	7,  // 12: bridge.AgentToServer.job_result:type_name -> bridge.JobResult
-	3,  // 13: bridge.AgentToServer.heartbeat:type_name -> bridge.Heartbeat
-	4,  // 14: bridge.AgentToServer.log:type_name -> bridge.LogEntry
-	6,  // 15: bridge.ServerToAgent.job_request:type_name -> bridge.JobRequest
-	9,  // 16: bridge.ServerToAgent.config:type_name -> bridge.AgentConfig
-	18, // 17: bridge.Row.FieldsEntry.value:type_name -> google.protobuf.Value
-	11, // 18: bridge.AgentService.Connect:input_type -> bridge.AgentToServer
-	12, // 19: bridge.AgentService.Connect:output_type -> bridge.ServerToAgent
-	19, // [19:20] is the sub-list for method output_type
-	18, // [18:19] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	11, // 8: bridge.JobResult.config_status:type_name -> bridge.AgentConfigStatus
+	18, // 9: bridge.LokiConfig.labels:type_name -> bridge.LokiConfig.LabelsEntry
+	8,  // 10: bridge.AgentConfig.loki:type_name -> bridge.LokiConfig
+	12, // 11: bridge.AgentConfig.runtime:type_name -> bridge.AgentRuntimeConfig
+	8,  // 12: bridge.AgentConfigStatus.loki:type_name -> bridge.LokiConfig
+	10, // 13: bridge.AgentConfigStatus.runtime:type_name -> bridge.AgentRuntimeStatus
+	2,  // 14: bridge.AgentToServer.hello:type_name -> bridge.AgentHello
+	7,  // 15: bridge.AgentToServer.job_result:type_name -> bridge.JobResult
+	3,  // 16: bridge.AgentToServer.heartbeat:type_name -> bridge.Heartbeat
+	4,  // 17: bridge.AgentToServer.log:type_name -> bridge.LogEntry
+	6,  // 18: bridge.ServerToAgent.job_request:type_name -> bridge.JobRequest
+	9,  // 19: bridge.ServerToAgent.config:type_name -> bridge.AgentConfig
+	20, // 20: bridge.Row.FieldsEntry.value:type_name -> google.protobuf.Value
+	13, // 21: bridge.AgentService.Connect:input_type -> bridge.AgentToServer
+	14, // 22: bridge.AgentService.Connect:output_type -> bridge.ServerToAgent
+	22, // [22:23] is the sub-list for method output_type
+	21, // [21:22] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_proto_bridge_proto_init() }
@@ -1124,13 +1299,13 @@ func file_proto_bridge_proto_init() {
 	if File_proto_bridge_proto != nil {
 		return
 	}
-	file_proto_bridge_proto_msgTypes[9].OneofWrappers = []any{
+	file_proto_bridge_proto_msgTypes[11].OneofWrappers = []any{
 		(*AgentToServer_Hello)(nil),
 		(*AgentToServer_JobResult)(nil),
 		(*AgentToServer_Heartbeat)(nil),
 		(*AgentToServer_Log)(nil),
 	}
-	file_proto_bridge_proto_msgTypes[10].OneofWrappers = []any{
+	file_proto_bridge_proto_msgTypes[12].OneofWrappers = []any{
 		(*ServerToAgent_JobRequest)(nil),
 		(*ServerToAgent_Config)(nil),
 	}
@@ -1140,7 +1315,7 @@ func file_proto_bridge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_bridge_proto_rawDesc), len(file_proto_bridge_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

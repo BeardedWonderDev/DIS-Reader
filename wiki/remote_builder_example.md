@@ -54,6 +54,16 @@ func main() {
     units, err := remote.UnitService("tenant-a").ListUnits(ctx, types.ListParams{Limit: 10})
     if err != nil { log.Fatal(err) }
     log.Printf("units: %d", len(units))
+
+    // Fetch a sanitized snapshot of the agent's runtime config (secrets are never returned)
+    status, err := remote.ReadAgentConfig(ctx, "tenant-a")
+    if err != nil { log.Fatal(err) }
+    log.Printf("agent host=%s jdbcPort=%s hasPassword=%v hasClientSecret=%v",
+        status.GetRuntime().GetDisHost(),
+        status.GetRuntime().GetJdbcPort(),
+        status.GetRuntime().GetHasPassword(),
+        status.GetRuntime().GetHasClientSecret(),
+    )
 }
 
 // helper to panic on listen error

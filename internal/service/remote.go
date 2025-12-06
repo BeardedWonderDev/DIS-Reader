@@ -14,6 +14,7 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/internal/parts"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/unit"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
 
@@ -172,6 +173,38 @@ func (s *RemoteService) UpdateAgentConfig(ctx context.Context, cfg *proto.AgentC
 	}
 	s.server.SetAgentConfig(cfg, broadcast, tenant, clientID)
 	return nil
+}
+
+// ReadAgentConfig requests a sanitized snapshot of the agent's current configuration.
+func (s *RemoteService) ReadAgentConfig(ctx context.Context, tenant string) (*proto.AgentConfigStatus, error) {
+	t, err := s.resolveTenant(tenant)
+	if err != nil {
+		return nil, err
+	}
+	if s.registry == nil {
+		return nil, fmt.Errorf("registry not initialized")
+	}
+	conn, err := s.registry.Pick(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	res, err := conn.SendJob(ctx, &proto.JobRequest{
+		JobId: uuid.New().String(),
+		Kind:  proto.JobKind_JOB_KIND_READ_CONFIG,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, fmt.Errorf("nil job result")
+	}
+	if res.Status == proto.Status_STATUS_ERROR {
+		return nil, fmt.Errorf("remote error: %s", res.Message)
+	}
+	if res.ConfigStatus == nil {
+		return nil, fmt.Errorf("agent did not return config status")
+	}
+	return res.ConfigStatus, nil
 }
 
 // resolveTenant chooses the explicit tenant if provided, otherwise the default (if set).

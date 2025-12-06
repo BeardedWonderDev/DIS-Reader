@@ -56,6 +56,7 @@ type AgentConfig struct {
 		Enabled            bool `mapstructure:"enabled"`
 		InsecureSkipVerify bool `mapstructure:"insecureSkipVerify"`
 	} `mapstructure:"tls"`
+	AppliedLoki *proto.LokiConfig `mapstructure:"-"` // last applied, sanitized Loki config (no secrets)
 }
 
 func loadConfig() (*AgentConfig, error) {
@@ -342,6 +343,9 @@ func executeJob(ctx context.Context, cfg *AgentConfig, db database.DB, req *prot
 		res.Status, res.Message = statusFromError(db.StartJDBCRunner())
 	case proto.JobKind_JOB_KIND_STOP_JDBC:
 		res.Status, res.Message = statusFromError(db.StopJDBCRunner())
+	case proto.JobKind_JOB_KIND_READ_CONFIG:
+		res.ConfigStatus = buildConfigStatus(cfg)
+		res.Status = proto.Status_STATUS_OK
 	default:
 		res.Status = proto.Status_STATUS_ERROR
 		res.Message = "unknown job kind"
@@ -502,7 +506,46 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 		slog.String("tenant_id", cfg.Loki.TenantId),
 		slog.String("agent_id", agentCfg.ClientID),
 	)
+	agentCfg.AppliedLoki = sanitizeLokiConfig(cfg.Loki)
 	return nil
+}
+
+func buildConfigStatus(cfg *AgentConfig) *proto.AgentConfigStatus {
+	if cfg == nil {
+		return nil
+	}
+
+	status := &proto.AgentConfigStatus{
+		Runtime: &proto.AgentRuntimeStatus{
+			DisHost:         cfg.DIS.Host,
+			DisUser:         cfg.DIS.User,
+			JdbcPort:        "",
+			JavaPath:        "",
+			TenantId:        cfg.TenantID,
+			HasPassword:     cfg.DIS.Password != "",
+			HasClientSecret: cfg.ClientSecret != "",
+		},
+	}
+
+	if cfg.DIS.JDBCConfig != nil {
+		status.Runtime.JdbcPort = cfg.DIS.JDBCConfig.JDBCPort
+		status.Runtime.JavaPath = cfg.DIS.JDBCConfig.JavaPath
+	}
+
+	if cfg.AppliedLoki != nil {
+		status.Loki = sanitizeLokiConfig(cfg.AppliedLoki)
+	}
+
+	return status
+}
+
+func sanitizeLokiConfig(in *proto.LokiConfig) *proto.LokiConfig {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.ApiKey = ""
+	return &out
 }
 
 func newLokiHandler(cfg *proto.LokiConfig) (slog.Handler, error) {

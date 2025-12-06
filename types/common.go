@@ -83,4 +83,6 @@ type DISReaderRemote interface {
 	// and updates the server defaults used for future connections. If broadcast is false, only future
 	// connections will see the update.
 	UpdateAgentConfig(ctx context.Context, cfg *bridgeproto.AgentConfig, tenant string, broadcast bool) error
+	// ReadAgentConfig requests a sanitized view of the agent's current configuration.
+	ReadAgentConfig(ctx context.Context, tenant string) (*bridgeproto.AgentConfigStatus, error)
 }

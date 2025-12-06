@@ -162,6 +162,11 @@ fmt.Println("units", len(units))
 // Start/stop the remote JDBC runner on the agent (mirrors embedded lifecycle)
 if err := remote.StartJDBCRunner(ctx, "tenant-a"); err != nil { log.Fatal(err) }
 defer remote.StopJDBCRunner(ctx, "tenant-a")
+
+// Read the agent's current config (sanitized: secrets are write-only)
+cfgStatus, err := remote.ReadAgentConfig(ctx, "tenant-a")
+if err != nil { log.Fatal(err) }
+fmt.Println("agent host:", cfgStatus.GetRuntime().GetDisHost(), "has password?", cfgStatus.GetRuntime().GetHasPassword())
 ```
 
 Defaults and ports:

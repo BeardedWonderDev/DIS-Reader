@@ -57,3 +57,51 @@ func TestExecuteJob_StartStopJDBC(t *testing.T) {
 		t.Fatalf("expected stop to succeed and flag to be set, res=%v", stopRes)
 	}
 }
+
+func TestExecuteJob_ReadConfigSanitized(t *testing.T) {
+	db := &stubDB{}
+	ctx := context.Background()
+	cfg := &AgentConfig{
+		DIS: types.DISConfig{
+			Host:     "host",
+			User:     "user",
+			Password: "secretpw",
+			JDBCConfig: &types.JDBCConfig{
+				JDBCPort: "9999",
+				JavaPath: "/usr/bin/java",
+			},
+		},
+		ClientSecret: "client-secret",
+		TenantID:     "tenant-1",
+		AppliedLoki: &bridgeproto.LokiConfig{
+			Url:      "https://loki.example",
+			ApiKey:   "apikey",
+			TenantId: "lokitenant",
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var loggerVal atomic.Value
+	loggerVal.Store(logger)
+
+	res := executeJob(ctx, cfg, db, &bridgeproto.JobRequest{JobId: "3", Kind: bridgeproto.JobKind_JOB_KIND_READ_CONFIG}, &loggerVal)
+	if res.Status != bridgeproto.Status_STATUS_OK {
+		t.Fatalf("expected OK status, got %v", res.Status)
+	}
+	if res.ConfigStatus == nil || res.ConfigStatus.Runtime == nil {
+		t.Fatalf("expected config status in response")
+	}
+	rt := res.ConfigStatus.Runtime
+	if !rt.HasPassword || !rt.HasClientSecret {
+		t.Fatalf("expected password and client secret flags to be true")
+	}
+	if rt.DisHost != "host" || rt.DisUser != "user" || rt.JdbcPort != "9999" || rt.JavaPath != "/usr/bin/java" || rt.TenantId != "tenant-1" {
+		t.Fatalf("unexpected runtime snapshot: %+v", rt)
+	}
+	if res.ConfigStatus.Loki == nil {
+		t.Fatalf("expected loki snapshot")
+	}
+	if res.ConfigStatus.Loki.ApiKey != "" {
+		t.Fatalf("expected loki api key to be sanitized")
+	}
+}

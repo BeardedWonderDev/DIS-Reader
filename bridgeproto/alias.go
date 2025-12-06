@@ -13,6 +13,9 @@ type (
 	Row                = internalproto.Row
 	AgentConfig        = internalproto.AgentConfig
 	AgentRuntimeConfig = internalproto.AgentRuntimeConfig
+	AgentRuntimeStatus = internalproto.AgentRuntimeStatus
+	AgentConfigStatus  = internalproto.AgentConfigStatus
+	LokiConfig         = internalproto.LokiConfig
 )
 
 // Re-export enums so consumers can reference them without the internal path.
@@ -32,4 +35,5 @@ const (
 	JobKind_JOB_KIND_DISCONNECT    = internalproto.JobKind_JOB_KIND_DISCONNECT
 	JobKind_JOB_KIND_START_JDBC    = internalproto.JobKind_JOB_KIND_START_JDBC
 	JobKind_JOB_KIND_STOP_JDBC     = internalproto.JobKind_JOB_KIND_STOP_JDBC
+	JobKind_JOB_KIND_READ_CONFIG   = internalproto.JobKind_JOB_KIND_READ_CONFIG
 )
