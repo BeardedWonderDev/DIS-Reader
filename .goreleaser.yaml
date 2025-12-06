@@ -108,7 +108,7 @@ msi:
     name: "dis-agent-{{ .MsiArch }}"
     wxs: packaging/windows/agent.wxs
     replace: true
-    product_version_template: "{{ .Major }}.{{ .Minor }}.{{ .Patch }}.0"
+    product_version: "{{ .Major }}.{{ .Minor }}.{{ .Patch }}.0"
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 homebrew_casks:
