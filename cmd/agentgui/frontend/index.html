@@ -67,11 +67,11 @@
   <div class="card">
     <h4 style="margin-top:0">Service Control</h4>
     <div class="row">
-      <button onclick="service('install')">Install</button>
-      <button onclick="service('start')" class="secondary">Start</button>
-      <button onclick="service('stop')" class="secondary">Stop</button>
-      <button onclick="service('restart')" class="secondary">Restart</button>
-      <button onclick="service('status')" class="secondary">Status</button>
+      <button onclick="serviceLocal('install')">Install</button>
+      <button onclick="serviceLocal('start')" class="secondary">Start</button>
+      <button onclick="serviceLocal('stop')" class="secondary">Stop</button>
+      <button onclick="serviceLocal('restart')" class="secondary">Restart</button>
+      <button onclick="serviceLocal('status')" class="secondary">Status</button>
     </div>
     <div class="row" style="margin-top:8px;">
       <span id="serviceMsg" class="muted"></span>
@@ -159,6 +159,32 @@ async function service(action) {
     msg.textContent = `${action} error: ${e}`;
     msg.className = 'error';
   }
+}
+
+async function serviceLocal(action) {
+  const msg = document.getElementById('serviceMsg');
+  // Prefer native Go binding (works even if control API is down)
+  if (window.go && window.go.main && window.go.main.App) {
+    try {
+      let result = '';
+      switch (action) {
+        case 'install': result = await window.go.main.App.InstallService(); break;
+        case 'start': result = await window.go.main.App.StartService(); break;
+        case 'stop': result = await window.go.main.App.StopService(); break;
+        case 'restart': result = await window.go.main.App.RestartService(); break;
+        case 'status': result = await window.go.main.App.StatusService(); break;
+      }
+      msg.textContent = result || (action + ' ok');
+      msg.className = 'success';
+      refreshStatus();
+      return;
+    } catch (e) {
+      msg.textContent = `${action} failed locally: ${e}`;
+      msg.className = 'error';
+    }
+  }
+  // Fallback to control API if binding unavailable
+  await service(action);
 }
 
 async function loadConfig() {

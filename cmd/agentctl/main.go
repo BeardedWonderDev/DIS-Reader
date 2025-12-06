@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/servicectl"
 	"github.com/rivo/tview"
 )
 
@@ -141,10 +142,31 @@ func (s *uiState) refresh(tv *tview.TextView, app *tview.Application) {
 }
 
 func (s *uiState) service(action string, tv *tview.TextView, app *tview.Application) {
-	url := fmt.Sprintf("%s/service/%s", strings.TrimRight(s.api, "/"), action)
-	if err := s.postJSON(url, "{}"); err != nil {
-		tv.SetText(fmt.Sprintf("[red]%s failed:[-] %v", action, err))
-		return
+	ctrl := servicectl.New()
+	var err error
+	ctx := context.Background()
+	switch action {
+	case "install":
+		err = ctrl.Install(ctx)
+	case "start":
+		err = ctrl.Start(ctx)
+	case "stop":
+		err = ctrl.Stop(ctx)
+	case "restart":
+		err = ctrl.Restart(ctx)
+	case "status":
+		_, err = ctrl.Status(ctx)
+	}
+	if err != nil {
+		// Fallback to control API if available
+		url := fmt.Sprintf("%s/service/%s", strings.TrimRight(s.api, "/"), action)
+		if postErr := s.postJSON(url, "{}"); postErr != nil {
+			tv.SetText(fmt.Sprintf("[red]%s failed:[-] %v (local) ; %v (api)", action, err, postErr))
+			return
+		}
+		tv.SetText(fmt.Sprintf("%s via API (local failed: %v)", action, err))
+	} else {
+		tv.SetText(fmt.Sprintf("%s ok (local)", action))
 	}
 	s.refresh(tv, app)
 }
