@@ -150,7 +150,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: continue --merge --clean
+          args: continue --merge
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
