@@ -10,7 +10,7 @@
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
     label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
-    input { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #1f2937; background: #0b1220; color: #e2e8f0; }
+    input, select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #1f2937; background: #0b1220; color: #e2e8f0; }
     button { padding: 10px 14px; border: none; border-radius: 8px; background: #22c55e; color: #0b1220; font-weight: 600; cursor: pointer; }
     button.secondary { background: #334155; color: #e2e8f0; }
     .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
@@ -18,6 +18,11 @@
     .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; }
     .ok { background: #bbf7d0; color: #166534; }
     .fail { background: #fecdd3; color: #991b1b; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .half { flex:1 1 240px; }
+    .muted { color: #94a3b8; font-size: 12px; }
+    .error { color: #fca5a5; }
+    .success { color: #bbf7d0; }
   </style>
 </head>
 <body>
@@ -41,6 +46,11 @@
         <label>Token (optional)</label>
         <input id="token" placeholder="Bearer token" />
       </div>
+      <div>
+        <label>Auto Refresh (seconds)</label>
+        <input id="refresh" type="number" min="0" value="10" />
+        <span class="muted">0 to disable auto-refresh</span>
+      </div>
     </div>
   </div>
 
@@ -55,12 +65,35 @@
   </div>
 
   <div class="card">
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button onclick="service('start')">Start</button>
+    <h4 style="margin-top:0">Service Control</h4>
+    <div class="row">
+      <button onclick="service('install')">Install</button>
+      <button onclick="service('start')" class="secondary">Start</button>
       <button onclick="service('stop')" class="secondary">Stop</button>
       <button onclick="service('restart')" class="secondary">Restart</button>
-      <button onclick="service('status')" class="secondary">Service Status</button>
-      <button onclick="service('install')" class="secondary">Install Service</button>
+      <button onclick="service('status')" class="secondary">Status</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Configuration</h4>
+    <div class="grid">
+      <div><label>Server URL</label><input id="cfg_serverURL" /></div>
+      <div><label>Client ID</label><input id="cfg_clientID" /></div>
+      <div><label>Client Secret</label><input id="cfg_clientSecret" type="password" /></div>
+      <div><label>DIS Host</label><input id="cfg_disHost" /></div>
+      <div><label>DIS User</label><input id="cfg_disUser" /></div>
+      <div><label>DIS Password</label><input id="cfg_disPassword" type="password" /></div>
+      <div><label>JDBC Port</label><input id="cfg_jdbcPort" /></div>
+      <div><label>Java Path</label><input id="cfg_javaPath" /></div>
+      <div><label>TLS Enabled</label><select id="cfg_tlsEnabled"><option value="true">true</option><option value="false">false</option></select></div>
+      <div><label>TLS InsecureSkipVerify</label><select id="cfg_tlsInsecure"><option value="false">false</option><option value="true">true</option></select></div>
+      <div><label>Auto Connect On Start</label><select id="cfg_autoConnect"><option value="true">true</option><option value="false">false</option></select></div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button onclick="applyConfig()">Save & Apply</button>
+      <button class="secondary" onclick="validateConfig()">Validate</button>
+      <span id="configMsg" class="muted"></span>
     </div>
   </div>
 
@@ -112,7 +145,116 @@ async function service(action) {
   }
 }
 
+async function loadConfig() {
+  const api = document.getElementById('api').value.trim();
+  const token = document.getElementById('token').value.trim();
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    const res = await fetch(api + '/config', { headers });
+    const data = await res.json();
+    const c = data.config || {};
+    const dis = c.dis || {};
+    const jdbc = dis.jdbcConfig || {};
+    const tls = c.tls || {};
+    document.getElementById('cfg_serverURL').value = c.serverURL || '';
+    document.getElementById('cfg_clientID').value = c.clientID || '';
+    document.getElementById('cfg_clientSecret').value = c.clientSecret || '';
+    document.getElementById('cfg_disHost').value = dis.host || '';
+    document.getElementById('cfg_disUser').value = dis.user || '';
+    document.getElementById('cfg_disPassword').value = dis.password || '';
+    document.getElementById('cfg_jdbcPort').value = jdbc.jdbcPort || '';
+    document.getElementById('cfg_javaPath').value = jdbc.javaPath || '';
+    document.getElementById('cfg_tlsEnabled').value = String(tls.enabled ?? true);
+    document.getElementById('cfg_tlsInsecure').value = String(tls.insecureSkipVerify ?? false);
+    document.getElementById('cfg_autoConnect').value = String(c.autoConnectOnStart ?? false);
+    document.getElementById('configMsg').textContent = 'Loaded config';
+  } catch (e) {
+    document.getElementById('configMsg').textContent = 'Error loading config: ' + e;
+  }
+}
+
+function buildConfigPayload() {
+  return {
+    serverURL: document.getElementById('cfg_serverURL').value.trim(),
+    clientID: document.getElementById('cfg_clientID').value.trim(),
+    clientSecret: document.getElementById('cfg_clientSecret').value.trim(),
+    autoConnectOnStart: document.getElementById('cfg_autoConnect').value === 'true',
+    dis: {
+      host: document.getElementById('cfg_disHost').value.trim(),
+      user: document.getElementById('cfg_disUser').value.trim(),
+      password: document.getElementById('cfg_disPassword').value.trim(),
+      jdbcConfig: {
+        jdbcPort: document.getElementById('cfg_jdbcPort').value.trim(),
+        javaPath: document.getElementById('cfg_javaPath').value.trim()
+      }
+    },
+    tls: {
+      enabled: document.getElementById('cfg_tlsEnabled').value === 'true',
+      insecureSkipVerify: document.getElementById('cfg_tlsInsecure').value === 'true'
+    }
+  };
+}
+
+async function applyConfig() {
+  const api = document.getElementById('api').value.trim();
+  const token = document.getElementById('token').value.trim();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const payload = buildConfigPayload();
+  try {
+    const res = await fetch(api + '/config/apply', { method: 'POST', headers, body: JSON.stringify(payload) });
+    if (!res.ok) {
+      const text = await res.text();
+      document.getElementById('configMsg').textContent = 'Apply failed: ' + text;
+      document.getElementById('configMsg').className = 'error';
+      return;
+    }
+    document.getElementById('configMsg').textContent = 'Config applied. Restart if needed, then start service.';
+    document.getElementById('configMsg').className = 'success';
+    refreshStatus();
+  } catch (e) {
+    document.getElementById('configMsg').textContent = 'Apply error: ' + e;
+    document.getElementById('configMsg').className = 'error';
+  }
+}
+
+async function validateConfig() {
+  const api = document.getElementById('api').value.trim();
+  const token = document.getElementById('token').value.trim();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const payload = buildConfigPayload();
+  try {
+    const res = await fetch(api + '/config/validate', { method: 'POST', headers, body: JSON.stringify(payload) });
+    if (!res.ok) {
+      const text = await res.text();
+      document.getElementById('configMsg').textContent = 'Validation failed: ' + text;
+      document.getElementById('configMsg').className = 'error';
+      return;
+    }
+    document.getElementById('configMsg').textContent = 'Valid configuration.';
+    document.getElementById('configMsg').className = 'success';
+  } catch (e) {
+    document.getElementById('configMsg').textContent = 'Validate error: ' + e;
+    document.getElementById('configMsg').className = 'error';
+  }
+}
+
+let timer = null;
+function scheduleRefresh() {
+  if (timer) clearInterval(timer);
+  const seconds = parseInt(document.getElementById('refresh').value || '0', 10);
+  if (seconds > 0) {
+    timer = setInterval(refreshStatus, seconds * 1000);
+  }
+}
+
+document.getElementById('refresh').addEventListener('change', scheduleRefresh);
+
 refreshStatus();
+loadConfig();
+scheduleRefresh();
 </script>
 </body>
 </html>
