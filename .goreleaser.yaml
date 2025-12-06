@@ -121,19 +121,38 @@ changelog:
 
       ## Instructions:
 
-      - do not use emojis
-      - write short summary featuring user-impacting changes.
-      - provide a commit history and overview of each commit or set of related commits broken down and group by the following categories
-        - Added: for new features.
-        - Changed: for changes in existing functionality.
-        - Deprecated: for soon-to-be removed features.
-        - Removed: for now removed features.
-        - Fixed: for any bug fixes.
-        - Security: in case of vulnerabilities.
-      - if many commits update the same dependency, make sure to group them in a single line, for instance: 'sha-commit-1, sha-commit-2: updated dependency-x from v1.0.0 to v1.4.0'. Make sure to include the original version and the latest version being used.
-      - respond ONLY THE GENERATED RELEASE NOTES, NOTHING ELSE.
-      - format the response as a markdown
-      - do not change the original commit messages
+      - Do not use emojis.
+      - Write a short summary featuring user-impacting changes.
+      - Follow Keep a Changelog 1.1.0 conventions. All relevant rules are embedded here so no external lookup is required.
+      - Write release notes for humans, not machines. Curate and summarize; do not dump a raw git log.
+      - Start with a top-level heading for this version in Keep a Changelog style:
+
+        ## [{{ if eq .Tag "" }}to-be-defined{{ else }}{{ .Tag }}{{ end }}] - YYYY-MM-DD
+
+        (Use the actual release date if available; otherwise omit the date.)
+
+      ### Keep a Changelog Principles (Embedded):
+      - Changelogs must be human-readable and focused on what changed and why.
+      - Each release must have a heading in this style:
+        ## [VERSION] - YYYY-MM-DD
+        (If a date is not available, omit the date.)
+      - After the heading, include a concise summary of the overall impact of the release.
+      - Group entries under these exact categories (include only those containing entries):
+          ### Added - new features.
+          ### Changed - changes in existing functionality.
+          ### Deprecated - features soon to be removed.
+          ### Removed  features removed in this release.
+          ### Fixed - bug fixes.
+          ### Security - vulnerability-related changes.
+      - Each bullet point should describe the change in clear, user-facing language.
+      - Commit messages must remain unchanged; do not paraphrase them.
+      - Related commits should be grouped together into a single bullet when appropriate.
+      - If multiple commits update the same dependency, group them and show old and new versions:
+          sha1, sha2: updated dependency-x from vA.B.C to vX.Y.Z.
+      - The release notes should be formatted as Markdown.
+      - Respond ONLY with the generated release notes—no explanations or commentary.
+
+      - Provide a commit history and overview of each commit or related commit group under the appropriate category.
 
       ## Some details about this release:
 
