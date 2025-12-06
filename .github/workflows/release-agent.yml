@@ -39,7 +39,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: changelog --config .goreleaser.yaml --output dist/release-notes.md
+          args: changelog --config .goreleaser.yaml --output release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -55,7 +55,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --split --parallelism 2 --skip=homebrew --release-notes dist/release-notes.md
+          args: release --clean --split --parallelism 2 --skip=homebrew --release-notes release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -84,7 +84,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: changelog --config .goreleaser.yaml --output dist/release-notes.md
+          args: changelog --config .goreleaser.yaml --output release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -94,7 +94,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --split --parallelism 2 --single-target --skip=docker --skip=nfpm --release-notes dist/release-notes.md
+          args: release --clean --split --parallelism 2 --single-target --skip=docker --skip=nfpm --release-notes release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -124,7 +124,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: changelog --config .goreleaser.yaml --output dist/release-notes.md
+          args: changelog --config .goreleaser.yaml --output release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -134,7 +134,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --split --parallelism 2 --single-target --skip=docker --skip=nfpm --skip=homebrew --release-notes dist/release-notes.md
+          args: release --clean --split --parallelism 2 --single-target --skip=docker --skip=nfpm --skip=homebrew --release-notes release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -186,6 +186,12 @@ jobs:
         with:
           name: dist-windows
           path: dist
+      - name: Regenerate release notes for merge
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: changelog --config .goreleaser.yaml --output release-notes.md
       - name: Merge and publish release
         uses: goreleaser/goreleaser-action@v6
         with:
