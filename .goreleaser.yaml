@@ -41,18 +41,48 @@ builds:
     ldflags:
       - "-s -w -X main.Version={{.Version}}"
     mod_timestamp: "{{ .CommitTimestamp }}"
-  - id: agent-gui
+  - id: agent-gui-linux
     main: ./cmd/agentgui
     binary: dis-agent-gui
     env:
       - CGO_ENABLED=1
     goos:
       - linux
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+      - -tags=gui
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agent-gui-darwin
+    main: ./cmd/agentgui
+    binary: dis-agent-gui
+    env:
+      - CGO_ENABLED=1
+    goos:
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+      - -tags=gui
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agent-gui-windows
+    main: ./cmd/agentgui
+    binary: dis-agent-gui
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+    goarch:
+      - amd64
     flags:
       - -trimpath
       - -tags=gui
@@ -65,7 +95,9 @@ archives:
     ids:
       - agent
       - agentctl
-      - agent-gui
+      - agent-gui-linux
+      - agent-gui-darwin
+      - agent-gui-windows
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
