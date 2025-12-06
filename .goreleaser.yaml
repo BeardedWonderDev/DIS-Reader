@@ -95,9 +95,6 @@ archives:
     ids:
       - agent
       - agentctl
-      - agent-gui-linux
-      - agent-gui-darwin
-      - agent-gui-windows
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
@@ -111,6 +108,34 @@ archives:
       - packaging/windows/install_service.ps1
       - packaging/windows/uninstall_service.ps1
       - packaging/launchd/com.dis.agent.plist
+
+  - id: archives-gui-linux
+    ids:
+      - agent-gui-linux
+    name_template: "{{ .ProjectName }}-gui_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: archives-gui-darwin
+    ids:
+      - agent-gui-darwin
+    name_template: "{{ .ProjectName }}-gui_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/launchd/com.dis.agent.plist
+
+  - id: archives-gui-windows
+    ids:
+      - agent-gui-windows
+    name_template: "{{ .ProjectName }}-gui_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [zip]
+    files:
+      - LICENSE
+      - README.md
 
 nfpms:
   - id: linux
