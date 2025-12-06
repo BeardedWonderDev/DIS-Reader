@@ -275,10 +275,6 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     dockerfile: packaging/docker/Dockerfile
-    build_flag_templates:
-      - "--build-arg=BINARY=dis-agent"
-      - "--build-arg=TARGETOS={{ .Os }}"
-      - "--build-arg=TARGETARCH={{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
