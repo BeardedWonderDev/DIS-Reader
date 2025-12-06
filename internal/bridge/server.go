@@ -284,44 +284,59 @@ func (c *streamAgentConnection) Close() error {
 }
 
 func (c *streamAgentConnection) run(ctx context.Context, grace time.Duration) error {
+	msgCh := make(chan *proto.AgentToServer)
+	errCh := make(chan error, 1)
+
+	go func() {
+		for {
+			msg, err := c.stream.Recv()
+			if err != nil {
+				errCh <- err
+				return
+			}
+			msgCh <- msg
+		}
+	}()
+
+	hbTimer := time.NewTimer(grace)
+	defer hbTimer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-		}
-
-		msg, err := c.stream.Recv()
-		if err != nil {
+		case err := <-errCh:
 			return err
-		}
-
-		switch payload := msg.Payload.(type) {
-		case *proto.AgentToServer_JobResult:
-			c.dispatchResult(payload.JobResult)
-		case *proto.AgentToServer_Heartbeat:
-			c.lastHB = time.Now()
-		case *proto.AgentToServer_Log:
-			if c.logger != nil {
-				level := logging.MapLogLevel(payload.Log.Level)
-				attrs := logging.CommonAttrs(c.tenantID, c.agentID, "", "agent_log", "log")
-				for k, v := range payload.Log.Fields {
-					attrs = append(attrs, slog.String(k, v))
-				}
-				attrs = append(attrs, slog.String("message", payload.Log.Message))
-				c.logger.Log(ctx, level, "agent log", attrs...)
-			}
-		default:
-			if c.logger != nil {
-				c.logger.Debug("unhandled agent message", slog.Any("payload", fmt.Sprintf("%T", payload)))
-			}
-		}
-
-		if time.Since(c.lastHB) > grace {
+		case <-hbTimer.C:
 			if c.logger != nil {
 				c.logger.Warn("heartbeat timeout", logging.CommonAttrs(c.tenantID, c.agentID, "", "heartbeat", "timeout")...)
 			}
 			return errors.New("heartbeat timeout")
+		case msg := <-msgCh:
+			switch payload := msg.Payload.(type) {
+			case *proto.AgentToServer_JobResult:
+				c.dispatchResult(payload.JobResult)
+			case *proto.AgentToServer_Heartbeat:
+				c.lastHB = time.Now()
+				if !hbTimer.Stop() {
+					<-hbTimer.C
+				}
+				hbTimer.Reset(grace)
+			case *proto.AgentToServer_Log:
+				if c.logger != nil {
+					level := logging.MapLogLevel(payload.Log.Level)
+					attrs := logging.CommonAttrs(c.tenantID, c.agentID, "", "agent_log", "log")
+					for k, v := range payload.Log.Fields {
+						attrs = append(attrs, slog.String(k, v))
+					}
+					attrs = append(attrs, slog.String("message", payload.Log.Message))
+					c.logger.Log(ctx, level, "agent log", attrs...)
+				}
+			default:
+				if c.logger != nil {
+					c.logger.Debug("unhandled agent message", slog.Any("payload", fmt.Sprintf("%T", payload)))
+				}
+			}
 		}
 	}
 }
