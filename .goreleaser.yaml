@@ -24,11 +24,29 @@ builds:
     ldflags:
       - "-s -w"
     mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: agentctl
+    main: ./cmd/agentctl
+    binary: agentctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
   - id: archives
     ids:
       - agent
+      - agentctl
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:

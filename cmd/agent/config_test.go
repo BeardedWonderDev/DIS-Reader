@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spf13/viper"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/agentcore"
 )
 
 func TestLoadConfigWithEnv(t *testing.T) {
@@ -39,7 +39,7 @@ func TestLoadConfigWithEnv(t *testing.T) {
 		}
 	}()
 
-	cfg, err := loadConfigWith(viper.New())
+	cfg, err := agentcore.Load(agentcore.DefaultAgentConfigFile)
 	if err != nil {
 		t.Fatalf("loadConfigWith returned error: %v", err)
 	}

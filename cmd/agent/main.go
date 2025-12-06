@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,17 +16,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/agentcore"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/controlapi"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/database"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/logging"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/runnerjar"
+	"github.com/BeardedWonderDev/DIS-Reader/internal/servicectl"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/dusted-go/logging/prettylog"
 	kitlog "github.com/go-kit/log"
 	"github.com/grafana/loki-client-go/loki"
 	"github.com/prometheus/common/config"
 	slogloki "github.com/samber/slog-loki/v3"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -38,108 +39,19 @@ import (
 var errRestartRequired = errors.New("restart requested by bridge")
 
 const (
-	defaultAgentConfigFile = "agent.yaml"
-	defaultJavaPath        = "java"
-	defaultJDBCPort        = "8888"
-	heartbeatInterval      = 30 * time.Second
-	agentEnvPrefix         = "disagent"
+	heartbeatInterval = 30 * time.Second
 )
 
-type AgentConfig struct {
-	ServerURL          string          `mapstructure:"serverURL"`
-	ClientID           string          `mapstructure:"clientID"`
-	ClientSecret       string          `mapstructure:"clientSecret"`
-	TenantID           string          `mapstructure:"tenantID"`
-	AutoConnectOnStart bool            `mapstructure:"autoConnectOnStart"`
-	DIS                types.DISConfig `mapstructure:"dis"`
-	TLS                struct {
-		Enabled            bool `mapstructure:"enabled"`
-		InsecureSkipVerify bool `mapstructure:"insecureSkipVerify"`
-	} `mapstructure:"tls"`
-	AppliedLoki *proto.LokiConfig `mapstructure:"-"` // last applied, sanitized Loki config (no secrets)
+type AgentConfig = agentcore.Config
+
+type agentStatus struct {
+	bridgeConnected atomic.Bool
+	lastHeartbeat   atomic.Value
+	lastError       atomic.Value
 }
 
 func loadConfig() (*AgentConfig, error) {
-	return loadConfigWith(viper.New())
-}
-
-func loadConfigWith(v *viper.Viper) (*AgentConfig, error) {
-	v.SetConfigFile(defaultAgentConfigFile)
-	v.SetDefault("dis.logLevel", slog.LevelInfo)
-	v.SetDefault("dis.jdbcConfig.javaPath", defaultJavaPath)
-	v.SetDefault("dis.jdbcConfig.jdbcPort", defaultJDBCPort)
-	v.SetDefault("autoConnectOnStart", false)
-	v.SetDefault("tls.enabled", true)
-	v.SetDefault("tls.insecureSkipVerify", false)
-
-	if _, err := os.ReadFile(defaultAgentConfigFile); err == nil {
-		if err := v.ReadInConfig(); err != nil {
-			return nil, fmt.Errorf("read config: %w", err)
-		}
-	} else {
-		if os.IsNotExist(err) {
-			log.Printf("Could not find %s. Attempting to use environment variables.\n", defaultAgentConfigFile)
-		} else {
-			return nil, fmt.Errorf("read config: %w", err)
-		}
-	}
-
-	var cfg AgentConfig
-	for _, fieldName := range getFlattenedStructFields(reflect.TypeOf(cfg)) {
-		envKey := strings.ToUpper(fmt.Sprintf("%s_%s", agentEnvPrefix, strings.ReplaceAll(fieldName, ".", "_")))
-		if envVar, ok := os.LookupEnv(envKey); ok {
-			v.Set(fieldName, envVar)
-		}
-	}
-
-	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal config: %w", err)
-	}
-
-	if cfg.ServerURL == "" {
-		return nil, errors.New("serverURL is required")
-	}
-	if cfg.ClientID == "" {
-		return nil, errors.New("clientID is required")
-	}
-
-	if cfg.DIS.JDBCConfig == nil {
-		cfg.DIS.JDBCConfig = &types.JDBCConfig{
-			JavaPath: defaultJavaPath,
-			JDBCPort: defaultJDBCPort,
-		}
-	}
-
-	return &cfg, nil
-}
-
-func getFlattenedStructFields(t reflect.Type) []string {
-	return getFlattenedStructFieldsHelper(t, []string{})
-}
-
-func getFlattenedStructFieldsHelper(t reflect.Type, prefixes []string) []string {
-	unwrappedT := t
-	if t.Kind() == reflect.Pointer {
-		unwrappedT = t.Elem()
-	}
-
-	flattenedFields := make([]string, 0)
-	for i := 0; i < unwrappedT.NumField(); i++ {
-		field := unwrappedT.Field(i)
-		fieldName := field.Tag.Get("mapstructure")
-		switch field.Type.Kind() {
-		case reflect.Struct, reflect.Pointer:
-			flattenedFields = append(flattenedFields, getFlattenedStructFieldsHelper(field.Type, append(prefixes, fieldName))...)
-		default:
-			flattenedField := fieldName
-			if len(prefixes) > 0 {
-				flattenedField = fmt.Sprintf("%s.%s", strings.Join(prefixes, "."), fieldName)
-			}
-			flattenedFields = append(flattenedFields, flattenedField)
-		}
-	}
-
-	return flattenedFields
+	return agentcore.Load(agentcore.DefaultAgentConfigFile)
 }
 
 func main() {
@@ -159,6 +71,8 @@ func main() {
 	var loggerValue atomic.Value
 	loggerValue.Store(logger)
 
+	status := &agentStatus{}
+
 	logger.Info("agent starting",
 		slog.String("server", logging.RedactURLHost(cfg.ServerURL)),
 		slog.String("tenant_id", cfg.TenantID),
@@ -167,6 +81,71 @@ func main() {
 		slog.Bool("tls_enabled", cfg.TLS.Enabled),
 		slog.Bool("tls_insecure_skip_verify", cfg.TLS.InsecureSkipVerify),
 	)
+
+	if cfg.Control.Enabled {
+		if cfg.Control.Token == "" {
+			logger.Warn("control API enabled without token; consider setting control.token for security")
+		}
+		statusFn := func() controlapi.Status {
+			st := controlapi.Status{
+				Running:         true,
+				BridgeConnected: status.bridgeConnected.Load(),
+				Version:         "agent-0.1.0",
+				AgentID:         cfg.ClientID,
+				ServerURL:       cfg.ServerURL,
+				ConfigPath:      agentcore.DefaultAgentConfigFile,
+			}
+			if v := status.lastHeartbeat.Load(); v != nil {
+				if t, ok := v.(time.Time); ok {
+					st.LastHeartbeat = &t
+				}
+			}
+			if v := status.lastError.Load(); v != nil {
+				st.LastError = fmt.Sprint(v)
+			}
+			return st
+		}
+		effFn := func() *agentcore.EffectiveConfig {
+			return agentcore.ToEffective(copyConfig(cfg))
+		}
+		applyFn := func(c *agentcore.Config) error {
+			merged := copyConfig(cfg)
+			merged.ServerURL = c.ServerURL
+			merged.ClientID = c.ClientID
+			merged.ClientSecret = c.ClientSecret
+			merged.AutoConnectOnStart = c.AutoConnectOnStart
+			if merged.DIS.JDBCConfig == nil {
+				merged.DIS.JDBCConfig = &types.JDBCConfig{}
+			}
+			if c.DIS.JDBCConfig != nil {
+				if c.DIS.JDBCConfig.JavaPath != "" {
+					merged.DIS.JDBCConfig.JavaPath = c.DIS.JDBCConfig.JavaPath
+				}
+				if c.DIS.JDBCConfig.JDBCPort != "" {
+					merged.DIS.JDBCConfig.JDBCPort = c.DIS.JDBCConfig.JDBCPort
+				}
+			}
+			merged.DIS.Host = c.DIS.Host
+			merged.DIS.User = c.DIS.User
+			merged.DIS.Password = c.DIS.Password
+			merged.TLS = c.TLS
+			merged.Control = c.Control
+			*cfg = *merged
+			return agentcore.Save(agentcore.DefaultAgentConfigFile, merged)
+		}
+		if err := controlapi.Start(ctx, controlapi.Options{
+			Addr:        cfg.Control.Addr,
+			Token:       cfg.Control.Token,
+			StatusFn:    statusFn,
+			EffectiveFn: effFn,
+			ApplyFn:     applyFn,
+			ServiceCtl:  servicectl.New(),
+		}); err != nil {
+			logger.Warn("control api failed to start", slog.Any("err", err))
+		} else {
+			logger.Info("control api listening", slog.String("addr", cfg.Control.Addr))
+		}
+	}
 
 	var cleanupJar func() error
 	if cfg.DIS.JDBCConfig != nil && cfg.DIS.JDBCConfig.JarPath == "" {
@@ -199,11 +178,14 @@ func main() {
 		cancel()
 	}
 
-	runAgent(ctx, cfg, db, baseHandler, &loggerValue)
+	runAgent(ctx, cfg, db, baseHandler, &loggerValue, status)
 }
 
-func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler slog.Handler, loggerVal *atomic.Value) {
+func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler slog.Handler, loggerVal *atomic.Value, status *agentStatus) {
 	backoff := time.Second
+	if status != nil {
+		status.bridgeConnected.Store(false)
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return
@@ -215,8 +197,12 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler
 				slog.Duration("backoff", backoff),
 			)...)
 
-		if err := runOnce(ctx, cfg, db, baseHandler, loggerVal); err != nil {
+		if err := runOnce(ctx, cfg, db, baseHandler, loggerVal, status); err != nil {
 			currentLogger(loggerVal).Error("agent loop error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
+			if status != nil {
+				status.bridgeConnected.Store(false)
+				status.lastError.Store(err)
+			}
 			if errors.Is(err, errRestartRequired) {
 				time.Sleep(backoff)
 				backoff = time.Second
@@ -234,7 +220,7 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler
 	}
 }
 
-func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler slog.Handler, loggerVal *atomic.Value) error {
+func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler slog.Handler, loggerVal *atomic.Value, status *agentStatus) error {
 	creds := dialCredentials(cfg)
 	conn, err := grpc.DialContext(ctx, cfg.ServerURL, grpc.WithTransportCredentials(creds))
 	if err != nil {
@@ -249,6 +235,10 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler 
 	if err != nil {
 		currentLogger(loggerVal).Error("agent stream connect failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 		return fmt.Errorf("connect stream: %w", err)
+	}
+	if status != nil {
+		status.bridgeConnected.Store(true)
+		status.lastError.Store(nil)
 	}
 
 	hello := &proto.AgentHello{
@@ -265,12 +255,16 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler 
 
 	hbCtx, cancelHB := context.WithCancel(ctx)
 	defer cancelHB()
-	go sendHeartbeats(hbCtx, stream, cfg, loggerVal)
+	go sendHeartbeats(hbCtx, stream, cfg, loggerVal, status)
 
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
 			currentLogger(loggerVal).Warn("agent stream recv error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "recv"), slog.Any("err", err))...)
+			if status != nil {
+				status.bridgeConnected.Store(false)
+				status.lastError.Store(err)
+			}
 			return err
 		}
 
@@ -379,7 +373,7 @@ func dialCredentials(cfg *AgentConfig) credentials.TransportCredentials {
 	return credentials.NewTLS(&tls.Config{})
 }
 
-func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient, cfg *AgentConfig, loggerVal *atomic.Value) {
+func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient, cfg *AgentConfig, loggerVal *atomic.Value, status *agentStatus) {
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -398,6 +392,10 @@ func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient
 			}); err != nil {
 				currentLogger(loggerVal).Warn("heartbeat send failed", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "heartbeat", "send"), slog.Any("err", err))...)
 				return
+			}
+			if status != nil {
+				now := time.Now()
+				status.lastHeartbeat.Store(now)
 			}
 		}
 	}
@@ -430,50 +428,7 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 
 	// Apply runtime overrides first so downstream jobs use remote-configured values.
 	if rt := cfg.GetRuntime(); rt != nil {
-		restart := false
-		reconnect := false
-		trim := func(s string) string { return strings.TrimSpace(s) }
-
-		if h := trim(rt.GetDisHost()); h != "" {
-			agentCfg.DIS.Host = h
-		}
-		if u := trim(rt.GetDisUser()); u != "" {
-			agentCfg.DIS.User = u
-		}
-		if p := trim(rt.GetDisPassword()); p != "" {
-			agentCfg.DIS.Password = p
-		}
-		if jp := trim(rt.GetJdbcPort()); jp != "" {
-			if agentCfg.DIS.JDBCConfig == nil {
-				agentCfg.DIS.JDBCConfig = &types.JDBCConfig{}
-			}
-			if agentCfg.DIS.JDBCConfig.JDBCPort != jp {
-				agentCfg.DIS.JDBCConfig.JDBCPort = jp
-				restart = true
-			}
-		}
-		if jp := trim(rt.GetJavaPath()); jp != "" {
-			if agentCfg.DIS.JDBCConfig == nil {
-				agentCfg.DIS.JDBCConfig = &types.JDBCConfig{}
-			}
-			if agentCfg.DIS.JDBCConfig.JavaPath != jp {
-				agentCfg.DIS.JDBCConfig.JavaPath = jp
-				restart = true
-			}
-		}
-		if t := trim(rt.GetTenantId()); t != "" {
-			agentCfg.TenantID = t
-		}
-		if s := trim(rt.GetClientSecret()); s != "" {
-			if agentCfg.ClientSecret != s {
-				agentCfg.ClientSecret = s
-				reconnect = true
-			}
-		}
-		if rt.GetForceRestart() {
-			restart = true
-			reconnect = true
-		}
+		restart, reconnect := agentcore.ApplyRuntimeOverrides(agentCfg, rt)
 
 		if restart && db != nil {
 			// Best-effort restart so new ports/paths take effect before connect jobs.
@@ -491,6 +446,8 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 
 	// Loki config remains optional; only apply when provided.
 	if cfg.Loki == nil || strings.TrimSpace(cfg.Loki.Url) == "" {
+		// Persist effective config even if Loki absent to capture runtime overrides.
+		_ = agentcore.Save(agentcore.DefaultAgentConfigFile, agentCfg)
 		return nil
 	}
 
@@ -507,6 +464,7 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 		slog.String("agent_id", agentCfg.ClientID),
 	)
 	agentCfg.AppliedLoki = sanitizeLokiConfig(cfg.Loki)
+	_ = agentcore.Save(agentcore.DefaultAgentConfigFile, agentCfg)
 	return nil
 }
 
@@ -602,6 +560,18 @@ func labelAttrs(labels map[string]string) []slog.Attr {
 		attrs = append(attrs, slog.String(k, labels[k]))
 	}
 	return attrs
+}
+
+func copyConfig(in *AgentConfig) *AgentConfig {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	if in.DIS.JDBCConfig != nil {
+		jc := *in.DIS.JDBCConfig
+		out.DIS.JDBCConfig = &jc
+	}
+	return &out
 }
 
 func currentLogger(loggerVal *atomic.Value) *slog.Logger {
