@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DIS Agent Control</title>
+  <style>
+    :root { font-family: Inter, system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; }
+    body { margin: 0; padding: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+    input { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #1f2937; background: #0b1220; color: #e2e8f0; }
+    button { padding: 10px 14px; border: none; border-radius: 8px; background: #22c55e; color: #0b1220; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #334155; color: #e2e8f0; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    pre { background: #0b1220; border: 1px solid #1f2937; padding: 12px; border-radius: 8px; overflow: auto; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; }
+    .ok { background: #bbf7d0; color: #166534; }
+    .fail { background: #fecdd3; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h2 style="margin:0">DIS Agent Control</h2>
+      <small id="version"></small>
+    </div>
+    <div>
+      <button class="secondary" onclick="refreshStatus()">Refresh</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label>Control API</label>
+        <input id="api" value="http://127.0.0.1:7777" />
+      </div>
+      <div>
+        <label>Token (optional)</label>
+        <input id="token" placeholder="Bearer token" />
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="statusCard">
+    <div class="grid">
+      <div><label>Bridge</label><span id="bridge" class="badge">–</span></div>
+      <div><label>Agent ID</label><div id="agentId">–</div></div>
+      <div><label>Server URL</label><div id="serverURL">–</div></div>
+      <div><label>Last Heartbeat</label><div id="heartbeat">–</div></div>
+      <div><label>Last Error</label><div id="lastError">–</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button onclick="service('start')">Start</button>
+      <button onclick="service('stop')" class="secondary">Stop</button>
+      <button onclick="service('restart')" class="secondary">Restart</button>
+      <button onclick="service('status')" class="secondary">Service Status</button>
+      <button onclick="service('install')" class="secondary">Install Service</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Raw status</label>
+    <pre id="raw">(waiting)</pre>
+  </div>
+
+<script>
+async function refreshStatus() {
+  const api = document.getElementById('api').value.trim();
+  const token = document.getElementById('token').value.trim();
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    const res = await fetch(api + '/status', { headers });
+    const data = await res.json();
+    document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('version').textContent = data.version || '';
+    document.getElementById('agentId').textContent = data.agentId || '–';
+    document.getElementById('serverURL').textContent = data.serverURL || '–';
+    document.getElementById('heartbeat').textContent = data.lastHeartbeat || '–';
+    document.getElementById('lastError').textContent = data.lastError || '–';
+    const bridge = document.getElementById('bridge');
+    if (data.bridgeConnected) {
+      bridge.textContent = 'Connected';
+      bridge.className = 'badge ok';
+    } else {
+      bridge.textContent = 'Disconnected';
+      bridge.className = 'badge fail';
+    }
+  } catch (e) {
+    document.getElementById('raw').textContent = 'Error: ' + e;
+  }
+}
+
+async function service(action) {
+  const api = document.getElementById('api').value.trim();
+  const token = document.getElementById('token').value.trim();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    const res = await fetch(`${api}/service/${action}`, { method: 'POST', headers, body: '{}' });
+    const data = await res.json();
+    document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+    refreshStatus();
+  } catch (e) {
+    document.getElementById('raw').textContent = 'Error: ' + e;
+  }
+}
+
+refreshStatus();
+</script>
+</body>
+</html>

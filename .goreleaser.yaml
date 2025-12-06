@@ -41,12 +41,31 @@ builds:
     ldflags:
       - "-s -w"
     mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: agent-gui
+    main: ./cmd/agentgui
+    binary: dis-agent-gui
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+      - -tags=gui
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
   - id: archives
     ids:
       - agent
       - agentctl
+      - agent-gui
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
