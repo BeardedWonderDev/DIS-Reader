@@ -2,6 +2,11 @@
 version: 2
 project_name: dis-agent
 
+partial:
+  # Run releases in split/merge mode keyed by GOOS so per-OS jobs can
+  # build independently and a final job can merge/publish once.
+  by: goos
+
 before:
   hooks:
     - go mod download
