@@ -182,6 +182,28 @@ Produce ad-hoc datasets for analysis:
 - CSV: set `debugSearch.defaultOutputMode: csv` or `DISREADER_DEBUGSEARCH_DEFAULTOUTPUTMODE=csv`
 - Path override: `debugSearch.defaultOutputPath` / `DISREADER_DEBUGSEARCH_DEFAULTOUTPUTPATH`
 
+### Control plane (TUI + GUI)
+You can manage the remote agent without CLI flags by using the bundled control surfaces. Both talk to the local control API exposed by the agent.
+
+1. Enable the control API in `agent.yaml` (or env):
+   ```yaml
+   control:
+     enabled: true
+     addr: "127.0.0.1:7777"
+     token: "set-a-strong-token"
+   ```
+   Start/restart the agent so it listens on the control API.
+2. TUI (`agentctl`):
+   - Download the `agentctl` binary from the release matching your OS/arch.
+   - Run `./agentctl --addr http://127.0.0.1:7777 --token <token>`.
+   - Use the form to set `serverURL`, `clientID/Secret`, DIS host creds, JDBC port/java path, TLS flags, then “Save & Apply”.
+   - Use the buttons to `Install`, `Start`, `Stop`, `Restart`, and view status.
+3. GUI (`dis-agent-gui`):
+   - Download the GUI binary for your platform and run it (macOS app, Windows exe, or Linux binary with GTK/WebKit deps).
+   - Point it at the control API address/token.
+   - Fill out config fields and “Save + Install + Start” for first-run; “Save + Restart” for updates.
+   - The dashboard shows bridge status, last heartbeat, and raw status. Auto-refresh can be enabled in the UI.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- ROADMAP -->
