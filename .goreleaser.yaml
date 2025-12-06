@@ -103,14 +103,6 @@ nfpms:
         dst: /lib/systemd/system/dis-agent.service
         type: config|noreplace
 
-msi:
-  - id: windows-msi
-    name: "dis-agent-{{ .MsiArch }}"
-    wxs: packaging/windows/agent.wxs
-    replace: true
-    product_version: "{{ .Major }}.{{ .Minor }}.{{ .Patch }}.0"
-    mod_timestamp: "{{ .CommitTimestamp }}"
-
 homebrew_casks:
   - name: dis-agent
     ids:
