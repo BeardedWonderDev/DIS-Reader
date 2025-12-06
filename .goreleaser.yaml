@@ -249,7 +249,7 @@ nfpms:
 homebrew_casks:
   - name: dis-agent
     ids:
-      - archives
+      - archives-darwin
     url:
       template: "https://github.com/BeardedWonderDev/DIS-Reader/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     homepage: "https://github.com/BeardedWonderDev/DIS-Reader"

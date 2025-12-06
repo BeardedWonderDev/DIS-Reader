@@ -39,7 +39,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --parallelism 2 --id agent-linux --id agentctl-linux --id agent-gui-linux
+          args: release --clean --parallelism 2 --id agent-linux --id agentctl-linux --id agent-gui-linux --skip=homebrew
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -59,7 +59,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --parallelism 2 --id agent-darwin --id agentctl-darwin --id agent-gui-darwin --single-target
+          args: release --clean --parallelism 2 --id agent-darwin --id agentctl-darwin --id agent-gui-darwin --single-target --skip=docker --skip=nfpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -79,7 +79,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --parallelism 2 --id agent-windows --id agentctl-windows --id agent-gui-windows --single-target
+          args: release --clean --parallelism 2 --id agent-windows --id agentctl-windows --id agent-gui-windows --single-target --skip=docker --skip=nfpm --skip=homebrew
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
