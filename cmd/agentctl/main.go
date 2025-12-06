@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/installer"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/servicectl"
 	"github.com/rivo/tview"
 )
@@ -147,7 +148,9 @@ func (s *uiState) service(action string, tv *tview.TextView, app *tview.Applicat
 	ctx := context.Background()
 	switch action {
 	case "install":
-		err = ctrl.Install(ctx)
+		if _, err = installer.InstallLatest(ctx, ""); err == nil {
+			err = ctrl.Install(ctx)
+		}
 	case "start":
 		err = ctrl.Start(ctx)
 	case "stop":

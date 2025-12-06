@@ -67,7 +67,7 @@
   <div class="card">
     <h4 style="margin-top:0">Service Control</h4>
     <div class="row">
-      <button onclick="serviceLocal('install')">Install</button>
+      <button onclick="serviceLocal('install')">Download & Install</button>
       <button onclick="serviceLocal('start')" class="secondary">Start</button>
       <button onclick="serviceLocal('stop')" class="secondary">Stop</button>
       <button onclick="serviceLocal('restart')" class="secondary">Restart</button>
@@ -168,7 +168,7 @@ async function serviceLocal(action) {
     try {
       let result = '';
       switch (action) {
-        case 'install': result = await window.go.main.App.InstallService(); break;
+        case 'install': result = await window.go.main.App.InstallBinaryAndService(); break;
         case 'start': result = await window.go.main.App.StartService(); break;
         case 'stop': result = await window.go.main.App.StopService(); break;
         case 'restart': result = await window.go.main.App.RestartService(); break;

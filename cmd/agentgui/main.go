@@ -7,6 +7,7 @@ import (
 	"embed"
 	"log"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/installer"
 	"github.com/BeardedWonderDev/DIS-Reader/internal/servicectl"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -25,10 +26,30 @@ func NewApp() *App {
 }
 
 func (a *App) InstallService(ctx context.Context) (string, error) {
+	// assumes binary already present
 	if err := a.ctrl.Install(ctx); err != nil {
 		return "", err
 	}
 	return "install ok", nil
+}
+
+func (a *App) InstallBinary(ctx context.Context) (string, error) {
+	path, err := installer.InstallLatest(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	return "binary installed at " + path, nil
+}
+
+func (a *App) InstallBinaryAndService(ctx context.Context) (string, error) {
+	path, err := installer.InstallLatest(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	if err := a.ctrl.Install(ctx); err != nil {
+		return "", err
+	}
+	return "binary installed at " + path + "; service registered", nil
 }
 
 func (a *App) StartService(ctx context.Context) (string, error) {
