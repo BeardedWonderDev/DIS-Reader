@@ -294,6 +294,7 @@ changelog:
   use: github
   ai:
     use: openai
+    model: gpt-4o-mini
     prompt: |
       Write the release notes for this release.
 
