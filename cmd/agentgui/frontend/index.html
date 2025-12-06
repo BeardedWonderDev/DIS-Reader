@@ -74,6 +74,13 @@
       <button onclick="serviceLocal('status')" class="secondary">Status</button>
     </div>
     <div class="row" style="margin-top:8px;">
+      <div class="half">
+        <label>Install Path (optional)</label>
+        <input id="installPath" placeholder="/usr/local/bin or Program Files\\DIS Agent" />
+      </div>
+      <div class="half muted">Binary version: <span id="binVersion">latest</span></div>
+    </div>
+    <div class="row" style="margin-top:8px;">
       <span id="serviceMsg" class="muted"></span>
     </div>
   </div>
@@ -163,12 +170,13 @@ async function service(action) {
 
 async function serviceLocal(action) {
   const msg = document.getElementById('serviceMsg');
+  const dest = document.getElementById('installPath').value.trim();
   // Prefer native Go binding (works even if control API is down)
   if (window.go && window.go.main && window.go.main.App) {
     try {
       let result = '';
       switch (action) {
-        case 'install': result = await window.go.main.App.InstallBinaryAndService(); break;
+        case 'install': result = await window.go.main.App.InstallBinaryAndService(dest); break;
         case 'start': result = await window.go.main.App.StartService(); break;
         case 'stop': result = await window.go.main.App.StopService(); break;
         case 'restart': result = await window.go.main.App.RestartService(); break;
@@ -185,6 +193,13 @@ async function serviceLocal(action) {
   }
   // Fallback to control API if binding unavailable
   await service(action);
+}
+
+// Display build version from Go backend
+if (window.go && window.go.main && window.go.main.App) {
+  window.go.main.App.VersionString().then(v => {
+    document.getElementById('binVersion').textContent = v || 'latest';
+  }).catch(() => {});
 }
 
 async function loadConfig() {

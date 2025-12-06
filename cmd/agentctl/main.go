@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,6 +14,9 @@ import (
 	"github.com/BeardedWonderDev/DIS-Reader/internal/servicectl"
 	"github.com/rivo/tview"
 )
+
+// Version is the TUI build version; overridden via -ldflags "-X main.Version=vX.Y.Z".
+var Version = "latest"
 
 func main() {
 	addrFlag := flag.String("addr", "http://127.0.0.1:7777", "control API address")
@@ -33,9 +37,10 @@ func main() {
 }
 
 type uiState struct {
-	api    string
-	token  string
-	status *statusResp
+	api         string
+	token       string
+	status      *statusResp
+	installPath string
 }
 
 type statusResp struct {
@@ -111,6 +116,7 @@ func (s *uiState) configForm(app *tview.Application, pages *tview.Pages) *tview.
 	form.AddCheckbox("TLS Enabled", cfg.Config.TLS.Enabled, func(checked bool) { cfg.Config.TLS.Enabled = checked })
 	form.AddCheckbox("TLS Insecure Skip Verify", cfg.Config.TLS.InsecureSkipVerify, func(checked bool) { cfg.Config.TLS.InsecureSkipVerify = checked })
 	form.AddCheckbox("Auto Connect On Start", cfg.Config.AutoConnectOnStart, func(checked bool) { cfg.Config.AutoConnectOnStart = checked })
+	form.AddInputField("Install Path (optional)", s.installPath, 60, nil, func(text string) { s.installPath = text })
 
 	form.AddButton("Save & Apply", func() {
 		if err := s.applyConfig(cfg); err != nil {
@@ -148,7 +154,7 @@ func (s *uiState) service(action string, tv *tview.TextView, app *tview.Applicat
 	ctx := context.Background()
 	switch action {
 	case "install":
-		if _, err = installer.InstallLatest(ctx, ""); err == nil {
+		if _, err = installer.Install(ctx, Version, s.installPath); err == nil {
 			err = ctrl.Install(ctx)
 		}
 	case "start":

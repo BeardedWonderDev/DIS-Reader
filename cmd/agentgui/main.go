@@ -25,6 +25,9 @@ func NewApp() *App {
 	return &App{ctrl: servicectl.New()}
 }
 
+// Version is the GUI build version; override via -ldflags "-X main.Version=vX.Y.Z".
+var Version = "latest"
+
 func (a *App) InstallService(ctx context.Context) (string, error) {
 	// assumes binary already present
 	if err := a.ctrl.Install(ctx); err != nil {
@@ -34,15 +37,15 @@ func (a *App) InstallService(ctx context.Context) (string, error) {
 }
 
 func (a *App) InstallBinary(ctx context.Context) (string, error) {
-	path, err := installer.InstallLatest(ctx, "")
+	path, err := installer.Install(ctx, Version, "")
 	if err != nil {
 		return "", err
 	}
 	return "binary installed at " + path, nil
 }
 
-func (a *App) InstallBinaryAndService(ctx context.Context) (string, error) {
-	path, err := installer.InstallLatest(ctx, "")
+func (a *App) InstallBinaryAndService(ctx context.Context, dest string) (string, error) {
+	path, err := installer.Install(ctx, Version, dest)
 	if err != nil {
 		return "", err
 	}
@@ -50,6 +53,10 @@ func (a *App) InstallBinaryAndService(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return "binary installed at " + path + "; service registered", nil
+}
+
+func (a *App) VersionString(ctx context.Context) string {
+	return Version
 }
 
 func (a *App) StartService(ctx context.Context) (string, error) {

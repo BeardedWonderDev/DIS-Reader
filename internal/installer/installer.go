@@ -18,10 +18,10 @@ import (
 
 const repo = "BeardedWonderDev/DIS-Reader"
 
-// InstallLatest downloads the latest GitHub release asset matching the current
-// OS/arch, extracts the dis-agent binary, and installs it to destDir.
+// Install downloads the GitHub release asset matching version (empty -> latest)
+// and current OS/arch, extracts the dis-agent binary, and installs it to destDir.
 // Returns the installed binary path.
-func InstallLatest(ctx context.Context, destDir string) (string, error) {
+func Install(ctx context.Context, version, destDir string) (string, error) {
 	if destDir == "" {
 		switch runtime.GOOS {
 		case "windows":
@@ -30,7 +30,7 @@ func InstallLatest(ctx context.Context, destDir string) (string, error) {
 			destDir = "/usr/local/bin"
 		}
 	}
-	assetName, downloadURL, err := resolveAsset(ctx)
+	assetName, downloadURL, err := resolveAsset(ctx, version)
 	if err != nil {
 		return "", err
 	}
@@ -61,33 +61,46 @@ func InstallLatest(ctx context.Context, destDir string) (string, error) {
 	return binPath, nil
 }
 
-func resolveAsset(ctx context.Context) (string, string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("github api: %s", resp.Status)
-	}
-	var payload struct {
-		Assets []struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", "", err
-	}
-	wantSuffix := fmt.Sprintf("_%s_%s", runtime.GOOS, archSuffix(runtime.GOARCH))
-	for _, a := range payload.Assets {
-		if strings.Contains(a.Name, wantSuffix) && strings.Contains(a.Name, "dis-agent") {
-			return a.Name, a.BrowserDownloadURL, nil
+func resolveAsset(ctx context.Context, version string) (string, string, error) {
+	if version == "" || version == "latest" {
+		url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return "", "", err
 		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return "", "", fmt.Errorf("github api: %s", resp.Status)
+		}
+		var payload struct {
+			TagName string `json:"tag_name"`
+			Assets  []struct {
+				Name               string `json:"name"`
+				BrowserDownloadURL string `json:"browser_download_url"`
+			} `json:"assets"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			return "", "", err
+		}
+		wantSuffix := fmt.Sprintf("_%s_%s", runtime.GOOS, archSuffix(runtime.GOARCH))
+		for _, a := range payload.Assets {
+			if strings.Contains(a.Name, wantSuffix) && strings.Contains(a.Name, "dis-agent") {
+				return a.Name, a.BrowserDownloadURL, nil
+			}
+		}
+		return "", "", errors.New("matching asset not found")
 	}
-	return "", "", errors.New("matching asset not found")
+
+	// explicit version tag
+	suffix := fmt.Sprintf("_%s_%s", runtime.GOOS, archSuffix(runtime.GOARCH))
+	ext := ".tar.gz"
+	if runtime.GOOS == "windows" {
+		ext = ".zip"
+	}
+	name := fmt.Sprintf("dis-agent_%s%s%s", version, suffix, ext)
+	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, version, name)
+	return name, url, nil
 }
 
 func archSuffix(goarch string) string {
