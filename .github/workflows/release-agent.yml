@@ -68,6 +68,14 @@ jobs:
           path: dist
           retention-days: 3
 
+      - name: Upload goreleaser state (contexts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-linux
+          path: .goreleaser
+          if-no-files-found: warn
+          retention-days: 3
+
   build-macos:
     runs-on: macos-latest
     steps:
@@ -105,6 +113,14 @@ jobs:
         with:
           name: dist-macos
           path: dist
+          retention-days: 3
+
+      - name: Upload goreleaser state (contexts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-macos
+          path: .goreleaser
+          if-no-files-found: warn
           retention-days: 3
 
   build-windows:
@@ -147,6 +163,14 @@ jobs:
           path: dist
           retention-days: 3
 
+      - name: Upload goreleaser state (contexts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-windows
+          path: .goreleaser
+          if-no-files-found: warn
+          retention-days: 3
+
   publish:
     runs-on: ubuntu-latest
     needs: [build-linux, build-macos, build-windows]
@@ -176,15 +200,30 @@ jobs:
         with:
           name: dist-linux
           path: .
+      - name: Download linux goreleaser contexts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-linux
+          path: .
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist-macos
           path: .
+      - name: Download macOS goreleaser contexts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-macos
+          path: .
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist-windows
+          path: .
+      - name: Download Windows goreleaser contexts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-windows
           path: .
       - name: Regenerate release notes for merge
         uses: goreleaser/goreleaser-action@v6
