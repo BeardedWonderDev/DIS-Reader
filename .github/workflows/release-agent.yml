@@ -234,29 +234,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: >-
-            release --clean --parallelism 1 --single-target
-            --skip=announce
-            --skip=archive
-            --skip=nfpm
-            --skip=homebrew
-            --skip=sbom
-            --skip=sign
-            --skip=dmg
-            --skip=msi
-            --skip=winget
-            --skip=aur
-            --skip=aur-source
-            --skip=fury
-            --skip=npm
-            --skip=snapcraft
-            --skip=scoop
-            --skip=cloudsmith
-            --skip=ko
-            --skip=nix
-            --skip=makeself
-            --skip=mcp
-            --skip=report-sizes
+          args: release --clean --config .goreleaser.docker.yaml --parallelism 1 --single-target
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
