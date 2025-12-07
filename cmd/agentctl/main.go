@@ -167,6 +167,10 @@ func (s *uiState) service(action string, tv *tview.TextView, app *tview.Applicat
 		_, err = ctrl.Status(ctx)
 	}
 	if err != nil {
+		if action == "install" {
+			tv.SetText(fmt.Sprintf("[red]%s failed (local only):[-] %v", action, err))
+			return
+		}
 		// Fallback to control API if available
 		url := fmt.Sprintf("%s/service/%s", strings.TrimRight(s.api, "/"), action)
 		if postErr := s.postJSON(url, "{}"); postErr != nil {

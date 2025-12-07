@@ -171,6 +171,12 @@ async function service(action) {
 async function serviceLocal(action) {
   const msg = document.getElementById('serviceMsg');
   const dest = document.getElementById('installPath').value.trim();
+  // If the native binding isn't present, we cannot perform a local install.
+  if (action === 'install' && !(window.go && window.go.main && window.go.main.App)) {
+    msg.textContent = 'install failed locally: native binding unavailable (control API not attempted)';
+    msg.className = 'error';
+    return;
+  }
   // Prefer native Go binding (works even if control API is down)
   if (window.go && window.go.main && window.go.main.App) {
     try {
@@ -189,9 +195,15 @@ async function serviceLocal(action) {
     } catch (e) {
       msg.textContent = `${action} failed locally: ${e}`;
       msg.className = 'error';
+      if (action === 'install') {
+        return; // do not fall back to control API for install
+      }
     }
   }
   // Fallback to control API if binding unavailable
+  if (action === 'install') {
+    return; // install should never rely on control API (it may not be running yet)
+  }
   await service(action);
 }
 
