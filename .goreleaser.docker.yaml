@@ -38,3 +38,6 @@ changelog:
 
 checksum:
   disable: true
+
+release:
+  disable: true
