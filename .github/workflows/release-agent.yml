@@ -234,7 +234,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --skip=announce --skip=homebrew --skip=nfpm --skip=archives --skip=source --skip=checksums --skip=sign --skip=publish-artifacts --skip=validate --parallelism 1 --id-filter dis-agent --single-target
+          args: release --clean --skip=announce --skip=homebrew --skip=nfpm --skip=archives --skip=source --skip=checksums --skip=sign --skip=publish-artifacts --skip=validate --parallelism 1 --single-target
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
