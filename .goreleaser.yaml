@@ -200,6 +200,37 @@ archives:
       - packaging/windows/install_service.ps1
       - packaging/windows/uninstall_service.ps1
 
+  # Standalone agentctl (TUI) archives so users can download the control tool directly.
+  - id: archives-agentctl-linux
+    ids:
+      - agentctl-linux
+    name_template: "agentctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: archives-agentctl-darwin
+    ids:
+      - agentctl-darwin
+    name_template: "agentctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: archives-agentctl-windows
+    ids:
+      - agentctl-windows
+    name_template: "agentctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
   - id: archives-gui-linux
     ids:
       - agent-gui-linux

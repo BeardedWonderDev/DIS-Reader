@@ -175,17 +175,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dist-linux
-          path: dist
+          path: .
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist-macos
-          path: dist
+          path: .
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist-windows
-          path: dist
+          path: .
       - name: Regenerate release notes for merge
         uses: goreleaser/goreleaser-action@v6
         with:
