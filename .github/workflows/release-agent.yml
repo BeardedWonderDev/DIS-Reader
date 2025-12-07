@@ -174,21 +174,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Download linux artifacts
+      - name: Download all dist artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-linux
-          path: .
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-macos
-          path: .
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-windows
-          path: .
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
       - name: Regenerate release notes for merge
         uses: goreleaser/goreleaser-action@v6
         with:
