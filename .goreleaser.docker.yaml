@@ -33,9 +33,6 @@ dockers_v2:
       max_delay: 5m
     sbom: true
 
-release:
-  disable: true
-
 changelog:
   disable: true
 
