@@ -62,3 +62,58 @@ func TestParseSortOrderInvalid(t *testing.T) {
 		t.Fatalf("expected error for invalid sort order")
 	}
 }
+
+func TestParseFilterHandlesInAndEscaping(t *testing.T) {
+	filter := Filter{Field: "status", Operator: "IN", Value: []string{"a", "b'b"}}
+	parsed, err := ParseFilter(filter, demoParser{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if parsed.Column != "status_col" {
+		t.Fatalf("expected column to be mapped, got %s", parsed.Column)
+	}
+	expected := "('a','b''b')"
+	if parsed.Value != expected {
+		t.Fatalf("expected escaped IN list %s, got %v", expected, parsed.Value)
+	}
+}
+
+func TestParseFilterRejectsUnknownField(t *testing.T) {
+	filter := Filter{Field: "unknown", Operator: "=", Value: "x"}
+	if _, err := ParseFilter(filter, demoParser{}); err == nil {
+		t.Fatalf("expected error for unsupported filter field")
+	}
+}
+
+func TestParseValuePropagatesParserError(t *testing.T) {
+	if _, err := ParseValue("oops", "price_col", demoParser{}); err == nil {
+		t.Fatalf("expected parser error for invalid float")
+	}
+}
+
+func TestBuildListParamsWithFiltersAndCursorValue(t *testing.T) {
+	raw := RawListParams{
+		SortByParam:     "price",
+		SortOrderParam:  "ASC",
+		AfterIdParam:    "cursor-1",
+		AfterValueParam: "12.5",
+		FilterObjects: []Filter{{
+			Field:    "status",
+			Operator: "=",
+			Value:    "active",
+		}},
+	}
+	lp, err := BuildListParams[demoParser](raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if lp.AfterId != "cursor-1" {
+		t.Fatalf("expected afterId to be preserved, got %s", lp.AfterId)
+	}
+	if fv, ok := lp.AfterValue.(float64); !ok || fv != 12.5 {
+		t.Fatalf("expected parsed afterValue 12.5 float, got %#v", lp.AfterValue)
+	}
+	if len(lp.Filters) != 1 || lp.Filters[0].Column != "status_col" || lp.Filters[0].Value != "active" {
+		t.Fatalf("expected mapped filters, got %+v", lp.Filters)
+	}
+}

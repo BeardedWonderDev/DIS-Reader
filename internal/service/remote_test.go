@@ -108,7 +108,8 @@ func (f *fakeAgentConn) Close() error { return nil }
 
 // fakeRegistry is a minimal AgentRegistry used for tests.
 type fakeRegistry struct {
-	conn bridge.AgentConnection
+	conn  bridge.AgentConnection
+	stats bridge.RegistryStats
 }
 
 func (r *fakeRegistry) Register(ctx context.Context, tenantID string, agentID string, conn bridge.AgentConnection) error {
@@ -125,9 +126,48 @@ func (r *fakeRegistry) Pick(ctx context.Context, tenantID string) (bridge.AgentC
 	return r.conn, nil
 }
 
-func (r *fakeRegistry) Stats() bridge.RegistryStats { return bridge.RegistryStats{} }
+func (r *fakeRegistry) Stats() bridge.RegistryStats { return r.stats }
 
 func (r *fakeRegistry) ObserveQuery(tenantID, agentID string, latency time.Duration) {}
+
+func TestPingAgentErrorsWhenNoAgent(t *testing.T) {
+	reg := &fakeRegistry{}
+	s := NewRemoteService(&types.DISConfig{}, nil, nil, reg, nil)
+	s.WithDefaultTenant("tenant-x")
+	if err := s.PingAgent(context.Background(), ""); err == nil {
+		t.Fatalf("expected error when no agent is registered")
+	}
+}
+
+func TestRegisterHealthRegistersHealthMetricsAndPprof(t *testing.T) {
+	reg := &fakeRegistry{stats: bridge.RegistryStats{TotalAgents: 1, Tenants: map[string]int{"t1": 1}}}
+	mux := http.NewServeMux()
+	cfg := &types.DISConfig{Bridge: &types.BridgeConfig{PprofEnabled: true, PprofPath: "/pprof/"}}
+	s := NewRemoteService(cfg, nil, nil, reg, nil)
+	s.RegisterHealth(mux)
+
+	// healthz
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from healthz, got %d", rec.Code)
+	}
+	// metrics
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from metrics, got %d", rec.Code)
+	}
+	// pprof index under custom path
+	req = httptest.NewRequest(http.MethodGet, "/pprof/", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code == 0 {
+		t.Fatalf("expected pprof handler to be registered")
+	}
+}
 
 func TestReadAgentConfig(t *testing.T) {
 	mt := &stubMultiTenantDB{}
