@@ -2,6 +2,7 @@ package invoices
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,10 @@ import (
 
 type stubDB struct {
 	lastQuery string
+	getErr    error
+	selectErr error
+	getItem   *InvoiceItem
+	getWG     *WholeGoodsInvoice
 }
 
 func (s *stubDB) StartJDBCRunner() error                 { return nil }
@@ -21,6 +26,19 @@ func (s *stubDB) PingService(ctx context.Context) error  { return nil }
 func (s *stubDB) PingDatabase(ctx context.Context) error { return nil }
 func (s *stubDB) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	s.lastQuery = query
+	if s.getErr != nil {
+		return s.getErr
+	}
+	switch d := dest.(type) {
+	case *InvoiceItem:
+		if s.getItem != nil {
+			*d = *s.getItem
+		}
+	case *WholeGoodsInvoice:
+		if s.getWG != nil {
+			*d = *s.getWG
+		}
+	}
 	return nil
 }
 func (s *stubDB) Query(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error) {
@@ -33,6 +51,9 @@ func (s *stubDB) QueryRow(ctx context.Context, query string, args ...interface{}
 }
 func (s *stubDB) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	s.lastQuery = query
+	if s.selectErr != nil {
+		return s.selectErr
+	}
 	return nil
 }
 func (s *stubDB) QueryWithSource(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error) {
@@ -67,6 +88,15 @@ func TestListInvoiceItemsDateFilter(t *testing.T) {
 	}
 	if !strings.Contains(db.lastQuery, "AHPDTE") || !strings.Contains(db.lastQuery, "DATE('2024-01-02')") {
 		t.Fatalf("expected date filter: %s", db.lastQuery)
+	}
+}
+
+func TestListInvoiceItemsInvalidDateFilterType(t *testing.T) {
+	db := &stubDB{}
+	repo := NewRepository(db)
+	lp := types.ListParams{Filters: []types.Filter{{Field: "postingdate", Operator: ">=", Value: "bad"}}}
+	if _, err := repo.ListInvoiceItems(context.Background(), lp); err == nil {
+		t.Fatalf("expected error for non-time postingdate filter")
 	}
 }
 
@@ -112,5 +142,67 @@ func TestNumericLiteralValidation(t *testing.T) {
 	val, err := numericLiteral("42")
 	if err != nil || val != "42" {
 		t.Fatalf("expected numeric literal 42, got %s (err=%v)", val, err)
+	}
+}
+
+func TestGetByDocumentAndLineSuccess(t *testing.T) {
+	db := &stubDB{getItem: &InvoiceItem{DocumentNumber: "DOC1", LineID: "1"}}
+	repo := NewRepository(db)
+	model, err := repo.GetByDocumentAndLine(context.Background(), "DOC1", "1")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	item, ok := model.(*InvoiceItem)
+	if !ok {
+		t.Fatalf("expected *InvoiceItem type")
+	}
+	if item.DocumentNumber != "DOC1" || item.LineID != "1" {
+		t.Fatalf("expected mapped invoice item, got %+v", item)
+	}
+	if !strings.Contains(db.lastQuery, "FILEC.IAH") || !strings.Contains(db.lastQuery, "DOC1") {
+		t.Fatalf("expected query against invoice table: %s", db.lastQuery)
+	}
+}
+
+func TestGetByDocumentAndLineError(t *testing.T) {
+	db := &stubDB{getErr: fmt.Errorf("boom")}
+	repo := NewRepository(db)
+	if _, err := repo.GetByDocumentAndLine(context.Background(), "DOC1", "1"); err == nil {
+		t.Fatalf("expected error propagation from DB")
+	}
+}
+
+func TestGetWholeGoodsInvoiceSuccess(t *testing.T) {
+	db := &stubDB{getWG: &WholeGoodsInvoice{InvoiceNumber: "INV1", LineItemNumber: 2}}
+	repo := NewRepository(db)
+	row, err := repo.GetWholeGoodsInvoice(context.Background(), "INV1", "2")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if row.InvoiceNumber != "INV1" || row.LineItemNumber != 2 {
+		t.Fatalf("expected mapped whole goods row, got %+v", row)
+	}
+	if !strings.Contains(db.lastQuery, "CUSINV") || !strings.Contains(db.lastQuery, "INV1") {
+		t.Fatalf("expected query against CUSINV: %s", db.lastQuery)
+	}
+}
+
+func TestGetWholeGoodsInvoiceError(t *testing.T) {
+	db := &stubDB{getErr: fmt.Errorf("fail")}
+	repo := NewRepository(db)
+	if _, err := repo.GetWholeGoodsInvoice(context.Background(), "INV1", "2"); err == nil {
+		t.Fatalf("expected error propagation")
+	}
+}
+
+func TestFormatAndEscapeHelpers(t *testing.T) {
+	if got := escapeLiteral("O'Hare"); got != "O''Hare" {
+		t.Fatalf("expected quote escape, got %s", got)
+	}
+	if got := formatFilterValue(" abc "); got != "' abc '" {
+		t.Fatalf("expected string quoted, got %s", got)
+	}
+	if got := formatFilterValue(5); got != "5" {
+		t.Fatalf("expected numeric passthrough, got %s", got)
 	}
 }
