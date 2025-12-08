@@ -42,6 +42,9 @@ const (
 	heartbeatInterval = 30 * time.Second
 )
 
+// heartbeatIntervalVar is test-overridable; default heartbeatInterval.
+var heartbeatIntervalVar = heartbeatInterval
+
 type AgentConfig = agentcore.Config
 
 type agentStatus struct {
@@ -201,7 +204,7 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler
 			currentLogger(loggerVal).Error("agent loop error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 			if status != nil {
 				status.bridgeConnected.Store(false)
-				status.lastError.Store(err)
+				status.lastError.Store(err.Error())
 			}
 			if errors.Is(err, errRestartRequired) {
 				time.Sleep(backoff)
@@ -241,7 +244,6 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler 
 	}
 	if status != nil {
 		status.bridgeConnected.Store(true)
-		status.lastError.Store(nil)
 	}
 
 	hello := &proto.AgentHello{
@@ -266,7 +268,7 @@ func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler 
 			currentLogger(loggerVal).Warn("agent stream recv error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "recv"), slog.Any("err", err))...)
 			if status != nil {
 				status.bridgeConnected.Store(false)
-				status.lastError.Store(err)
+				status.lastError.Store(err.Error())
 			}
 			return err
 		}
@@ -377,7 +379,7 @@ func dialCredentials(cfg *AgentConfig) credentials.TransportCredentials {
 }
 
 func sendHeartbeats(ctx context.Context, stream proto.AgentService_ConnectClient, cfg *AgentConfig, loggerVal *atomic.Value, status *agentStatus) {
-	ticker := time.NewTicker(heartbeatInterval)
+	ticker := time.NewTicker(heartbeatIntervalVar)
 	defer ticker.Stop()
 	for {
 		select {

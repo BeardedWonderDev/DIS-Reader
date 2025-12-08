@@ -256,4 +256,13 @@ func TestRemoteDBTenantRequiredErrors(t *testing.T) {
 	if err := db.Connect(ctx, ""); err == nil {
 		t.Fatalf("expected tenant requirement error for Connect")
 	}
+	if err := db.Disconnect(ctx, ""); err == nil {
+		t.Fatalf("expected tenant requirement error for Disconnect")
+	}
+	if err := db.PingService(ctx, ""); err == nil {
+		t.Fatalf("expected tenant requirement error for PingService")
+	}
+	if err := db.PingDatabase(ctx, ""); err == nil {
+		t.Fatalf("expected tenant requirement error for PingDatabase")
+	}
 }
