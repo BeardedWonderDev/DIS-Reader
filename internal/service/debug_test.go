@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -74,5 +76,70 @@ func TestRunDebugSearchSQLiteCreatesDirAndPersistsRows(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected 1 row, got %d", count)
+	}
+}
+
+func TestRunDebugSearchCSVWritesRows(t *testing.T) {
+	tmp := t.TempDir()
+	outputPath := filepath.Join(tmp, "out.csv")
+	progress := make(chan types.ProgressStatus, 10)
+	events := make(chan types.TableEvent, 10)
+
+	svc := EmbeddedService{
+		db:     &fakeDB{rows: []types.ResultRow{{"A": "1", "B": "two"}}},
+		logger: newTestLogger(),
+	}
+
+	svc.runDebugSearchCSV("run-1", "term", outputPath, []string{`SELECT * FROM parts`}, progress, events)
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read csv: %v", err)
+	}
+	if !strings.Contains(string(content), "1") || !strings.Contains(string(content), "two") {
+		t.Fatalf("expected csv content to include data rows, got %s", string(content))
+	}
+	select {
+	case evt := <-events:
+		if evt.EventType != "completed" {
+			t.Fatalf("expected completed event, got %s", evt.EventType)
+		}
+	default:
+		t.Fatalf("expected at least one event emitted")
+	}
+}
+
+func TestRunDebugSearchCSVEmitsFailure(t *testing.T) {
+	tmp := t.TempDir()
+	// directory doesn't exist; os.Create will fail
+	outputPath := filepath.Join(tmp, "missing", "out.csv")
+	events := make(chan types.TableEvent, 1)
+
+	svc := EmbeddedService{
+		db:     &fakeDB{rows: []types.ResultRow{{"A": "1"}}},
+		logger: newTestLogger(),
+	}
+
+	svc.runDebugSearchCSV("run-err", "term", outputPath, []string{`SELECT * FROM parts`}, nil, events)
+
+	select {
+	case evt := <-events:
+		if evt.EventType != "run_failed" {
+			t.Fatalf("expected run_failed event, got %s", evt.EventType)
+		}
+	default:
+		t.Fatalf("expected failure event")
+	}
+}
+
+func TestLoadQueryTemplatesParsesNonComments(t *testing.T) {
+	templates := loadQueryTemplates()
+	if len(templates) == 0 {
+		t.Fatalf("expected embedded query templates")
+	}
+	for _, tmpl := range templates {
+		if strings.HasPrefix(strings.TrimSpace(tmpl), "--") || strings.TrimSpace(tmpl) == "" {
+			t.Fatalf("unexpected comment/blank in templates: %q", tmpl)
+		}
 	}
 }

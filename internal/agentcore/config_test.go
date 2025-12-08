@@ -59,3 +59,51 @@ func TestSaveAndApplyRuntimeOverrides(t *testing.T) {
 		t.Fatalf("runtime overrides not applied")
 	}
 }
+
+func TestToEffectiveSetsLocalProvenance(t *testing.T) {
+	cfg := &Config{
+		ServerURL: "https://example",
+		ClientID:  "client-1",
+		DIS:       types.DISConfig{Host: "h", JDBCConfig: &types.JDBCConfig{JavaPath: "java", JDBCPort: "8888"}},
+		Control:   ControlConfig{Enabled: true, Addr: "127.0.0.1:7777"},
+	}
+	eff := ToEffective(cfg)
+	if eff == nil || eff.Provenance == nil {
+		t.Fatalf("expected provenance map")
+	}
+	checks := []string{"serverURL", "clientID", "dis.host", "dis.jdbcConfig.javaPath", "control.enabled", "tls.enabled"}
+	for _, key := range checks {
+		if eff.Provenance[key] != "local" {
+			t.Fatalf("expected %s provenance local, got %q", key, eff.Provenance[key])
+		}
+	}
+}
+
+func TestMarkRuntimeProvenance(t *testing.T) {
+	cfg := &Config{ServerURL: "https://example", ClientID: "cid", DIS: types.DISConfig{JDBCConfig: &types.JDBCConfig{}}}
+	eff := ToEffective(cfg)
+	rt := &bridgeproto.AgentRuntimeConfig{
+		DisHost:     "remote-host",
+		DisUser:     "user",
+		DisPassword: "pw",
+		JdbcPort:    "9999",
+		JavaPath:    "/opt/java",
+		TenantId:    "tenant-1",
+		ClientSecret:"secret",
+	}
+	MarkRuntimeProvenance(eff, rt)
+	expectRemote := []string{
+		"dis.host", "dis.user", "dis.password",
+		"dis.jdbcConfig.jdbcPort", "dis.jdbcConfig.javaPath",
+		"tenantID", "clientSecret",
+	}
+	for _, key := range expectRemote {
+		if eff.Provenance[key] != "remote" {
+			t.Fatalf("expected %s to be marked remote, got %q", key, eff.Provenance[key])
+		}
+	}
+	// Unchanged field should remain local
+	if eff.Provenance["serverURL"] != "local" {
+		t.Fatalf("expected serverURL to remain local, got %q", eff.Provenance["serverURL"])
+	}
+}

@@ -183,3 +183,77 @@ func TestRemoteDBQueryWithSourceIncludesFlagAndLimits(t *testing.T) {
 		t.Fatalf("expected rows to be limited to maxRows, got %d", len(rows))
 	}
 }
+
+func TestRemoteDBConnectDisconnectAndPings(t *testing.T) {
+	agent := &fakeAgent{res: &bridgeproto.JobResult{Status: bridgeproto.Status_STATUS_OK}}
+	reg := &fakeRegistry{agent: agent}
+	db := NewRemoteDB(reg, nil, 100, 0)
+
+	ctx := context.Background()
+	if err := db.Connect(ctx, "tenant-x"); err != nil {
+		t.Fatalf("connect err: %v", err)
+	}
+	if agent.lastReq == nil || agent.lastReq.Kind != bridgeproto.JobKind_JOB_KIND_CONNECT {
+		t.Fatalf("connect job kind mismatch: %v", agent.lastReq)
+	}
+	if err := db.Disconnect(ctx, "tenant-x"); err != nil {
+		t.Fatalf("disconnect err: %v", err)
+	}
+	if agent.lastReq == nil || agent.lastReq.Kind != bridgeproto.JobKind_JOB_KIND_DISCONNECT {
+		t.Fatalf("disconnect job kind mismatch: %v", agent.lastReq)
+	}
+	if err := db.PingService(ctx, "tenant-x"); err != nil {
+		t.Fatalf("ping service err: %v", err)
+	}
+	if agent.lastReq == nil || agent.lastReq.Kind != bridgeproto.JobKind_JOB_KIND_PING_SERVICE {
+		t.Fatalf("ping service job kind mismatch: %v", agent.lastReq)
+	}
+	if err := db.PingDatabase(ctx, "tenant-x"); err != nil {
+		t.Fatalf("ping database err: %v", err)
+	}
+	if agent.lastReq == nil || agent.lastReq.Kind != bridgeproto.JobKind_JOB_KIND_PING_DATABASE {
+		t.Fatalf("ping database job kind mismatch: %v", agent.lastReq)
+	}
+}
+
+func TestRemoteDBQueryRowAndSelect(t *testing.T) {
+	agent := &fakeAgent{
+		res: &bridgeproto.JobResult{
+			Status: bridgeproto.Status_STATUS_OK,
+			Rows: []*bridgeproto.Row{
+				{Fields: map[string]*structpb.Value{"name": structpb.NewStringValue("first")}},
+			},
+		},
+	}
+	reg := &fakeRegistry{agent: agent}
+	db := NewRemoteDB(reg, nil, 10, 0)
+
+	ctx := context.Background()
+	row, err := db.QueryRow(ctx, "select name", "tenant-x")
+	if err != nil {
+		t.Fatalf("queryrow err: %v", err)
+	}
+	if row["name"] != "first" {
+		t.Fatalf("unexpected row: %+v", row)
+	}
+
+	var dest []types.ResultRow
+	if err := db.Select(ctx, &dest, "select name", "tenant-x"); err != nil {
+		t.Fatalf("select err: %v", err)
+	}
+	if len(dest) != 1 || dest[0]["name"] != "first" {
+		t.Fatalf("unexpected select results: %+v", dest)
+	}
+}
+
+func TestRemoteDBTenantRequiredErrors(t *testing.T) {
+	reg := &fakeRegistry{agent: &fakeAgent{res: &bridgeproto.JobResult{Status: bridgeproto.Status_STATUS_OK}}}
+	db := NewRemoteDB(reg, nil, 10, 0)
+	ctx := context.Background()
+	if _, err := db.Query(ctx, "select 1", ""); err == nil {
+		t.Fatalf("expected tenant requirement error for Query")
+	}
+	if err := db.Connect(ctx, ""); err == nil {
+		t.Fatalf("expected tenant requirement error for Connect")
+	}
+}

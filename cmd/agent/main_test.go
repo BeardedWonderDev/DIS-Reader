@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"io"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/BeardedWonderDev/DIS-Reader/internal/agentcore"
 	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -180,5 +182,109 @@ func TestResultRowsToProto(t *testing.T) {
 	}
 	if fields["x"].Kind != (*structpb.Value_StringValue)(nil) && fields["x"].GetStringValue() == "" {
 		t.Fatalf("expected fallback string value for struct, got %v", fields["x"])
+	}
+}
+
+func TestApplyAgentConfigRuntimeRestart(t *testing.T) {
+	origDir, _ := os.Getwd()
+	tempDir := t.TempDir()
+	_ = os.Chdir(tempDir)
+	defer os.Chdir(origDir)
+
+	base := slog.NewTextHandler(io.Discard, nil)
+	var loggerVal atomic.Value
+	loggerVal.Store(slog.New(base))
+
+	agentCfg := &AgentConfig{
+		DIS: types.DISConfig{JDBCConfig: &types.JDBCConfig{JavaPath: "java", JDBCPort: "8888"}},
+	}
+	rt := &bridgeproto.AgentRuntimeConfig{
+		JdbcPort: "9999", JavaPath: "newjava", ClientSecret: "secret", ForceRestart: true,
+	}
+	cfg := &bridgeproto.AgentConfig{Runtime: rt}
+	db := &stubDB{}
+
+	err := applyAgentConfig(base, &loggerVal, cfg, agentCfg, db)
+	if err != errRestartRequired {
+		t.Fatalf("expected errRestartRequired, got %v", err)
+	}
+	if !db.startCalled || !db.stopCalled {
+		t.Fatalf("expected JDBC runner restart, got start=%v stop=%v", db.startCalled, db.stopCalled)
+	}
+	if agentCfg.DIS.JDBCConfig.JDBCPort != "9999" || agentCfg.DIS.JDBCConfig.JavaPath != "newjava" || agentCfg.ClientSecret != "secret" {
+		t.Fatalf("runtime values not applied to agent config: %+v", agentCfg.DIS.JDBCConfig)
+	}
+}
+
+func TestApplyAgentConfigSkipsLokiWhenNil(t *testing.T) {
+	origDir, _ := os.Getwd()
+	tempDir := t.TempDir()
+	_ = os.Chdir(tempDir)
+	defer os.Chdir(origDir)
+
+	base := slog.NewTextHandler(io.Discard, nil)
+	var loggerVal atomic.Value
+	loggerVal.Store(slog.New(base))
+
+	agentCfg := &AgentConfig{DIS: types.DISConfig{JDBCConfig: &types.JDBCConfig{}}}
+	if err := applyAgentConfig(base, &loggerVal, &bridgeproto.AgentConfig{}, agentCfg, &stubDB{}); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if _, err := os.Stat(agentcore.DefaultAgentConfigFile); err != nil {
+		t.Fatalf("expected config file written, err=%v", err)
+	}
+}
+
+func TestNewLokiHandlerRequiresURL(t *testing.T) {
+	if _, err := newLokiHandler(&bridgeproto.LokiConfig{Url: ""}); err == nil {
+		t.Fatalf("expected error for empty url")
+	}
+}
+
+type recordingHandler struct {
+	enabled bool
+	handled int
+	attrs   []slog.Attr
+	groups  []string
+}
+
+func (r *recordingHandler) Enabled(ctx context.Context, level slog.Level) bool { return r.enabled }
+func (r *recordingHandler) Handle(ctx context.Context, record slog.Record) error {
+	r.handled++
+	return nil
+}
+func (r *recordingHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	r.attrs = append(r.attrs, attrs...)
+	return r
+}
+func (r *recordingHandler) WithGroup(name string) slog.Handler {
+	r.groups = append(r.groups, name)
+	return r
+}
+
+func TestFanoutHandlerForwards(t *testing.T) {
+	h1 := &recordingHandler{enabled: true}
+	h2 := &recordingHandler{enabled: false}
+	fan := fanoutHandler{handlers: []slog.Handler{h1, h2}}
+
+	if !fan.Enabled(context.Background(), slog.LevelInfo) {
+		t.Fatalf("expected fanout enabled when any child is enabled")
+	}
+
+	rec := slog.NewRecord(time.Now(), slog.LevelInfo, "msg", 0)
+	if err := fan.Handle(context.Background(), rec); err != nil {
+		t.Fatalf("handle err: %v", err)
+	}
+	if h1.handled != 1 {
+		t.Fatalf("expected first handler to handle record")
+	}
+	if h2.handled != 0 {
+		t.Fatalf("expected disabled handler not to handle record")
+	}
+
+	withAttrs := fan.WithAttrs([]slog.Attr{slog.String("k", "v")}).(fanoutHandler)
+	withGroup := withAttrs.WithGroup("g").(fanoutHandler)
+	if len(h1.attrs) == 0 || len(h1.groups) == 0 || len(withGroup.handlers) != 2 {
+		t.Fatalf("expected attrs/groups to propagate to handlers")
 	}
 }
