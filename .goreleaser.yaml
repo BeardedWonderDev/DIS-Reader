@@ -327,59 +327,60 @@ changelog:
     use: openai
     model: gpt-4o-mini
     prompt: |
-      Write the release notes for this release.
+      Write the release notes for this release. Your output must be a clean, readable, human-oriented changelog following the Keep a Changelog 1.1.0 format (fully embedded below). Only return the generated release notes—no explanations, no commentary, no reflections.
 
-      ## Instructions:
+      Instructions
+        •	No emojis.
+        •	Provide a brief, user-impactful summary immediately after the version heading.
+        •	Do not produce a raw git log. Curate, group, and summarize.
+        •	Format the top-level heading exactly as:
+          - [{{ if eq .Tag "" }}to-be-defined{{ else }}{{ .Tag }}{{ end }}] - YYYY-MM-DD
 
-      - Do not use emojis.
-      - Write a short summary featuring user-impacting changes.
-      - Follow Keep a Changelog 1.1.0 conventions. All relevant rules are embedded here so no external lookup is required.
-      - Write release notes for humans, not machines. Curate and summarize; do not dump a raw git log.
-      - Start with a top-level heading for this version in Keep a Changelog style:
+      Use the actual release date if present; if absent, omit the date entirely.
 
-        ## [{{ if eq .Tag "" }}to-be-defined{{ else }}{{ .Tag }}{{ end }}] - YYYY-MM-DD
+        •	All output must be valid Markdown.
 
-        (Use the actual release date if available; otherwise omit the date.)
+      Changelogs must emphasize clarity, human readability, and the reasons behind changes. After the version heading:
+        1.	Provide a short, high-level summary of the release impact.
+        2.	Group changes under only the categories that apply, using these exact headings:
+            - Added
+            - Changed
+            - Deprecated
+            - Removed
+            - Fixed
+            = Security
+        3.	Each bullet point should describe what changed from the perspective of an end user or operator.
+        4.	Commit messages must appear verbatim when referenced.
+        5.	When multiple commits relate to the same functional change, group them into a single bullet and list the commit SHAs inside the bullet.
+        6.	When multiple commits update the same dependency, group them and show:
+            - sha1, sha2: updated dependency-x from vA.B.C to vX.Y.Z
+        7.	Avoid noise: omit purely internal or irrelevant commits unless they affect behavior or developer experience.
 
-      ### Keep a Changelog Principles (Embedded):
-      - Changelogs must be human-readable and focused on what changed and why.
-      - Each release must have a heading in this style:
-        ## [VERSION] - YYYY-MM-DD
-        (If a date is not available, omit the date.)
-      - After the heading, include a concise summary of the overall impact of the release.
-      - Group entries under these exact categories (include only those containing entries):
-          ### Added - new features.
-          ### Changed - changes in existing functionality.
-          ### Deprecated - features soon to be removed.
-          ### Removed  features removed in this release.
-          ### Fixed - bug fixes.
-          ### Security - vulnerability-related changes.
-      - Each bullet point should describe the change in clear, user-facing language.
-      - Commit messages must remain unchanged; do not paraphrase them.
-      - Related commits should be grouped together into a single bullet when appropriate.
-      - If multiple commits update the same dependency, group them and show old and new versions:
-          sha1, sha2: updated dependency-x from vA.B.C to vX.Y.Z.
-      - The release notes should be formatted as Markdown.
-      - Respond ONLY with the generated release notes—no explanations or commentary.
+      Commit Overview Requirement
 
-      - Provide a commit history and overview of each commit or related commit group under the appropriate category.
+      For each category used, produce:
+        •	A curated set of bullet points summarizing actual changes.
+        •	A commit list grouped under each bullet or sub-bullet.
+        •	Do not paraphrase commit messages. Keep them exact.
 
-      ## Some details about this release:
+      Release Context
 
-      Project name: {{.ProjectName}}
-      Git repository URL: {{.GitURL}}
-      {{ if eq .Tag "" }}
-      Previous version: {{.Version}}
+      Project: {{.ProjectName}}
+      Repository: {{.GitURL}}
+
+      {{ if eq .Tag “” }}
+      Previous Version: {{.Version}}
       Version: to be defined
       {{ else }}
       Previous Version: {{.PreviousTag}}
       Version: {{.Tag}}
       {{ end }}
-      {{ if .IsSnapshot }}This is a snapshot build.{{ end }}
-      {{ if .IsNightly }}This is a nightly build.{{ end }}
+
+      {{ if .IsSnapshot }}Snapshot build.{{ end }}
+      {{ if .IsNightly }}Nightly build.{{ end }}
       {{ with .TagSubject }}Tag subject: {{ . }}{{ end }}
       {{ with .TagContents }}Tag content: {{ . }}{{ end }}
 
-      ## Release notes:
+      Release Notes Output
 
       {{ .ReleaseNotes }}
