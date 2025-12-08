@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/BeardedWonderDev/DIS-Reader/types"
@@ -110,5 +111,19 @@ func TestApplyPaneFocusColors(t *testing.T) {
 	v.applyPaneFocus(table, false)
 	if table.GetBorderColor() != v.theme.Colors.BorderColor {
 		t.Fatalf("expected border color when unfocused")
+	}
+}
+
+func TestNavBarTextHighlightsActivePage(t *testing.T) {
+	theme := types.ResolveTheme("")
+	v := &viewerApp{theme: theme, activePage: pageParts}
+	text := v.navBarText()
+	if !strings.Contains(text, "F2 Parts Lookup") {
+		t.Fatalf("expected Parts tab label in nav text")
+	}
+	// Active tab should use accent background segment marker "[black:<accent>]"
+	accent := colorToHex(theme.Colors.AccentColor)
+	if !strings.Contains(text, "[black:"+accent+"]") {
+		t.Fatalf("expected accent highlight for active tab, got %s", text)
 	}
 }
