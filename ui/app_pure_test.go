@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -56,5 +57,58 @@ func TestFormatIntHelpers(t *testing.T) {
 	}
 	if s := formatLeadingInt64([]int64{9, 8, 7}, 4); s != "9, 8, 7" {
 		t.Fatalf("unexpected leading int64: %s", s)
+	}
+}
+
+func TestIsLogAtBottom(t *testing.T) {
+	v := &viewerApp{logView: tview.NewTextView(), logLines: 2}
+	v.logView.SetRect(0, 0, 10, 5)
+	if !v.isLogAtBottom() {
+		t.Fatalf("expected at bottom when height >= lines")
+	}
+	v.logLines = 10
+	v.logView.ScrollTo(3, 0)
+	if v.isLogAtBottom() {
+		t.Fatalf("expected not at bottom when scrolled up")
+	}
+}
+
+func TestUpdateLogTitleUnreadFlag(t *testing.T) {
+	v := &viewerApp{logView: tview.NewTextView()}
+	v.updateLogTitle()
+	if title := v.logView.GetTitle(); title != " Activity " {
+		t.Fatalf("expected default title, got %s", title)
+	}
+	v.logUnread = true
+	v.updateLogTitle()
+	if title := v.logView.GetTitle(); title != " Activity (new) " {
+		t.Fatalf("expected unread title, got %s", title)
+	}
+}
+
+func TestFocusInTextEntry(t *testing.T) {
+	app := tview.NewApplication()
+	v := &viewerApp{app: app}
+	input := tview.NewInputField()
+	app.SetFocus(input)
+	if !v.focusInTextEntry() {
+		t.Fatalf("expected true when focus is input field")
+	}
+	app.SetFocus(tview.NewTextView())
+	if v.focusInTextEntry() {
+		t.Fatalf("expected false when focus is not text entry")
+	}
+}
+
+func TestApplyPaneFocusColors(t *testing.T) {
+	v := &viewerApp{theme: types.ResolveTheme("")}
+	table := tview.NewTable()
+	v.applyPaneFocus(table, true)
+	if table.GetBorderColor() != v.theme.Colors.AccentColor {
+		t.Fatalf("expected accent border color when focused")
+	}
+	v.applyPaneFocus(table, false)
+	if table.GetBorderColor() != v.theme.Colors.BorderColor {
+		t.Fatalf("expected border color when unfocused")
 	}
 }

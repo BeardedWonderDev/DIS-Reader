@@ -1,7 +1,9 @@
 package database
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -62,5 +64,42 @@ func TestAs400DateHookEpochSeconds(t *testing.T) {
 	}
 	if parsed := got.(time.Time); !parsed.Equal(want) {
 		t.Fatalf("expected %s, got %s", want, parsed)
+	}
+}
+
+type stubHandler struct{ records []slog.Record }
+
+func (h *stubHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *stubHandler) Handle(_ context.Context, r slog.Record) error {
+	h.records = append(h.records, r)
+	return nil
+}
+func (h *stubHandler) WithAttrs(attrs []slog.Attr) slog.Handler { return h }
+func (h *stubHandler) WithGroup(name string) slog.Handler       { return h }
+
+func TestLogStructuredLineParsesJSONAndPlain(t *testing.T) {
+	h := &stubHandler{}
+	logger := slog.New(h)
+
+	logStructuredLine(logger, `{"status":"ok","message":"hello","requestId":"abc"}`, slog.LevelInfo)
+	logStructuredLine(logger, `{"status":"err","message":"bad"}`, slog.LevelError)
+	logStructuredLine(logger, "not-json", slog.LevelError)
+
+	if len(h.records) < 3 {
+		t.Fatalf("expected at least 3 records, got %d", len(h.records))
+	}
+	if h.records[0].Level != slog.LevelInfo || h.records[1].Level != slog.LevelError {
+		t.Fatalf("unexpected levels: %v %v", h.records[0].Level, h.records[1].Level)
+	}
+
+	foundRequest := false
+	h.records[0].Attrs(func(a slog.Attr) bool {
+		if a.Key == "request_id" && a.Value.String() == "abc" {
+			foundRequest = true
+		}
+		return true
+	})
+	if !foundRequest {
+		t.Fatalf("expected request_id attribute in first record")
 	}
 }

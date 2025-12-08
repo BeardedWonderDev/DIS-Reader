@@ -2,6 +2,8 @@ package types
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 )
@@ -60,6 +62,39 @@ func TestBuildListParamsCursorMissingAfterValue(t *testing.T) {
 func TestParseSortOrderInvalid(t *testing.T) {
 	if _, err := ParseSortOrder("WRONG"); err == nil {
 		t.Fatalf("expected error for invalid sort order")
+	}
+}
+
+func TestListMiddlewarePopulatesContext(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/?limit=5&page=2&sortBy=name&sortOrder=ASC&filters=status:eq:active", nil)
+	rw := httptest.NewRecorder()
+	called := false
+	h := ListMiddleware[demoParser](http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		lp := GetListParamsFromContext(r.Context())
+		if lp.Page != 2 || lp.Limit != 5 || lp.SortBy != "name_col" || lp.SortOrder != SortOrderAsc {
+			t.Fatalf("unexpected list params: %+v", lp)
+		}
+		if len(lp.Filters) != 1 || lp.Filters[0].Column != "status_col" || lp.Filters[0].Value != "active" {
+			t.Fatalf("unexpected filters: %+v", lp.Filters)
+		}
+	}))
+
+	h.ServeHTTP(rw, req)
+	if !called {
+		t.Fatalf("handler was not called")
+	}
+}
+
+func TestListMiddlewareRejectsBadFilterFormat(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/?filters=badfilter", nil)
+	rw := httptest.NewRecorder()
+	h := ListMiddleware[demoParser](http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("handler should not be reached on error")
+	}))
+	h.ServeHTTP(rw, req)
+	if rw.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad filter format, got %d", rw.Code)
 	}
 }
 
