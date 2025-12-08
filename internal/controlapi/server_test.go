@@ -2,12 +2,14 @@ package controlapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/agentcore"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
 type fakeServiceCtl struct{ calls []string }
@@ -98,4 +100,151 @@ func TestControlAPIEndpoints(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for missing token, got %d", resp.StatusCode)
 	}
+}
+
+func TestControlAPIErrorPathsAndHelpers(t *testing.T) {
+	// authorize should reject when token mismatches
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/status", nil)
+	if authorize(w, r, "tok") {
+		t.Fatalf("expected unauthorized without bearer header")
+	}
+
+	// Start should error when address missing
+	if err := Start(context.Background(), Options{}); err == nil {
+		t.Fatalf("expected error for missing addr")
+	}
+
+	// sanitizeConfig should mask secret fields
+	cfg := &agentcore.Config{
+		TenantID:     "tenant",
+		ClientSecret: "secret",
+		DIS:          types.DISConfig{Password: "pass"},
+		Control:      agentcore.ControlConfig{Token: "tok"},
+	}
+	safe := sanitizeConfig(cfg)
+	if safe.TenantID != "" || safe.ClientSecret != "***" || safe.DIS.Password != "***" || safe.Control.Token != "***" {
+		t.Fatalf("expected masked config, got %+v", safe)
+	}
+
+	// mask helper
+	if mask("") != "" || mask("x") != "***" {
+		t.Fatalf("mask helper not behaving")
+	}
+
+	// buildMux negative paths: method not allowed + validation failure + apply failure + service error and unknown
+	serviceErr := errors.New("svc fail")
+	svc := &fakeServiceCtl{}
+	opts := Options{
+		Token: "tok",
+		StatusFn: func() Status {
+			return Status{Running: true}
+		},
+		EffectiveFn: func() *agentcore.EffectiveConfig {
+			return &agentcore.EffectiveConfig{Config: &agentcore.Config{}}
+		},
+		ValidateFn: func(cfg *agentcore.Config) error { return errors.New("bad") },
+		ApplyFn:    func(cfg *agentcore.Config) error { return errors.New("apply bad") },
+		ServiceCtl: svc,
+	}
+	mux := http.NewServeMux()
+	buildMux(mux, opts)
+
+	// wrong method on /config
+	req := httptest.NewRequest(http.MethodPost, "/config", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for config POST, got %d", resp.Code)
+	}
+
+	// validation failure
+	req = httptest.NewRequest(http.MethodPost, "/config/validate", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer tok")
+	resp = httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for validation failure, got %d", resp.Code)
+	}
+
+	// apply failure
+	req = httptest.NewRequest(http.MethodPost, "/config/apply", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer tok")
+	resp = httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for apply failure, got %d", resp.Code)
+	}
+
+	// service error
+	badCtl := &fakeServiceCtl{}
+	badOpts := opts
+	badOpts.ServiceCtl = badCtl
+	// override Start to fail
+	badOpts.ServiceCtl = &fakeServiceCtlWithError{err: serviceErr}
+	mux2 := http.NewServeMux()
+	buildMux(mux2, badOpts)
+	req = httptest.NewRequest(http.MethodPost, "/service/start", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	resp = httptest.NewRecorder()
+	mux2.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for service failure, got %d", resp.Code)
+	}
+
+	// unknown action
+	req = httptest.NewRequest(http.MethodPost, "/service/unknown", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	resp = httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown action, got %d", resp.Code)
+	}
+}
+
+func TestControlAPIStartAndUnavailableHandlers(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	opts := Options{
+		Addr:     "127.0.0.1:0",
+		Token:    "",
+		StatusFn: func() Status { return Status{} },
+		EffectiveFn: func() *agentcore.EffectiveConfig {
+			return nil
+		},
+	}
+	if err := Start(ctx, opts); err != nil {
+		t.Fatalf("expected start to succeed with addr: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	buildMux(mux, opts)
+
+	// config unavailable when EffectiveFn returns nil
+	req := httptest.NewRequest(http.MethodGet, "/config", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when config unavailable, got %d", resp.Code)
+	}
+
+	// service control unavailable returns 501
+	req = httptest.NewRequest(http.MethodPost, "/service/start", nil)
+	resp = httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 when service control missing, got %d", resp.Code)
+	}
+}
+
+type fakeServiceCtlWithError struct{ err error }
+
+func (f *fakeServiceCtlWithError) Install(ctx context.Context) error { return f.err }
+func (f *fakeServiceCtlWithError) Start(ctx context.Context) error   { return f.err }
+func (f *fakeServiceCtlWithError) Stop(ctx context.Context) error    { return f.err }
+func (f *fakeServiceCtlWithError) Restart(ctx context.Context) error { return f.err }
+func (f *fakeServiceCtlWithError) Status(ctx context.Context) (string, error) {
+	return "", f.err
 }
