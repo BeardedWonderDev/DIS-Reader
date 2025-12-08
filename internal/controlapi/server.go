@@ -44,6 +44,27 @@ func Start(ctx context.Context, opts Options) error {
 	}
 	mux := http.NewServeMux()
 
+	buildMux(mux, opts)
+
+	srv := &http.Server{Addr: opts.Addr, Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
+	}()
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			// server exits silently on error; caller can log
+		}
+	}()
+
+	return nil
+}
+
+// buildMux wires handlers onto the provided mux; factored for testing.
+func buildMux(mux *http.ServeMux, opts Options) {
+
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		if !authorize(w, r, opts.Token) {
 			return
@@ -145,21 +166,6 @@ func Start(ctx context.Context, opts Options) error {
 		}
 		writeJSON(w, map[string]string{"status": action})
 	})
-
-	srv := &http.Server{Addr: opts.Addr, Handler: mux}
-
-	go func() {
-		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
-	}()
-
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			// server exits silently on error; caller can log
-		}
-	}()
-
-	return nil
 }
 
 func authorize(w http.ResponseWriter, r *http.Request, token string) bool {
