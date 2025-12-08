@@ -197,7 +197,7 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler
 				slog.Duration("backoff", backoff),
 			)...)
 
-		if err := runOnce(ctx, cfg, db, baseHandler, loggerVal, status); err != nil {
+		if err := runOnceFunc(ctx, cfg, db, baseHandler, loggerVal, status); err != nil {
 			currentLogger(loggerVal).Error("agent loop error", append(logging.CommonAttrs(cfg.TenantID, cfg.ClientID, "", "bridge_connect", "connect"), slog.Any("err", err))...)
 			if status != nil {
 				status.bridgeConnected.Store(false)
@@ -219,6 +219,9 @@ func runAgent(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler
 		backoff = time.Second
 	}
 }
+
+// runOnceFunc is patchable for tests.
+var runOnceFunc = runOnce
 
 func runOnce(ctx context.Context, cfg *AgentConfig, db database.DB, baseHandler slog.Handler, loggerVal *atomic.Value, status *agentStatus) error {
 	creds := dialCredentials(cfg)
