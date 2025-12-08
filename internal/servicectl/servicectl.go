@@ -7,6 +7,9 @@ import (
 	"runtime"
 )
 
+// commandContext is defined for testability; tests can override to stub external commands.
+var commandContext = exec.CommandContext
+
 // Controller defines service lifecycle operations.
 type Controller interface {
 	Install(ctx context.Context) error
@@ -126,7 +129,7 @@ func (n *noopController) Status(ctx context.Context) (string, error) { return ""
 // --- helpers ---
 
 func run(ctx context.Context, cmd string, args ...string) error {
-	c := exec.CommandContext(ctx, cmd, args...)
+	c := commandContext(ctx, cmd, args...)
 	if out, err := c.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %w (output: %s)", cmd, err, string(out))
 	}
@@ -134,7 +137,7 @@ func run(ctx context.Context, cmd string, args ...string) error {
 }
 
 func runOutput(ctx context.Context, cmd string, args ...string) (string, error) {
-	c := exec.CommandContext(ctx, cmd, args...)
+	c := commandContext(ctx, cmd, args...)
 	out, err := c.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("%s: %w (output: %s)", cmd, err, string(out))
