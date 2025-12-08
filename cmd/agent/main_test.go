@@ -5,9 +5,11 @@ import (
 	"io"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
 	"github.com/BeardedWonderDev/DIS-Reader/types"
+	"google.golang.org/protobuf/types/known/structpb"
 	"log/slog"
 )
 
@@ -103,5 +105,80 @@ func TestExecuteJob_ReadConfigSanitized(t *testing.T) {
 	}
 	if res.ConfigStatus.Loki.ApiKey != "" {
 		t.Fatalf("expected loki api key to be sanitized")
+	}
+}
+
+func TestDialCredentials(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *AgentConfig
+		want string
+	}{
+		{"insecure when tls disabled", &AgentConfig{}, "insecure"},
+		{"tls insecure skip verify", &AgentConfig{TLS: struct {
+			Enabled            bool `mapstructure:"enabled" yaml:"enabled"`
+			InsecureSkipVerify bool `mapstructure:"insecureSkipVerify" yaml:"insecureSkipVerify"`
+		}{Enabled: true, InsecureSkipVerify: true}}, "tls"},
+		{"tls strict", &AgentConfig{TLS: struct {
+			Enabled            bool `mapstructure:"enabled" yaml:"enabled"`
+			InsecureSkipVerify bool `mapstructure:"insecureSkipVerify" yaml:"insecureSkipVerify"`
+		}{Enabled: true, InsecureSkipVerify: false}}, "tls"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			creds := dialCredentials(tc.cfg)
+			if got := creds.Info().SecurityProtocol; got != tc.want {
+				t.Fatalf("expected %s, got %s", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestLabelAttrsSorted(t *testing.T) {
+	attrs := labelAttrs(map[string]string{"b": "2", "a": "1"})
+	if len(attrs) != 2 {
+		t.Fatalf("expected 2 attrs, got %d", len(attrs))
+	}
+	if attrs[0].Key != "a" || attrs[1].Key != "b" {
+		t.Fatalf("expected keys sorted, got %v", []slog.Attr{attrs[0], attrs[1]})
+	}
+	if labelAttrs(nil) != nil {
+		t.Fatalf("expected nil for empty labels")
+	}
+}
+
+func TestCopyConfigDeepCopiesJDBC(t *testing.T) {
+	orig := &AgentConfig{DIS: types.DISConfig{JDBCConfig: &types.JDBCConfig{JavaPath: "/bin/java"}}}
+	dup := copyConfig(orig)
+	if dup == orig || dup.DIS.JDBCConfig == orig.DIS.JDBCConfig {
+		t.Fatalf("expected deep copy of JDBC config")
+	}
+	orig.DIS.JDBCConfig.JavaPath = "changed"
+	if dup.DIS.JDBCConfig.JavaPath != "/bin/java" {
+		t.Fatalf("expected copy to retain original values, got %s", dup.DIS.JDBCConfig.JavaPath)
+	}
+}
+
+func TestResultRowsToProto(t *testing.T) {
+	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	rows := []types.ResultRow{{
+		"ts": ts,
+		"n":  int64(5),
+		"x":  struct{ A int }{A: 1},
+	}}
+	protoRows := resultRowsToProto(rows)
+	if len(protoRows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(protoRows))
+	}
+	fields := protoRows[0].Fields
+	if got := fields["ts"].GetNumberValue(); got != float64(ts.UnixMilli()) {
+		t.Fatalf("expected millis for time, got %v", got)
+	}
+	if fields["n"].GetNumberValue() != 5 {
+		t.Fatalf("expected numeric value preserved")
+	}
+	if fields["x"].Kind != (*structpb.Value_StringValue)(nil) && fields["x"].GetStringValue() == "" {
+		t.Fatalf("expected fallback string value for struct, got %v", fields["x"])
 	}
 }

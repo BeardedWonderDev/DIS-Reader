@@ -8,6 +8,7 @@ import (
 
 	"github.com/BeardedWonderDev/DIS-Reader/internal/bridge"
 	bridgeproto "github.com/BeardedWonderDev/DIS-Reader/internal/bridge/proto"
+	"github.com/BeardedWonderDev/DIS-Reader/types"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -136,5 +137,49 @@ func TestRemoteDBStartStopLifecycle(t *testing.T) {
 	}
 	if agent.lastReq == nil || agent.lastReq.Kind != bridgeproto.JobKind_JOB_KIND_STOP_JDBC {
 		t.Fatalf("expected stop jdbc job, got %v", agent.lastReq)
+	}
+}
+
+func TestRemoteDBEnforceLimits(t *testing.T) {
+	db := NewRemoteDB(&fakeRegistry{}, nil, 2, 0)
+	rows := []types.ResultRow{
+		{"a": 1}, {"a": 2}, {"a": 3},
+	}
+	limited := db.enforceLimits(rows)
+	if len(limited) != 2 {
+		t.Fatalf("expected max 2 rows, got %d", len(limited))
+	}
+
+	// Byte cap should stop before exceeding maxResultBytes
+	byteCapped := NewRemoteDB(&fakeRegistry{}, nil, 0, 20)
+	rows = []types.ResultRow{{"a": "short"}, {"a": "this is longer than cap"}}
+	limited = byteCapped.enforceLimits(rows)
+	if len(limited) != 1 {
+		t.Fatalf("expected only first row to fit byte cap, got %d", len(limited))
+	}
+}
+
+func TestRemoteDBQueryWithSourceIncludesFlagAndLimits(t *testing.T) {
+	agent := &fakeAgent{
+		res: &bridgeproto.JobResult{
+			Status: bridgeproto.Status_STATUS_OK,
+			Rows: []*bridgeproto.Row{
+				{Fields: map[string]*structpb.Value{"x": structpb.NewNumberValue(1)}},
+				{Fields: map[string]*structpb.Value{"x": structpb.NewNumberValue(2)}},
+			},
+		},
+	}
+	reg := &fakeRegistry{agent: agent}
+	db := NewRemoteDB(reg, nil, 1, 0)
+
+	rows, err := db.QueryWithSource(context.Background(), "select 1", "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if agent.lastReq == nil || !agent.lastReq.IncludeSrc {
+		t.Fatalf("expected IncludeSrc flag to be set on job request")
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected rows to be limited to maxRows, got %d", len(rows))
 	}
 }

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -151,5 +153,25 @@ func TestReadAgentConfig(t *testing.T) {
 	}
 	if agent.lastReq == nil || agent.lastReq.Kind != proto.JobKind_JOB_KIND_READ_CONFIG {
 		t.Fatalf("expected read config job to be sent")
+	}
+}
+
+func TestRegisterPprofRegistersHandlers(t *testing.T) {
+	mux := http.NewServeMux()
+	registerPprof(mux, "")
+
+	paths := []string{"", "cmdline", "profile", "symbol", "trace"}
+	for _, p := range paths {
+		path := "/debug/pprof/" + p
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		h, _ := mux.Handler(req)
+		if h == nil {
+			t.Fatalf("expected handler for %s", path)
+		}
+		h.ServeHTTP(rec, req)
+		if rec.Code == 0 {
+			t.Fatalf("handler for %s did not run", path)
+		}
 	}
 }
