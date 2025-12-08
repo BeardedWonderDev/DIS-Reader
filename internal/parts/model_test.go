@@ -38,11 +38,32 @@ func TestToIntHelpersHandleMixedTypes(t *testing.T) {
 	if got := toInt32(" 12 "); got != 12 {
 		t.Fatalf("expected parse string to int32, got %d", got)
 	}
+	if got := toInt32(int(7)); got != 7 {
+		t.Fatalf("expected int to convert to int32, got %d", got)
+	}
+	if got := toInt32(int32(8)); got != 8 {
+		t.Fatalf("expected int32 passthrough, got %d", got)
+	}
+	if got := toInt32(float32(9.9)); got != 9 {
+		t.Fatalf("expected float32 truncation, got %d", got)
+	}
+	if got := toInt32(""); got != 0 {
+		t.Fatalf("expected empty string to return 0, got %d", got)
+	}
 	if got := toInt32("bad"); got != 0 {
 		t.Fatalf("expected invalid string to yield 0, got %d", got)
 	}
 	if got := toInt64(float64(15)); got != 15 {
 		t.Fatalf("expected float64 to int64 conversion")
+	}
+	if got := toInt64(int32(16)); got != 16 {
+		t.Fatalf("expected int32 to int64 conversion")
+	}
+	if got := toInt64(float32(17.3)); got != 17 {
+		t.Fatalf("expected float32 truncation to int64, got %d", got)
+	}
+	if got := toInt64("   "); got != 0 {
+		t.Fatalf("expected whitespace string to return 0, got %d", got)
 	}
 	if got := toInt64(nil); got != 0 {
 		t.Fatalf("expected nil to return 0")
