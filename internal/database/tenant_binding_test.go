@@ -2,14 +2,17 @@ package database
 
 import (
 	"context"
-	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/BeardedWonderDev/DIS-Reader/types"
 )
 
+// fakeMultiTenantDB records the last call for assertion.
 type fakeMultiTenantDB struct {
 	lastTenant string
+	lastQuery  string
+	lastArgs   []interface{}
 }
 
 func (f *fakeMultiTenantDB) StartJDBCRunner(tenant string) error { f.lastTenant = tenant; return nil }
@@ -31,57 +34,83 @@ func (f *fakeMultiTenantDB) PingDatabase(ctx context.Context, tenant string) err
 	return nil
 }
 func (f *fakeMultiTenantDB) Get(ctx context.Context, dest interface{}, query string, tenant string, args ...interface{}) error {
-	f.lastTenant = tenant
-	if destMap, ok := dest.(*map[string]string); ok {
-		(*destMap)["query"] = query
-	}
+	f.record(query, tenant, args)
 	return nil
 }
 func (f *fakeMultiTenantDB) Query(ctx context.Context, query string, tenant string, args ...interface{}) ([]types.ResultRow, error) {
-	f.lastTenant = tenant
-	return []types.ResultRow{{"query": query}}, nil
+	f.record(query, tenant, args)
+	return nil, nil
 }
 func (f *fakeMultiTenantDB) QueryRow(ctx context.Context, query string, tenant string, args ...interface{}) (types.ResultRow, error) {
-	f.lastTenant = tenant
-	return types.ResultRow{"query": query}, nil
+	f.record(query, tenant, args)
+	return nil, nil
 }
 func (f *fakeMultiTenantDB) Select(ctx context.Context, dest interface{}, query string, tenant string, args ...interface{}) error {
-	f.lastTenant = tenant
-	if slice, ok := dest.(*[]types.ResultRow); ok {
-		*slice = []types.ResultRow{{"query": query}}
-		return nil
-	}
-	return errors.New("dest not slice")
+	f.record(query, tenant, args)
+	return nil
 }
 func (f *fakeMultiTenantDB) QueryWithSource(ctx context.Context, query string, tenant string, args ...interface{}) ([]types.ResultRow, error) {
-	f.lastTenant = tenant
-	return []types.ResultRow{{"query": query}}, nil
+	f.record(query, tenant, args)
+	return nil, nil
 }
 
-func TestBindTenantForwardsTenant(t *testing.T) {
-	mt := &fakeMultiTenantDB{}
-	db := BindTenant(mt, "tenant-123")
+func (f *fakeMultiTenantDB) record(query, tenant string, args []interface{}) {
+	f.lastTenant = tenant
+	f.lastQuery = query
+	f.lastArgs = args
+}
 
-	if err := db.Connect(context.Background()); err != nil {
-		t.Fatalf("connect err: %v", err)
+func TestBindTenantForwardsTenantAndArgs(t *testing.T) {
+	mt := &fakeMultiTenantDB{}
+	bound := BindTenant(mt, "tenant-123")
+
+	ctx := context.Background()
+
+	if err := bound.Connect(ctx); err != nil {
+		t.Fatalf("connect: %v", err)
 	}
 	if mt.lastTenant != "tenant-123" {
-		t.Fatalf("expected tenant propagated, got %s", mt.lastTenant)
+		t.Fatalf("expected tenant for Connect, got %q", mt.lastTenant)
 	}
 
-	rows, err := db.Query(context.Background(), "SELECT 1")
-	if err != nil {
-		t.Fatalf("query err: %v", err)
+	_, _ = bound.Query(ctx, "SELECT 1 WHERE a = ?", 42)
+	if mt.lastTenant != "tenant-123" {
+		t.Fatalf("expected tenant for Query, got %q", mt.lastTenant)
 	}
-	if rows[0]["query"] != "SELECT 1" {
-		t.Fatalf("expected query to pass through")
+	if mt.lastQuery != "SELECT 1 WHERE a = ?" {
+		t.Fatalf("unexpected query recorded: %q", mt.lastQuery)
+	}
+	if !reflect.DeepEqual(mt.lastArgs, []interface{}{42}) {
+		t.Fatalf("unexpected args, got %#v", mt.lastArgs)
 	}
 
-	var dest map[string]string = map[string]string{}
-	if err := db.Get(context.Background(), &dest, "SELECT 2"); err != nil {
-		t.Fatalf("get err: %v", err)
+	if err := bound.Disconnect(ctx); err != nil {
+		t.Fatalf("disconnect: %v", err)
 	}
-	if dest["query"] != "SELECT 2" {
-		t.Fatalf("expected dest to be filled from fake")
+	if mt.lastTenant != "tenant-123" {
+		t.Fatalf("expected tenant for Disconnect, got %q", mt.lastTenant)
+	}
+}
+
+func TestBindTenantCoversAllMethods(t *testing.T) {
+	mt := &fakeMultiTenantDB{}
+	db := BindTenant(mt, "tenant-x")
+	ctx := context.Background()
+
+	// lifecycle helpers
+	_ = db.StartJDBCRunner()
+	_ = db.StopJDBCRunner()
+	_ = db.PingService(ctx)
+	_ = db.PingDatabase(ctx)
+
+	// data helpers
+	_ = db.Get(ctx, nil, "q1")
+	_, _ = db.Query(ctx, "q2")
+	_, _ = db.QueryRow(ctx, "q3")
+	_ = db.Select(ctx, nil, "q4")
+	_, _ = db.QueryWithSource(ctx, "q5")
+
+	if mt.lastTenant != "tenant-x" {
+		t.Fatalf("expected tenant propagated, got %q", mt.lastTenant)
 	}
 }

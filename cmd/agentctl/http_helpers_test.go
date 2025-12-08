@@ -75,3 +75,19 @@ func TestFetchAndApplyConfigHelpers(t *testing.T) {
 		t.Fatalf("applyConfig err: %v", err)
 	}
 }
+
+func TestAuthHeaderSetter(t *testing.T) {
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	ui := &uiState{token: "tok"}
+	ui.auth(req)
+	if req.Header.Get("Authorization") != "Bearer tok" {
+		t.Fatalf("expected bearer token set")
+	}
+
+	req2, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	ui2 := &uiState{}
+	ui2.auth(req2)
+	if req2.Header.Get("Authorization") != "" {
+		t.Fatalf("expected no auth header when token empty")
+	}
+}

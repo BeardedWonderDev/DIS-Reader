@@ -120,3 +120,26 @@ func TestControllersUseExpectedCommands(t *testing.T) {
 		t.Fatalf("expected noop controller to error")
 	}
 }
+
+func TestRestartSequencesAndFailures(t *testing.T) {
+	old := commandContext
+	defer func() { commandContext = old }()
+
+	// launchd restart should issue bootout then kickstart in order
+	var calls []string
+	commandContext = helperCommandContext("ok", &calls)
+	l := &launchdController{}
+	if err := l.Restart(context.Background()); err != nil {
+		t.Fatalf("launchd restart: %v", err)
+	}
+	if len(calls) < 2 || !strings.HasPrefix(calls[0], "launchctl bootout") || !strings.HasPrefix(calls[1], "launchctl kickstart") {
+		t.Fatalf("unexpected launchd restart sequence: %v", calls)
+	}
+
+	// windows restart should stop then start; ensure error surfaces when stop fails
+	commandContext = helperCommandContext("fail", nil)
+	w := &windowsController{}
+	if err := w.Restart(context.Background()); err == nil {
+		t.Fatalf("expected restart to fail when stop fails")
+	}
+}
