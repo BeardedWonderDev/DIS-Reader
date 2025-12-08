@@ -28,3 +28,29 @@ func TestExtractAndCleanup(t *testing.T) {
 		t.Fatalf("expected temp dir removed, got err=%v", err)
 	}
 }
+
+func TestCleanupNoDirAndNil(t *testing.T) {
+	var nilExtracted *Extracted
+	if err := nilExtracted.Cleanup(); err != nil {
+		t.Fatalf("nil cleanup returned error: %v", err)
+	}
+
+	empty := &Extracted{}
+	if err := empty.Cleanup(); err != nil {
+		t.Fatalf("empty dir cleanup returned error: %v", err)
+	}
+}
+
+func TestExtractTempDirError(t *testing.T) {
+	// Set TMPDIR to a file path so os.MkdirTemp fails.
+	tmpFile, err := os.CreateTemp("", "not-a-dir")
+	if err != nil {
+		t.Fatalf("setup temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	t.Setenv("TMPDIR", tmpFile.Name())
+	if _, err := Extract(); err == nil {
+		t.Fatalf("expected Extract to fail when TMPDIR is not a directory")
+	}
+}
