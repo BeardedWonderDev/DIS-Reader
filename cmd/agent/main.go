@@ -445,6 +445,7 @@ func applyAgentConfig(baseHandler slog.Handler, loggerVal *atomic.Value, cfg *pr
 			}
 		}
 		if reconnect {
+			_ = agentcore.Save(agentcore.DefaultAgentConfigFile, agentCfg)
 			return errRestartRequired
 		}
 	}
