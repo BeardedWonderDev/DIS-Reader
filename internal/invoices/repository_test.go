@@ -98,3 +98,19 @@ func TestGetWholeGoodsInvoiceValidation(t *testing.T) {
 		t.Fatalf("expected numeric validation error for line item")
 	}
 }
+
+func TestNumericLiteralValidation(t *testing.T) {
+	if _, err := numericLiteral(""); err == nil {
+		t.Fatalf("expected error for empty line item")
+	}
+	if _, err := numericLiteral("  "); err == nil {
+		t.Fatalf("expected error for whitespace line item")
+	}
+	if _, err := numericLiteral("abc"); err == nil {
+		t.Fatalf("expected error for non-numeric line item")
+	}
+	val, err := numericLiteral("42")
+	if err != nil || val != "42" {
+		t.Fatalf("expected numeric literal 42, got %s (err=%v)", val, err)
+	}
+}

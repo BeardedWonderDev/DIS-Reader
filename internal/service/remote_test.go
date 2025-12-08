@@ -215,3 +215,88 @@ func TestRegisterPprofRegistersHandlers(t *testing.T) {
 		}
 	}
 }
+
+type mutableAuthStub struct {
+	lastID     string
+	lastSecret string
+	lastTenant string
+}
+
+func (m *mutableAuthStub) Authenticate(ctx context.Context, clientID, clientSecret, tenantID string) (string, string, error) {
+	return tenantID, clientID, nil
+}
+
+func (m *mutableAuthStub) Upsert(agentID string, secret bridge.StaticAgentSecret) {
+	m.lastID = agentID
+	m.lastSecret = secret.ClientSecret
+	m.lastTenant = secret.TenantID
+}
+
+func TestUpdateAgentConfigMutatesAuthenticator(t *testing.T) {
+	auth := &mutableAuthStub{}
+	reg := bridge.NewInMemoryRegistry()
+	server := bridge.NewServer(auth, reg, nil)
+
+	cfg := &types.DISConfig{Bridge: &types.BridgeConfig{ClientID: "agent-1"}}
+	svc := NewRemoteService(cfg, nil, nil, reg, server)
+
+	agentCfg := &proto.AgentConfig{
+		Runtime: &proto.AgentRuntimeConfig{
+			TenantId:     "tenant-x",
+			ClientSecret: "secret-123",
+		},
+	}
+
+	if err := svc.UpdateAgentConfig(context.Background(), agentCfg, "tenant-x", true); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if auth.lastID != "agent-1" || auth.lastSecret != "secret-123" || auth.lastTenant != "tenant-x" {
+		t.Fatalf("auth upsert not called as expected: %#v", auth)
+	}
+}
+
+func TestUpdateAgentConfigErrorsWhenServerNil(t *testing.T) {
+	svc := &RemoteService{}
+	if err := svc.UpdateAgentConfig(context.Background(), &proto.AgentConfig{}, "", false); err == nil {
+		t.Fatalf("expected error when server is nil")
+	}
+}
+
+type nilResultConn struct{}
+
+func (nilResultConn) TenantID() string { return "t1" }
+func (nilResultConn) AgentID() string  { return "a1" }
+func (nilResultConn) SendJob(ctx context.Context, req *proto.JobRequest) (*proto.JobResult, error) {
+	return nil, nil
+}
+func (nilResultConn) Close() error { return nil }
+
+type registryWithConn struct{ conn bridge.AgentConnection }
+
+func (r registryWithConn) Register(ctx context.Context, tenantID string, agentID string, conn bridge.AgentConnection) error {
+	return nil
+}
+func (r registryWithConn) Unregister(ctx context.Context, tenantID string, agentID string) {}
+func (r registryWithConn) Pick(ctx context.Context, tenantID string) (bridge.AgentConnection, error) {
+	if r.conn == nil {
+		return nil, fmt.Errorf("missing")
+	}
+	return r.conn, nil
+}
+func (r registryWithConn) Stats() bridge.RegistryStats                                  { return bridge.RegistryStats{} }
+func (r registryWithConn) ObserveQuery(tenantID, agentID string, latency time.Duration) {}
+
+func TestReadAgentConfigHandlesNilResult(t *testing.T) {
+	reg := registryWithConn{conn: nilResultConn{}}
+	svc := NewRemoteService(&types.DISConfig{}, nil, nil, reg, nil)
+	if _, err := svc.ReadAgentConfig(context.Background(), "tenant-1"); err == nil {
+		t.Fatalf("expected error when agent returns nil result")
+	}
+}
+
+func TestReadAgentConfigErrorsWhenRegistryMissing(t *testing.T) {
+	svc := &RemoteService{}
+	if _, err := svc.ReadAgentConfig(context.Background(), "tenant-1"); err == nil {
+		t.Fatalf("expected error when registry is nil")
+	}
+}

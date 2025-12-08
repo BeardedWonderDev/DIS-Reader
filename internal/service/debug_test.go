@@ -143,3 +143,33 @@ func TestLoadQueryTemplatesParsesNonComments(t *testing.T) {
 		}
 	}
 }
+
+func TestBatchStatusPersistence(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer db.Close()
+
+	svc := &EmbeddedService{}
+	svc.ensureBatchStatusTable(db)
+
+	runID := "run-1"
+	if err := svc.markCompletedInDB(runID, "term", 2, db); err != nil {
+		t.Fatalf("mark completed: %v", err)
+	}
+	if err := svc.markCompletedInDB(runID, "term", 5, db); err != nil {
+		t.Fatalf("mark completed: %v", err)
+	}
+
+	completed := svc.loadCompletedFromDB(runID, db)
+	if _, ok := completed[2]; !ok {
+		t.Fatalf("expected idx 2 to be completed")
+	}
+	if _, ok := completed[5]; !ok {
+		t.Fatalf("expected idx 5 to be completed")
+	}
+	if _, ok := completed[1]; ok {
+		t.Fatalf("did not expect idx 1 to be completed")
+	}
+}

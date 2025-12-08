@@ -152,3 +152,35 @@ func TestBuildListParamsWithFiltersAndCursorValue(t *testing.T) {
 		t.Fatalf("expected mapped filters, got %+v", lp.Filters)
 	}
 }
+
+func TestSortOrderString(t *testing.T) {
+	cases := []struct {
+		name string
+		so   SortOrder
+		want string
+	}{
+		{"asc", SortOrderAsc, "ASC"},
+		{"desc", SortOrderDesc, "DESC"},
+		{"unknown", SortOrder(99), ""},
+	}
+	for _, tc := range cases {
+		if got := tc.so.String(); got != tc.want {
+			t.Fatalf("%s: expected %q, got %q", tc.name, tc.want, got)
+		}
+	}
+}
+
+func TestUseCursorPagination(t *testing.T) {
+	lp := ListParams{}
+	if lp.UseCursorPagination() {
+		t.Fatalf("expected false when no cursor hints present")
+	}
+	lp.AfterId = "next"
+	if !lp.UseCursorPagination() {
+		t.Fatalf("expected true when afterId is set")
+	}
+	lp = ListParams{BeforeValue: 123}
+	if !lp.UseCursorPagination() {
+		t.Fatalf("expected true when beforeValue is set")
+	}
+}

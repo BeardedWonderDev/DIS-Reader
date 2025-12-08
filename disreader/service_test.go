@@ -105,3 +105,46 @@ func (fakeRegistry) ObserveQuery(tenantID, agentID string, latency time.Duration
 func buildTestGRPCServer() *grpc.Server {
 	return grpc.NewServer()
 }
+
+func TestBuildAgentConfigIncludesRuntimeAndLoki(t *testing.T) {
+	disCfg := &types.DISConfig{
+		Host:     "h1",
+		User:     "u1",
+		Password: "p1",
+		JDBCConfig: &types.JDBCConfig{
+			JDBCPort: "9999",
+			JavaPath: "/usr/bin/java",
+		},
+		Bridge: &types.BridgeConfig{
+			TenantID:     "tenant-x",
+			ClientSecret: "secret-x",
+		},
+	}
+	bridgeCfg := &types.BridgeConfig{
+		Loki: &types.LokiConfig{
+			URL:        "http://loki",
+			TenantID:   "loki-tenant",
+			APIKey:     "apikey",
+			AuthHeader: "X-Auth",
+			Labels:     map[string]string{"app": "dis"},
+			MinLevel:   slog.LevelWarn,
+		},
+	}
+
+	cfg := buildAgentConfig(disCfg, bridgeCfg)
+	if cfg == nil || cfg.Runtime == nil || cfg.Loki == nil {
+		t.Fatalf("expected runtime and loki to be populated, got %+v", cfg)
+	}
+	if cfg.Runtime.GetDisHost() != "h1" || cfg.Runtime.GetJdbcPort() != "9999" || cfg.Runtime.GetTenantId() != "tenant-x" {
+		t.Fatalf("runtime fields not set correctly: %+v", cfg.Runtime)
+	}
+	if cfg.Loki.GetUrl() != "http://loki" || cfg.Loki.GetLabels()["app"] != "dis" || cfg.Loki.GetMinLevel() != "warn" {
+		t.Fatalf("loki fields not set correctly: %+v", cfg.Loki)
+	}
+}
+
+func TestBuildAgentConfigReturnsNilWhenEmpty(t *testing.T) {
+	if cfg := buildAgentConfig(&types.DISConfig{}, &types.BridgeConfig{}); cfg != nil {
+		t.Fatalf("expected nil config when no runtime or loki data, got %+v", cfg)
+	}
+}
