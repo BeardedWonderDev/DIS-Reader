@@ -1,0 +1,386 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+version: 2
+project_name: dis-agent
+
+partial:
+  # Run releases in split/merge mode keyed by GOOS so per-OS jobs can
+  # build independently and a final job can merge/publish once.
+  by: goos
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: agent-linux
+    main: ./cmd/agent
+    binary: dis-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agent-darwin
+    main: ./cmd/agent
+    binary: dis-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agent-windows
+    main: ./cmd/agent
+    binary: dis-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agentctl-linux
+    main: ./cmd/agentctl
+    binary: agentctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agentctl-darwin
+    main: ./cmd/agentctl
+    binary: agentctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agentctl-windows
+    main: ./cmd/agentctl
+    binary: agentctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: agent-gui-linux
+    main: ./cmd/agentgui
+    binary: dis-agent-gui
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+      - -tags=gui
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agent-gui-darwin
+    main: ./cmd/agentgui
+    binary: dis-agent-gui
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+      - -tags=gui
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: agent-gui-windows
+    main: ./cmd/agentgui
+    binary: dis-agent-gui
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+      - -tags=gui
+    ldflags:
+      - "-s -w -X main.Version={{.Version}}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: archives-linux
+    ids:
+      - agent-linux
+      - agentctl-linux
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/examples/agent.yaml
+      - packaging/examples/bridge_agents.yaml
+      - packaging/windows/install_service.ps1
+      - packaging/windows/uninstall_service.ps1
+      - packaging/launchd/com.dis.agent.plist
+
+  - id: archives-darwin
+    ids:
+      - agent-darwin
+      - agentctl-darwin
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/examples/agent.yaml
+      - packaging/examples/bridge_agents.yaml
+      - packaging/launchd/com.dis.agent.plist
+
+  - id: archives-windows
+    ids:
+      - agent-windows
+      - agentctl-windows
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/examples/agent.yaml
+      - packaging/examples/bridge_agents.yaml
+      - packaging/windows/install_service.ps1
+      - packaging/windows/uninstall_service.ps1
+
+  # Standalone agentctl (TUI) archives so users can download the control tool directly.
+  - id: archives-agentctl-linux
+    ids:
+      - agentctl-linux
+    name_template: "agentctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: archives-agentctl-darwin
+    ids:
+      - agentctl-darwin
+    name_template: "agentctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: archives-agentctl-windows
+    ids:
+      - agentctl-windows
+    name_template: "agentctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: archives-gui-linux
+    ids:
+      - agent-gui-linux
+    name_template: "{{ .ProjectName }}-gui_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: archives-gui-darwin
+    ids:
+      - agent-gui-darwin
+    name_template: "{{ .ProjectName }}-gui_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - packaging/launchd/com.dis.agent.plist
+
+  - id: archives-gui-windows
+    ids:
+      - agent-gui-windows
+    name_template: "{{ .ProjectName }}-gui_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+nfpms:
+  - id: linux
+    package_name: dis-agent
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
+    maintainer: "DIS Reader Team <maintainer@example.com>"
+    description: "DIS remote bridge agent (AS/400 JDBC bridge helper)."
+    homepage: "https://github.com/BeardedWonderDev/DIS-Reader"
+    license: "Apache-2.0"
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+    contents:
+      - src: packaging/examples/agent.yaml
+        dst: /etc/dis-agent/agent.yaml
+        type: config|noreplace
+      - src: packaging/examples/bridge_agents.yaml
+        dst: /etc/dis-agent/bridge_agents.yaml
+        type: config|noreplace
+      - src: packaging/systemd/dis-agent.service
+        dst: /lib/systemd/system/dis-agent.service
+        type: config|noreplace
+
+homebrew_casks:
+  - name: dis-agent
+    ids:
+      - archives-darwin
+    url:
+      template: "https://github.com/BeardedWonderDev/DIS-Reader/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    homepage: "https://github.com/BeardedWonderDev/DIS-Reader"
+    description: "DIS remote bridge agent (headless)."
+    license: "Apache-2.0"
+    binaries:
+      - dis-agent
+    repository:
+      owner: BeardedWonderDev
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    directory: Casks
+    skip_upload: true
+
+dockers_v2:
+  - id: dis-agent
+    images:
+      - ghcr.io/beardedwonderdev/dis-agent
+    tags:
+      - "{{ .Version }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    dockerfile: packaging/docker/Dockerfile
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  draft: false
+  replace_existing_draft: true
+  prerelease: auto
+  mode: replace
+
+changelog:
+  use: github
+  ai:
+    use: openai
+    model: gpt-4o-mini
+    prompt: |
+      Write the release notes for this release. Your output must be a clean, readable, human-oriented changelog following the Keep a Changelog 1.1.0 format (fully embedded below). Only return the generated release notes—no explanations, no commentary, no reflections.
+
+      Instructions
+        •	No emojis.
+        •	Provide a brief, user-impactful summary immediately after the version heading.
+        •	Do not produce a raw git log. Curate, group, and summarize.
+        •	Format the top-level heading exactly as:
+          - [{{ if eq .Tag "" }}to-be-defined{{ else }}{{ .Tag }}{{ end }}] - YYYY-MM-DD
+
+      Use the actual release date if present; if absent, omit the date entirely.
+
+        •	All output must be valid Markdown.
+
+      Changelogs must emphasize clarity, human readability, and the reasons behind changes. After the version heading:
+        1.	Provide a short, high-level summary of the release impact.
+        2.	Group changes under only the categories that apply, using these exact headings:
+            - Added
+            - Changed
+            - Deprecated
+            - Removed
+            - Fixed
+            = Security
+        3.	Each bullet point should describe what changed from the perspective of an end user or operator.
+        4.	Commit messages must appear verbatim when referenced.
+        5.	When multiple commits relate to the same functional change, group them into a single bullet and list the commit SHAs inside the bullet.
+        6.	When multiple commits update the same dependency, group them and show:
+            - sha1, sha2: updated dependency-x from vA.B.C to vX.Y.Z
+        7.	Avoid noise: omit purely internal or irrelevant commits unless they affect behavior or developer experience.
+
+      Commit Overview Requirement
+
+      For each category used, produce:
+        •	A curated set of bullet points summarizing actual changes.
+        •	A commit list grouped under each bullet or sub-bullet.
+        •	Do not paraphrase commit messages. Keep them exact.
+
+      Release Context
+
+      Project: {{.ProjectName}}
+      Repository: {{.GitURL}}
+
+      {{ if eq .Tag "" }}
+      Previous Version: {{.Version}}
+      Version: to be defined
+      {{ else }}
+      Previous Version: {{.PreviousTag}}
+      Version: {{.Tag}}
+      {{ end }}
+
+      {{ if .IsSnapshot }}Snapshot build.{{ end }}
+      {{ if .IsNightly }}Nightly build.{{ end }}
+      {{ with .TagSubject }}Tag subject: {{ . }}{{ end }}
+      {{ with .TagContents }}Tag content: {{ . }}{{ end }}
+
+      Release Notes Output
+
+      {{ .ReleaseNotes }}

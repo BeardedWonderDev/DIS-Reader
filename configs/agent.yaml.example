@@ -1,0 +1,17 @@
+# Example agent configuration
+serverURL: "dns-name-or-ip:443"
+clientID: "agent-001"
+clientSecret: "replace-me"
+tenantID: "default"
+
+dis:
+  host: "10.0.0.5"
+  user: "DISUSER"
+  password: "secret"
+  logLevel: 0          # slog.LevelInfo
+  jdbcConfig:
+    javaPath: "java"
+    jdbcPort: "8888"
+
+tls:
+  insecureSkipVerify: false

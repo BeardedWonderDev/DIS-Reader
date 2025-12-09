@@ -31,6 +31,22 @@ type DB interface {
 	QueryWithSource(ctx context.Context, query string, args ...interface{}) ([]types.ResultRow, error)
 }
 
+// MultiTenantDB mirrors DB but requires the caller to supply a tenant string.
+// This is used by remote mode, while domain code continues to depend on DB.
+type MultiTenantDB interface {
+	StartJDBCRunner(tenant string) error
+	StopJDBCRunner(tenant string) error
+	Connect(ctx context.Context, tenant string) error
+	Disconnect(ctx context.Context, tenant string) error
+	PingService(ctx context.Context, tenant string) error
+	PingDatabase(ctx context.Context, tenant string) error
+	Get(ctx context.Context, dest interface{}, query string, tenant string, args ...interface{}) error
+	Query(ctx context.Context, query string, tenant string, args ...interface{}) ([]types.ResultRow, error)
+	QueryRow(ctx context.Context, query string, tenant string, args ...interface{}) (types.ResultRow, error)
+	Select(ctx context.Context, dest interface{}, query string, tenant string, args ...interface{}) error
+	QueryWithSource(ctx context.Context, query string, tenant string, args ...interface{}) ([]types.ResultRow, error)
+}
+
 // IBMi400 is a Go wrapper around JDBCRunnerService, exposing high-level database methods.
 type IBMi400 struct {
 	JDBCRunner *JDBCRunnerService

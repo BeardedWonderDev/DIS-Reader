@@ -32,6 +32,17 @@ func NewConfig() *types.DISUIConfig {
 	viper.SetDefault("disConfig.jdbcConfig.jdbcPort", DefaultJDBCPort)
 	viper.SetDefault("debugSearch.defaultOutputMode", string(types.DebugSearchOutputSQLite))
 	viper.SetDefault("debugSearch.defaultOutputPath", "")
+	viper.SetDefault("bridge.mode", "embedded")
+	viper.SetDefault("bridge.autoConnectOnRegister", true)
+	viper.SetDefault("bridge.tls.insecureSkipVerify", false)
+	viper.SetDefault("bridge.credentialFile", "")
+	viper.SetDefault("bridge.credentialReloadSeconds", 0)
+	viper.SetDefault("bridge.maxRowsPerQuery", 1000)
+	viper.SetDefault("bridge.maxResultBytes", 0) // 0 = unlimited
+	viper.SetDefault("bridge.pprofEnabled", false)
+	viper.SetDefault("bridge.pprofPath", "/debug/pprof/")
+	viper.SetDefault("bridge.loki.minLevel", slog.LevelInfo)
+	viper.SetDefault("bridge.loki.authHeader", "Authorization")
 
 	// If config file exists, use it
 	_, err := os.ReadFile(ConfigFileName)
@@ -59,6 +70,13 @@ func NewConfig() *types.DISUIConfig {
 
 	if err := viper.Unmarshal(&config); err != nil {
 		log.Fatalln("Error while creating config. Shutting down.")
+	}
+
+	if config.Bridge == nil {
+		config.Bridge = &types.BridgeConfig{Mode: "embedded"}
+	}
+	if config.DIS != nil {
+		config.DIS.Bridge = config.Bridge
 	}
 
 	return &config

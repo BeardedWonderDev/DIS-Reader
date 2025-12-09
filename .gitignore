@@ -241,3 +241,4 @@ $RECYCLE.BIN/
 *.db
 *.se2
 /java-runner/target
+dist/

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <Product
+    Id="*"
+    Name="{{ .ProjectName }}"
+    UpgradeCode="B90E1F6C-9B9C-4F4F-9D7A-2C0A6C9D7B7F"
+    Language="1033"
+    Codepage="1252"
+    Version="{{ .Version }}"
+    Manufacturer="DIS Reader">
+
+    <Package
+      InstallerVersion="450"
+      Compressed="yes"
+      InstallScope="perMachine" />
+
+    <MajorUpgrade
+      DowngradeErrorMessage="A newer version of {{ .ProjectName }} is already installed." />
+
+    <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLDIR" Name="{{ .ProjectName }}">
+          <Component Id="MainExecutable" Guid="*">
+            <File Id="ExeFile" Source="dis-agent.exe" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="DefaultFeature" Title="{{ .ProjectName }}" Level="1">
+      <ComponentRef Id="MainExecutable" />
+    </Feature>
+  </Product>
+</Wix>

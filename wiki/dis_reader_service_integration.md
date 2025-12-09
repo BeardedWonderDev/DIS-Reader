@@ -1,6 +1,6 @@
 # DIS Reader Service Integration Guide
 
-This guide explains how to embed the DIS Reader backend service into any Go project (CLI, API, or worker) without the TUI layer. It covers configuration, lifecycle management, and every public service/method exposed by the library.
+This guide explains how to embed the DIS Reader backend service into any Go project (CLI, API, or worker) without the TUI layer. It covers configuration, lifecycle management, and public methods for both embedded and remote (agent/bridge, multi-tenant) modes.
 
 ---
 
@@ -18,7 +18,7 @@ or add the module to your `go.mod` and run `go mod tidy`.
 
 | Package | Purpose |
 |---------|---------|
-| `github.com/BeardedWonderDev/DIS-Reader/disreader` | Factory entrypoint for the service. |
+| `github.com/BeardedWonderDev/DIS-Reader/disreader` | Factory entrypoint for embedded service and the remote builder. |
 | `github.com/BeardedWonderDev/DIS-Reader/types` | Shared configuration structs, service interfaces, DTOs, and helpers. |
 | `github.com/BeardedWonderDev/DIS-Reader/internal/...` | Concrete implementations (import only if you control the repository; external consumers should stick to exported packages). |
 
@@ -63,6 +63,7 @@ Or construct `types.DISConfig` manually if you already have a configuration syst
 package main
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/BeardedWonderDev/DIS-Reader/disreader"
@@ -81,7 +82,7 @@ func main() {
 		},
 	}
 
-	disSvc, err := disreader.NewDISReaderService(cfg, nil) // nil logger -> pretty slog handler
+	disSvc, err := disreader.NewDISReaderEmbedded(cfg, nil) // nil logger -> pretty slog handler
 	if err != nil {
 		panic(err)
 	}
@@ -90,8 +91,11 @@ func main() {
 	// Optional: attach your own slog logger
 	// disSvc.SetLogger(myLogger)
 
-	// Test connectivity before issuing queries
-	if err := disSvc.TestConnection(context.Background()); err != nil {
+	// Optionally ping before issuing queries
+	if err := disSvc.PingService(context.Background()); err != nil {
+		panic(err)
+	}
+	if err := disSvc.PingDatabase(context.Background()); err != nil {
 		panic(err)
 	}
 
@@ -105,11 +109,43 @@ func main() {
 |--------|-------|
 | `Connect(ctx)` | Explicitly establish AS400 connectivity. Usually called automatically if host/user/password are set during initialization. |
 | `Disconnect(ctx)` | Close the TCP connection to the Java runner. |
-| `TestConnection(ctx)` | Verifies both the Java runner and the AS400 connection. |
+| `PingService(ctx)` | Verifies the embedded Java runner is responsive. |
+| `PingDatabase(ctx)` | Verifies the AS/400 connection through the runner. |
 | `AttachShutdownHook()` | Spawns a SIGINT/SIGTERM listener that gracefully stops the runner (useful inside long-lived daemons). |
 | `Shutdown()` | Stops the JDBC runner, cleans up temp directories, and releases resources. Always call this (or `defer`) when finished. |
 | `SetLogger(logger)` / `GetLogger()` | Replace or fetch the slog logger the service uses. |
 | `GetConfig()` | Returns the underlying `*types.DISConfig` (mutable). |
+
+---
+
+### 3.3 Remote mode (agent/bridge, multi-tenant)
+
+Remote mode is for environments where DIS/AS/400 is only reachable from inside the LAN. Run a lightweight agent near DIS; a bridge server proxies gRPC to agents; clients are multi-tenant and must pass a tenant.
+
+**Prereqs**
+- Bridge server running with `bridge.mode=remote`.
+- One or more agents, each configured with its own `tenantID`, clientID/secret, and DIS credentials (typically one agent per tenant).
+
+**Client construction**
+```go
+remote, err := disreader.NewDISReaderRemote(cfg, logger).
+    WithDefaultTenant("tenant-1"). // optional; omit for per-call tenancy
+    WithAuth(customAuth).          // optional override
+    WithRegistry(customReg).       // optional override
+    WithGRPC(grpcServer).          // optional: register bridge handlers
+    WithMux(httpMux).              // optional: /healthz, /metrics, pprof
+    Build()
+if err != nil { panic(err) }
+```
+
+**Usage**
+- Per-call tenant: `remote.Connect(ctx, "tenant-1")`, `remote.UnitService("tenant-2")`, `remote.PingAgent(ctx, "tenant-3")`.
+- Default tenant: set via `WithDefaultTenant` if you want a fallback for legacy-style helpers; otherwise require tenant explicitly.
+- Health: `remote.PingBridge(ctx)` for bridge liveness; `remote.PingAgent(ctx, tenant)` to ensure an agent is registered for that tenant.
+
+**Agent/bridge notes**
+- Bridge server can host multiple tenants concurrently; agents register themselves with their `tenantID`.
+- Clients must pass the tenant on every call unless they bind a default through their own wrapper.
 
 ---
 
@@ -274,7 +310,7 @@ Details:
 
 ```go
 logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
-disSvc, _ := disreader.NewDISReaderService(cfg, logger)
+disSvc, _ := disreader.NewDISReaderEmbedded(cfg, logger)
 ```
 
 - The embedded JDBC runner writes JSON lines to stdout/stderr; these are parsed and re-emitted via `slog` with attributes like `status`, `event`, `request_id`.
@@ -294,10 +330,34 @@ disSvc, _ := disreader.NewDISReaderService(cfg, logger)
 ## 9. Summary Checklist
 
 - [ ] Provide a valid `types.DISConfig` (host/user/password/java path/port).
-- [ ] Call `disreader.NewDISReaderService`.
+- [ ] Call `disreader.NewDISReaderEmbedded` (or the remote builder for multi-tenant bridge mode).
 - [ ] Optionally run `TestConnection` or `Connect`.
 - [ ] Use `UnitService` / `InvoiceService` for structured data access.
 - [ ] (Optional) Use `RunDebugSearch` for exploratory discovery.
 - [ ] Stop the service with `Shutdown()` or `AttachShutdownHook`.
 
 With these steps, you can leverage DIS Reader’s battle-tested JDBC orchestration, mapstructure decoding, and domain services inside any Go application—without depending on the TUI front-end. Update this document whenever new services or public methods become available.
+### 3.3 Remote Mode (agent/bridge, multi-tenant)
+
+Remote mode is for environments where DIS/AS400 is only reachable from inside the LAN. You run a lightweight agent near DIS; the bridge server proxies requests; clients are multi-tenant and must pass a tenant.
+
+**Prereqs**
+- Bridge server running with `bridge.mode=remote`.
+- Agents registered per tenant (or more for HA), each configured with `tenantID`, clientID/secret, and DIS credentials.
+
+**Client construction**
+```go
+remote, err := disreader.NewDISReaderRemote(cfg, logger).
+    WithDefaultTenant("tenant-1"). // optional; omit for pure per-call tenancy
+    WithAuth(customAuth).          // optional override
+    WithRegistry(customReg).       // optional override
+    WithGRPC(grpcServer).          // optional: register bridge handlers
+    WithMux(httpMux).              // optional: /healthz, /metrics, pprof
+    Build()
+if err != nil { panic(err) }
+```
+
+**Usage**
+- Per-call: `remote.Connect(ctx, "tenant-1")`, `remote.UnitService("tenant-2")`, `remote.PingAgent(ctx, "tenant-3")`.
+- Default tenant: set via `WithDefaultTenant` if you want legacy-style wrappers in your app; otherwise require tenant explicitly.
+- Health: `PingBridge(ctx)` for bridge liveness; `PingAgent(ctx, tenant)` to ensure an agent is registered.

@@ -1,23 +1,7 @@
 <!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
 <a id="readme-top"></a>
-<!--
-*** Thanks for checking out the Best-README-Template. If you have a suggestion
-*** that would make this better, please fork the repo and create a pull request
-*** or simply open an issue with the tag "enhancement".
-*** Don't forget to give the project a star!
-*** Thanks again! Now go create something AMAZING! :D
--->
-
-
 
 <!-- PROJECT SHIELDS -->
-<!--
-*** I'm using markdown "reference style" links for readability.
-*** Reference links are enclosed in brackets [ ] instead of parentheses ( ).
-*** See the bottom of this document for the declaration of the reference variables
-*** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
-*** https://www.markdownguide.org/basic-syntax/#reference-style-links
--->
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
@@ -25,32 +9,28 @@
 [![project_license][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
-
-
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/github_username/repo_name">
+  <a href="https://github.com/BeardedWonderDev/DIS-Reader">
     <img src="images/logo.png" alt="Logo" width="80" height="80">
   </a>
 
-<h3 align="center">project_title</h3>
+<h3 align="center">DIS Reader</h3>
 
   <p align="center">
-    project_description
+    A bridge service that lets your applications read DIS (AS/400) data easily—embedded JDBC or remote agent, same API.
     <br />
-    <a href="https://github.com/github_username/repo_name"><strong>Explore the docs »</strong></a>
+    <a href="#about-the-project"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/github_username/repo_name">View Demo</a>
+    <a href="#usage">View Demo</a>
     &middot;
-    <a href="https://github.com/github_username/repo_name/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
+    <a href="https://github.com/BeardedWonderDev/DIS-Reader/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
     &middot;
-    <a href="https://github.com/github_username/repo_name/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
+    <a href="https://github.com/BeardedWonderDev/DIS-Reader/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
   </p>
 </div>
-
-
 
 <!-- TABLE OF CONTENTS -->
 <details>
@@ -78,125 +58,167 @@
   </ol>
 </details>
 
-
-
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+[![Product Name Screen Shot][product-screenshot]](images/screenshot.png)
 
-Here's a blank template to get started. To avoid retyping too much info, do a search and replace with your text editor for the following: `github_username`, `repo_name`, `twitter_handle`, `linkedin_username`, `email_client`, `email`, `project_title`, `project_description`, `project_license`
+DIS Reader is a Go service that exposes DIS (AS/400) data to other applications with a stable, API-first contract. It runs in two modes:
+
+- **Embedded mode (default):** ships the JDBC runner inside the binary and serves queries directly to the DIS host you configure.
+- **Remote agent mode:** a lightweight LAN agent runs the JDBC bridge next to your DIS server and proxies requests to the cloud over gRPC—no inbound ports required.
+
+Capabilities:
+- Typed services for units, invoices, and parts with filter/sort/paging helpers.
+- Health-checked lifecycle around the JDBC runner (start, connect, ping, shutdown).
+- Debug Search batch runner that emits SQLite or CSV datasets for downstream tooling.
+- Simple config surface via `disreader.yaml` or `DISREADER_*` environment variables.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 ### Built With
 
-* [![Next][Next.js]][Next-url]
-* [![React][React.js]][React-url]
-* [![Vue][Vue.js]][Vue-url]
-* [![Angular][Angular.io]][Angular-url]
-* [![Svelte][Svelte.dev]][Svelte-url]
-* [![Laravel][Laravel.com]][Laravel-url]
-* [![Bootstrap][Bootstrap.com]][Bootstrap-url]
-* [![JQuery][JQuery.com]][JQuery-url]
+* [![Go][Go-shield]][Go-url]
+* [![gRPC][gRPC-shield]][gRPC-url]
+* [![Protocol Buffers][Proto-shield]][Proto-url]
+* [![SQLite][SQLite-shield]][SQLite-url]
+* [![Java][Java-shield]][Java-url]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
+Choose embedded when you can reach DIS directly; choose remote when DIS lives behind firewalls and only outbound traffic is allowed.
 
 ### Prerequisites
-
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
+* Go 1.24+
+* Java 11+ on PATH (for embedded JDBC runner or agent)
+* `protoc`, `protoc-gen-go`, `protoc-gen-go-grpc` (only if you regenerate bridge stubs)
+* (Remote mode) TLS egress to the bridge server
 
 ### Installation
-
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
+1. Clone the repo
    ```sh
-   git clone https://github.com/github_username/repo_name.git
+   git clone https://github.com/BeardedWonderDev/DIS-Reader.git
+   cd DIS-Reader
    ```
-3. Install NPM packages
+2. (Optional) Regenerate gRPC stubs
    ```sh
-   npm install
+   protoc --go_out=. --go-grpc_out=. proto/bridge.proto
    ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
-   ```
-5. Change git remote url to avoid accidental pushes to base project
+3. Build binaries
    ```sh
-   git remote set-url origin github_username/repo_name
-   git remote -v # confirm the changes
+   go build ./cmd/...        # core service binaries
+   go build ./cmd/agent/...  # remote agent daemon
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-<!-- USAGE EXAMPLES -->
+<!-- USAGE -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+### Embedded mode (default)
+Start the service using your DIS host credentials:
+```sh
+DISREADER_DISCONFIG_HOST=10.0.0.5 DISREADER_DISCONFIG_USER=XXXXX DISREADER_DISCONFIG_PASSWORD=XXXXX go run ./...
+```
+- Config file: `disreader.yaml`
+- Key settings: `disConfig.host|user|password`, JDBC `javaPath`/`jdbcPort`, connection pool sizes.
+- Consumers call the exported Go services (or any gRPC/HTTP gateway you layer on) to fetch units, invoices, and parts.
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+### Remote mode (agent bridge)
+1. Run the LAN agent near DIS (one per tenant, or more for HA):
+   ```sh
+   ./cmd/agent/agent --config agent.yaml
+   ```
+2. Client construction (Go):
+```go
+remote, err := disreader.NewDISReaderRemote(cfg, logger).
+    WithDefaultTenant("tenant-1"). // optional; omit for pure per-call tenancy
+    Build()
+rows, _ := remote.UnitService("tenant-1").ListUnits(ctx, lp)
+```
+Multi-tenant: set one agent per tenant; call tenant-aware methods (`Connect(ctx, tenant)`, `UnitService(tenant)`). Do not rely on a default tenant from config; supply it via `WithDefaultTenant` or per call.
+
+Remote client (full example):
+```go
+ctx := context.Background()
+
+remote, err := disreader.NewDISReaderRemote(cfg, logger).
+    WithDefaultTenant("tenant-a").
+    Build()
+if err != nil { log.Fatal(err) }
+
+if err := remote.PingBridge(ctx); err != nil { log.Fatal(err) }
+if err := remote.PingAgent(ctx, "tenant-a"); err != nil { log.Fatal(err) }
+if err := remote.Connect(ctx, "tenant-a"); err != nil { log.Fatal(err) }
+
+unitSvc := remote.UnitService("tenant-a")
+units, err := unitSvc.ListUnits(ctx, types.ListParams{Limit: 10})
+if err != nil { log.Fatal(err) }
+fmt.Println("units", len(units))
+
+// Start/stop the remote JDBC runner on the agent (mirrors embedded lifecycle)
+if err := remote.StartJDBCRunner(ctx, "tenant-a"); err != nil { log.Fatal(err) }
+defer remote.StopJDBCRunner(ctx, "tenant-a")
+
+// Read the agent's current config (sanitized: secrets are write-only)
+cfgStatus, err := remote.ReadAgentConfig(ctx, "tenant-a")
+if err != nil { log.Fatal(err) }
+fmt.Println("agent host:", cfgStatus.GetRuntime().GetDisHost(), "has password?", cfgStatus.GetRuntime().GetHasPassword())
+```
+
+Defaults and ports:
+- The remote builder auto-starts gRPC (/AgentService) on `:8443` and HTTP (/healthz,/metrics, pprof if enabled) on `:8080`. Override with env `DISREADER_BRIDGE_PORT` and `DISREADER_BRIDGE_HTTP_PORT`, or supply your own servers via `WithGRPC`/`WithMux`.
+Bridge config keys:
+- `bridge.mode: embedded|remote` (default embedded)
+- `bridge.serverURL`, `bridge.clientID`, `bridge.clientSecret`
+- TLS: `bridge.tls.insecure`, `bridge.tls.caFile`
 
 ### Debug Search Output Modes
+Produce ad-hoc datasets for analysis:
+- Default SQLite: `debug-search.db`
+- CSV: set `debugSearch.defaultOutputMode: csv` or `DISREADER_DEBUGSEARCH_DEFAULTOUTPUTMODE=csv`
+- Path override: `debugSearch.defaultOutputPath` / `DISREADER_DEBUGSEARCH_DEFAULTOUTPUTPATH`
 
-The in-app **Debug Search** module (or the `RunDebugSearch` API) can now emit results as either an SQLite database (`types.DebugSearchOutputSQLite`, default) or a CSV file (`types.DebugSearchOutputCSV`). Pick the format from the modal’s dropdown or by passing `types.DebugSearchOptions` when invoking the service directly. Configure sensible defaults via `debugSearch.defaultOutputMode` / `debugSearch.defaultOutputPath` in `disreader.yaml` (or matching `DISREADER_DEBUGSEARCH_*` env vars).
+### Control plane (TUI + GUI)
+You can manage the remote agent without CLI flags by using the bundled control surfaces. Both talk to the local control API exposed by the agent.
+
+1. Enable the control API in `agent.yaml` (or env):
+   ```yaml
+   control:
+     enabled: true
+     addr: "127.0.0.1:7777"
+     token: "set-a-strong-token"
+   ```
+   Start/restart the agent so it listens on the control API.
+2. TUI (`agentctl`):
+   - Download the `agentctl` binary from the release matching your OS/arch.
+   - Run `./agentctl --addr http://127.0.0.1:7777 --token <token>`.
+   - Use the form to set `serverURL`, `clientID/Secret`, DIS host creds, JDBC port/java path, TLS flags, then “Save & Apply”.
+   - Use the buttons to `Install`, `Start`, `Stop`, `Restart`, and view status.
+3. GUI (`dis-agent-gui`):
+   - Download the GUI binary for your platform and run it (macOS app, Windows exe, or Linux binary with GTK/WebKit deps).
+   - Point it at the control API address/token.
+   - Fill out config fields and “Save + Install + Start” for first-run; “Save + Restart” for updates.
+   - The dashboard shows bridge status, last heartbeat, and raw status. Auto-refresh can be enabled in the UI.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- ROADMAP -->
 ## Roadmap
 
-- [ ] Feature 1
-- [ ] Feature 2
-- [ ] Feature 3
-    - [ ] Nested Feature
-
-See the [open issues](https://github.com/github_username/repo_name/issues) for a full list of proposed features (and known issues).
+TODO: replace with the post–remote-agent roadmap once the current phase completes.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- CONTRIBUTING -->
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Please run `go test ./...` and `go vet ./...` before opening a PR. Add regression tests for service changes and include sample configs for new bridge/agent settings.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-### Top contributors:
-
-<a href="https://github.com/github_username/repo_name/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=github_username/repo_name" alt="contrib.rocks image" />
-</a>
-
-
 
 <!-- LICENSE -->
 ## License
@@ -205,58 +227,46 @@ Distributed under the project_license. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@twitter_handle](https://twitter.com/twitter_handle) - email@email_client.com
+DIS Reader Team - maintainer@example.com
 
-Project Link: [https://github.com/github_username/repo_name](https://github.com/github_username/repo_name)
+Project Link: https://github.com/BeardedWonderDev/DIS-Reader
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
-* []()
-* []()
-* []()
+* IBM i / AS/400 community resources
+* gRPC & Protocol Buffers maintainers
+* SQLite project
+* JT400 / JDBC bridge contributors
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
 <!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/github_username/repo_name.svg?style=for-the-badge
-[contributors-url]: https://github.com/github_username/repo_name/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/github_username/repo_name.svg?style=for-the-badge
-[forks-url]: https://github.com/github_username/repo_name/network/members
-[stars-shield]: https://img.shields.io/github/stars/github_username/repo_name.svg?style=for-the-badge
-[stars-url]: https://github.com/github_username/repo_name/stargazers
-[issues-shield]: https://img.shields.io/github/issues/github_username/repo_name.svg?style=for-the-badge
-[issues-url]: https://github.com/github_username/repo_name/issues
-[license-shield]: https://img.shields.io/github/license/github_username/repo_name.svg?style=for-the-badge
-[license-url]: https://github.com/github_username/repo_name/blob/master/LICENSE.txt
+[contributors-shield]: https://img.shields.io/github/contributors/BeardedWonderDev/DIS-Reader.svg?style=for-the-badge
+[contributors-url]: https://github.com/BeardedWonderDev/DIS-Reader/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/BeardedWonderDev/DIS-Reader.svg?style=for-the-badge
+[forks-url]: https://github.com/BeardedWonderDev/DIS-Reader/network/members
+[stars-shield]: https://img.shields.io/github/stars/BeardedWonderDev/DIS-Reader.svg?style=for-the-badge
+[stars-url]: https://github.com/BeardedWonderDev/DIS-Reader/stargazers
+[issues-shield]: https://img.shields.io/github/issues/BeardedWonderDev/DIS-Reader.svg?style=for-the-badge
+[issues-url]: https://github.com/BeardedWonderDev/DIS-Reader/issues
+[license-shield]: https://img.shields.io/github/license/BeardedWonderDev/DIS-Reader.svg?style=for-the-badge
+[license-url]: https://github.com/BeardedWonderDev/DIS-Reader/blob/main/LICENSE
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/linkedin_username
+[linkedin-url]: https://linkedin.com
 [product-screenshot]: images/screenshot.png
-[Next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
-[Next-url]: https://nextjs.org/
-[React.js]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
-[React-url]: https://reactjs.org/
-[Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
-[Vue-url]: https://vuejs.org/
-[Angular.io]: https://img.shields.io/badge/Angular-DD0031?style=for-the-badge&logo=angular&logoColor=white
-[Angular-url]: https://angular.io/
-[Svelte.dev]: https://img.shields.io/badge/Svelte-4A4A55?style=for-the-badge&logo=svelte&logoColor=FF3E00
-[Svelte-url]: https://svelte.dev/
-[Laravel.com]: https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white
-[Laravel-url]: https://laravel.com
-[Bootstrap.com]: https://img.shields.io/badge/Bootstrap-563D7C?style=for-the-badge&logo=bootstrap&logoColor=white
-[Bootstrap-url]: https://getbootstrap.com
-[JQuery.com]: https://img.shields.io/badge/jQuery-0769AD?style=for-the-badge&logo=jquery&logoColor=white
-[JQuery-url]: https://jquery.com 
+[Go-shield]: https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white
+[Go-url]: https://go.dev/
+[gRPC-shield]: https://img.shields.io/badge/gRPC-0052CC?style=for-the-badge&logo=google&logoColor=white
+[gRPC-url]: https://grpc.io/
+[Proto-shield]: https://img.shields.io/badge/Protobuf-3367D6?style=for-the-badge&logo=google&logoColor=white
+[Proto-url]: https://developers.google.com/protocol-buffers
+[SQLite-shield]: https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white
+[SQLite-url]: https://www.sqlite.org
+[Java-shield]: https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white
+[Java-url]: https://adoptium.net

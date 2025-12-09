@@ -1,0 +1,43 @@
+# Dedicated GoReleaser config for docker-only publishing of dis-agent
+version: 2
+project_name: dis-agent
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: agent-linux
+    main: ./cmd/agent
+    binary: dis-agent
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - "-s -w"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+dockers_v2:
+  - id: dis-agent
+    dockerfile: packaging/docker/Dockerfile
+    images:
+      - ghcr.io/beardedwonderdev/dis-agent
+    tags:
+      - "{{ .Version }}"
+    platforms: [linux/amd64, linux/arm64]
+    retry:
+      attempts: 5
+      delay: 10s
+      max_delay: 5m
+    sbom: true
+
+changelog:
+  disable: true
+
+checksum:
+  disable: true
+
+release:
+  disable: true

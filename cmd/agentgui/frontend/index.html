@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DIS Agent Control</title>
+  <style>
+    :root { font-family: Inter, system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; }
+    body { margin: 0; padding: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+    input, select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #1f2937; background: #0b1220; color: #e2e8f0; }
+    button { padding: 10px 14px; border: none; border-radius: 8px; background: #22c55e; color: #0b1220; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #334155; color: #e2e8f0; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    pre { background: #0b1220; border: 1px solid #1f2937; padding: 12px; border-radius: 8px; overflow: auto; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; }
+    .ok { background: #bbf7d0; color: #166534; }
+    .fail { background: #fecdd3; color: #991b1b; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .half { flex:1 1 240px; }
+    .muted { color: #94a3b8; font-size: 12px; }
+    .error { color: #fca5a5; }
+    .success { color: #bbf7d0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h2 style="margin:0">DIS Agent Control</h2>
+      <small id="version"></small>
+    </div>
+    <div>
+      <button class="secondary" onclick="refreshStatus()">Refresh</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label>Control API</label>
+        <input id="api" value="http://127.0.0.1:7777" />
+      </div>
+      <div>
+        <label>Token (optional)</label>
+        <input id="token" placeholder="Bearer token" />
+      </div>
+      <div>
+        <label>Auto Refresh (seconds)</label>
+        <input id="refresh" type="number" min="0" value="10" />
+        <span class="muted">0 to disable auto-refresh</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="statusCard">
+    <div class="grid">
+      <div><label>Bridge</label><span id="bridge" class="badge">–</span></div>
+      <div><label>Agent ID</label><div id="agentId">–</div></div>
+      <div><label>Server URL</label><div id="serverURL">–</div></div>
+      <div><label>Last Heartbeat</label><div id="heartbeat">–</div></div>
+      <div><label>Last Error</label><div id="lastError">–</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Service Control</h4>
+    <div class="row">
+      <button onclick="serviceLocal('install')">Download & Install</button>
+      <button onclick="serviceLocal('start')" class="secondary">Start</button>
+      <button onclick="serviceLocal('stop')" class="secondary">Stop</button>
+      <button onclick="serviceLocal('restart')" class="secondary">Restart</button>
+      <button onclick="serviceLocal('status')" class="secondary">Status</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div class="half">
+        <label>Install Path (optional)</label>
+        <input id="installPath" placeholder="/usr/local/bin or Program Files\\DIS Agent" />
+      </div>
+      <div class="half muted">Binary version: <span id="binVersion">latest</span></div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <span id="serviceMsg" class="muted"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Configuration</h4>
+    <div class="grid">
+      <div><label>Server URL</label><input id="cfg_serverURL" /></div>
+      <div><label>Client ID</label><input id="cfg_clientID" /></div>
+      <div><label>Client Secret</label><input id="cfg_clientSecret" type="password" /></div>
+      <div><label>DIS Host</label><input id="cfg_disHost" /></div>
+      <div><label>DIS User</label><input id="cfg_disUser" /></div>
+      <div><label>DIS Password</label><input id="cfg_disPassword" type="password" /></div>
+      <div><label>JDBC Port</label><input id="cfg_jdbcPort" /></div>
+      <div><label>Java Path</label><input id="cfg_javaPath" /></div>
+      <div><label>TLS Enabled</label><select id="cfg_tlsEnabled"><option value="true">true</option><option value="false">false</option></select></div>
+      <div><label>TLS InsecureSkipVerify</label><select id="cfg_tlsInsecure"><option value="false">false</option><option value="true">true</option></select></div>
+      <div><label>Auto Connect On Start</label><select id="cfg_autoConnect"><option value="true">true</option><option value="false">false</option></select></div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button onclick="applyConfig()">Save & Apply</button>
+      <button class="secondary" onclick="validateConfig()">Validate</button>
+      <button class="secondary" onclick="applyAndRestart()">Save + Restart</button>
+      <button class="secondary" onclick="applyInstallStart()">Save + Install + Start</button>
+      <span id="configMsg" class="muted"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Raw status</label>
+    <pre id="raw">(waiting)</pre>
+  </div>
+
+<script>
+async function refreshStatus() {
+  const api = getApi();
+  const token = getToken();
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    const res = await fetch(api + '/status', { headers });
+    const data = await res.json();
+    document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('version').textContent = data.version || '';
+    document.getElementById('agentId').textContent = data.agentId || '–';
+    document.getElementById('serverURL').textContent = data.serverURL || '–';
+    document.getElementById('heartbeat').textContent = data.lastHeartbeat || '–';
+    document.getElementById('lastError').textContent = data.lastError || '–';
+    const bridge = document.getElementById('bridge');
+    if (data.bridgeConnected) {
+      bridge.textContent = 'Connected';
+      bridge.className = 'badge ok';
+    } else {
+      bridge.textContent = 'Disconnected';
+      bridge.className = 'badge fail';
+    }
+  } catch (e) {
+    document.getElementById('raw').textContent = 'Error: ' + e;
+  }
+}
+
+async function service(action) {
+  const api = getApi();
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    const res = await fetch(`${api}/service/${action}`, { method: 'POST', headers, body: '{}' });
+    const text = await res.text();
+    document.getElementById('raw').textContent = text || '{}';
+    const msg = document.getElementById('serviceMsg');
+    if (res.ok) {
+      msg.textContent = `${action} succeeded`;
+      msg.className = 'success';
+    } else {
+      msg.textContent = `${action} failed: ${text}`;
+      msg.className = 'error';
+    }
+    refreshStatus();
+  } catch (e) {
+    document.getElementById('raw').textContent = 'Error: ' + e;
+    const msg = document.getElementById('serviceMsg');
+    msg.textContent = `${action} error: ${e}`;
+    msg.className = 'error';
+  }
+}
+
+async function serviceLocal(action) {
+  const msg = document.getElementById('serviceMsg');
+  const dest = document.getElementById('installPath').value.trim();
+  // If the native binding isn't present, we cannot perform a local install.
+  if (action === 'install' && !(window.go && window.go.main && window.go.main.App)) {
+    msg.textContent = 'install failed locally: native binding unavailable (control API not attempted)';
+    msg.className = 'error';
+    return;
+  }
+  // Prefer native Go binding (works even if control API is down)
+  if (window.go && window.go.main && window.go.main.App) {
+    try {
+      let result = '';
+      switch (action) {
+        case 'install': result = await window.go.main.App.InstallBinaryAndService(dest); break;
+        case 'start': result = await window.go.main.App.StartService(); break;
+        case 'stop': result = await window.go.main.App.StopService(); break;
+        case 'restart': result = await window.go.main.App.RestartService(); break;
+        case 'status': result = await window.go.main.App.StatusService(); break;
+      }
+      msg.textContent = result || (action + ' ok');
+      msg.className = 'success';
+      refreshStatus();
+      return;
+    } catch (e) {
+      msg.textContent = `${action} failed locally: ${e}`;
+      msg.className = 'error';
+      if (action === 'install') {
+        return; // do not fall back to control API for install
+      }
+    }
+  }
+  // Fallback to control API if binding unavailable
+  if (action === 'install') {
+    return; // install should never rely on control API (it may not be running yet)
+  }
+  await service(action);
+}
+
+// Display build version from Go backend
+if (window.go && window.go.main && window.go.main.App) {
+  window.go.main.App.VersionString().then(v => {
+    document.getElementById('binVersion').textContent = v || 'latest';
+  }).catch(() => {});
+}
+
+async function loadConfig() {
+  const api = getApi();
+  const token = getToken();
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    const res = await fetch(api + '/config', { headers });
+    const data = await res.json();
+    const c = data.config || {};
+    const dis = c.dis || {};
+    const jdbc = dis.jdbcConfig || {};
+    const tls = c.tls || {};
+    document.getElementById('cfg_serverURL').value = c.serverURL || '';
+    document.getElementById('cfg_clientID').value = c.clientID || '';
+    document.getElementById('cfg_clientSecret').value = c.clientSecret || '';
+    document.getElementById('cfg_disHost').value = dis.host || '';
+    document.getElementById('cfg_disUser').value = dis.user || '';
+    document.getElementById('cfg_disPassword').value = dis.password || '';
+    document.getElementById('cfg_jdbcPort').value = jdbc.jdbcPort || '';
+    document.getElementById('cfg_javaPath').value = jdbc.javaPath || '';
+    document.getElementById('cfg_tlsEnabled').value = String(tls.enabled ?? true);
+    document.getElementById('cfg_tlsInsecure').value = String(tls.insecureSkipVerify ?? false);
+    document.getElementById('cfg_autoConnect').value = String(c.autoConnectOnStart ?? false);
+    document.getElementById('configMsg').textContent = 'Loaded config';
+  } catch (e) {
+    document.getElementById('configMsg').textContent = 'Error loading config: ' + e;
+  }
+}
+
+function buildConfigPayload() {
+  return {
+    serverURL: document.getElementById('cfg_serverURL').value.trim(),
+    clientID: document.getElementById('cfg_clientID').value.trim(),
+    clientSecret: document.getElementById('cfg_clientSecret').value.trim(),
+    autoConnectOnStart: document.getElementById('cfg_autoConnect').value === 'true',
+    dis: {
+      host: document.getElementById('cfg_disHost').value.trim(),
+      user: document.getElementById('cfg_disUser').value.trim(),
+      password: document.getElementById('cfg_disPassword').value.trim(),
+      jdbcConfig: {
+        jdbcPort: document.getElementById('cfg_jdbcPort').value.trim(),
+        javaPath: document.getElementById('cfg_javaPath').value.trim()
+      }
+    },
+    tls: {
+      enabled: document.getElementById('cfg_tlsEnabled').value === 'true',
+      insecureSkipVerify: document.getElementById('cfg_tlsInsecure').value === 'true'
+    }
+  };
+}
+
+async function applyConfig() {
+  const api = getApi();
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const payload = buildConfigPayload();
+  try {
+    const res = await fetch(api + '/config/apply', { method: 'POST', headers, body: JSON.stringify(payload) });
+    if (!res.ok) {
+      const text = await res.text();
+      document.getElementById('configMsg').textContent = 'Apply failed: ' + text;
+      document.getElementById('configMsg').className = 'error';
+      return;
+    }
+    document.getElementById('configMsg').textContent = 'Config applied. Restart if needed, then start service.';
+    document.getElementById('configMsg').className = 'success';
+    refreshStatus();
+  } catch (e) {
+    document.getElementById('configMsg').textContent = 'Apply error: ' + e;
+    document.getElementById('configMsg').className = 'error';
+  }
+}
+
+async function validateConfig() {
+  const api = getApi();
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const payload = buildConfigPayload();
+  try {
+    const res = await fetch(api + '/config/validate', { method: 'POST', headers, body: JSON.stringify(payload) });
+    if (!res.ok) {
+      const text = await res.text();
+      document.getElementById('configMsg').textContent = 'Validation failed: ' + text;
+      document.getElementById('configMsg').className = 'error';
+      return;
+    }
+    document.getElementById('configMsg').textContent = 'Valid configuration.';
+    document.getElementById('configMsg').className = 'success';
+  } catch (e) {
+    document.getElementById('configMsg').textContent = 'Validate error: ' + e;
+    document.getElementById('configMsg').className = 'error';
+  }
+}
+
+let timer = null;
+function scheduleRefresh() {
+  if (timer) clearInterval(timer);
+  const seconds = parseInt(document.getElementById('refresh').value || '0', 10);
+  if (seconds > 0) {
+    timer = setInterval(refreshStatus, seconds * 1000);
+  }
+}
+
+document.getElementById('refresh').addEventListener('change', scheduleRefresh);
+
+function getApi() {
+  return document.getElementById('api').value.trim();
+}
+function getToken() {
+  return document.getElementById('token').value.trim();
+}
+
+function savePrefs() {
+  try {
+    localStorage.setItem('agent_api', getApi());
+    localStorage.setItem('agent_token', getToken());
+    localStorage.setItem('agent_refresh', document.getElementById('refresh').value);
+  } catch (e) {}
+}
+function loadPrefs() {
+  try {
+    const api = localStorage.getItem('agent_api'); if (api) document.getElementById('api').value = api;
+    const token = localStorage.getItem('agent_token'); if (token) document.getElementById('token').value = token;
+    const refresh = localStorage.getItem('agent_refresh'); if (refresh) document.getElementById('refresh').value = refresh;
+  } catch (e) {}
+}
+
+document.getElementById('api').addEventListener('change', savePrefs);
+document.getElementById('token').addEventListener('change', savePrefs);
+document.getElementById('refresh').addEventListener('change', savePrefs);
+
+async function applyAndRestart() {
+  const ok = await applyConfig();
+  if (ok) {
+    await service('restart');
+  }
+}
+
+async function applyInstallStart() {
+  const ok = await applyConfig();
+  if (ok) {
+    await service('install');
+    await service('start');
+  }
+}
+
+loadPrefs();
+refreshStatus();
+loadConfig();
+scheduleRefresh();
+</script>
+</body>
+</html>
