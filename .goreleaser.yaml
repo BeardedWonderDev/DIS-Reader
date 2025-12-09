@@ -368,7 +368,7 @@ changelog:
       Project: {{.ProjectName}}
       Repository: {{.GitURL}}
 
-      {{ if eq .Tag “” }}
+      {{ if eq .Tag "" }}
       Previous Version: {{.Version}}
       Version: to be defined
       {{ else }}
